@@ -1,39 +1,80 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Send, Loader2, Bot, User, BrainCircuit, Sparkles, MessageCircle, Zap } from 'lucide-react';
 import { generateBrochureData } from '@/lib/openrouter';
 import { generateEventImage } from '@/lib/imageGen';
 import { cn } from '@/lib/utils';
 
 interface AIChatProps {
   onDataGenerated: (data: any) => void;
+  onLoading: (isLoading: boolean, message?: string) => void;
 }
 
-export default function AIChat({ onDataGenerated }: AIChatProps) {
-  const [messages, setMessages] = useState<any[]>([
-    { role: 'assistant', content: "Hello! I'm Brochify AI. Tell me about your event (Title, Department, Dates, etc.) and I'll generate a professional brochure for you." }
-  ]);
+const renderReasoning = (details: any) => {
+    if (!details) return null;
+    if (typeof details === 'string') return details;
+    if (Array.isArray(details)) {
+        return details.map((block: any, idx: number) => (
+            <div key={idx} className="mb-2 last:mb-0">
+                {typeof block === 'string' ? block : (block.text || JSON.stringify(block))}
+            </div>
+        ));
+    }
+    if (typeof details === 'object') {
+        return details.text || JSON.stringify(details, null, 2);
+    }
+    return String(details);
+};
+
+export default function AIChat({ onDataGenerated, onLoading }: AIChatProps) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    setMessages([
+        { 
+          role: 'assistant', 
+          content: "System Initialized. I am your Neural Draftsman. Describe the university event you wish to architect, and I will synthesize a professional multi-page brochure instantly.",
+          timestamp: new Date()
+        }
+    ]);
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+        scrollRef.current.scrollTo({
+            top: scrollRef.current.scrollHeight,
+            behavior: 'smooth'
+        });
+    }
+  }, [messages, loading]);
 
   async function handleSend() {
     if (!input.trim() || loading) return;
     
-    const newMessages = [...messages, { role: 'user', content: input }];
-    setMessages(newMessages);
+    const userMessage = { role: 'user', content: input, timestamp: new Date() };
+    setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
+    onLoading(true, "Decoding Event Latent Space...");
 
     try {
       const result = await generateBrochureData(input, messages);
       const { data, rawMessage } = result;
       
       if (data.eventTitle && data.department) {
+        onLoading(true, "Synthesizing Visual Identity...");
+        
         setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: "Great! I've generated the brochure data. Now generating an AI image for the cover...",
-            reasoning_details: rawMessage?.reasoning_details 
+            content: "Architecture parameters verified. Now initializing generative visual engine for your cover illustration...",
+            reasoning_details: rawMessage?.reasoning_details,
+            timestamp: new Date()
         }]);
         
         const imageUrl = await generateEventImage(data.eventTitle);
@@ -42,82 +83,144 @@ export default function AIChat({ onDataGenerated }: AIChatProps) {
         onDataGenerated(data);
         setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: "Done! Check the preview on the right. You can still edit anything manually." 
+            content: "Drafting complete. Your brochure has been materialized in the preview canvas. Review and finalize for PDF export.",
+            timestamp: new Date()
         }]);
       } else {
          setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: "I need a bit more information. Please provide the registration fees and speakers if possible.",
-            reasoning_details: rawMessage?.reasoning_details
+            content: "Broad architecture established. However, I require more granular data (Registration tokens, specific dates, or keynote speakers) to reach final production state.",
+            reasoning_details: rawMessage?.reasoning_details,
+            timestamp: new Date()
          }]);
       }
     } catch (error: any) {
-       console.error('Error during generation:', error);
-       let errorMsg = "Sorry, I hit a snag. Please try again.";
-       if (error.response?.status === 429) {
-         errorMsg = "API Rate Limit reached (429). Please wait a few moments and try again.";
-       } else if (error.message?.includes('network')) {
-         errorMsg = "Network error. Please check your connection.";
-       }
-       
        setMessages(prev => [...prev, { 
            role: 'assistant', 
-           content: errorMsg 
+           content: "Signal termination encountered. Please re-initiate command or verify API availability.",
+           timestamp: new Date()
        }]);
     } finally {
       setLoading(false);
+      onLoading(false);
     }
   }
 
+  if (!mounted) return null;
+
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-white rounded-xl overflow-hidden shadow-2xl">
-      <div className="p-4 bg-primary flex items-center gap-2">
-        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-        <h2 className="font-bold">Brochify AI Assistant</h2>
+    <div className="flex flex-col h-[580px] bg-slate-900 border border-white/10 rounded-[32px] overflow-hidden shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] relative">
+      {/* Glossy Header */}
+      <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
+        <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-primary/20 rounded-[18px] flex items-center justify-center border border-primary/40 shadow-[0_0_20px_rgba(0,71,171,0.3)]">
+                <BrainCircuit className="w-6 h-6 text-primary animate-pulse" />
+            </div>
+            <div>
+                <h2 className="font-black text-xs tracking-[0.25em] text-white uppercase opacity-90">Neural Draftsman</h2>
+                <div className="flex items-center gap-2 mt-1">
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Sync Active • v2.0</span>
+                </div>
+            </div>
+        </div>
+        <div className="flex gap-1">
+            {[1,2,3].map(i => <div key={i} className="w-1 h-1 bg-white/20 rounded-full"></div>)}
+        </div>
       </div>
-      
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+      {/* Futuristic Message Area */}
+      <div 
+        ref={scrollRef} 
+        className="flex-1 overflow-y-auto p-6 space-y-8 scroll-smooth scrollbar-hide bg-[url('https://www.transparenttextures.com/patterns/micro-carbon.png')]"
+      >
         {messages.map((m, i) => (
-          <div key={i} className="space-y-2">
+          <div key={i} className={cn(
+            "flex flex-col gap-3 group translate-y-0 transition-all duration-500 ease-out animate-in fade-in slide-in-from-bottom-2",
+            m.role === 'user' ? "items-end" : "items-start"
+          )}>
             <div className={cn(
-              "max-w-[80%] p-3 rounded-2xl text-sm shadow-sm",
-              m.role === 'user' ? "bg-[#0047AB] ml-auto rounded-tr-none text-white" : "bg-slate-800 rounded-tl-none text-slate-100"
+                "flex items-center gap-2 opacity-30 group-hover:opacity-60 transition-opacity",
+                m.role === 'user' ? "flex-row-reverse" : "flex-row"
+            )}>
+                {m.role === 'user' ? <User className="w-3 h-3 text-primary" /> : <Bot className="w-3 h-3 text-primary" />}
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                    {m.role === 'user' ? "Operator" : "System"}
+                </span>
+            </div>
+            
+            <div className={cn(
+              "px-5 py-4 rounded-[24px] text-sm leading-relaxed shadow-xl border relative",
+              m.role === 'user' 
+                ? "bg-primary text-white border-white/20 rounded-tr-none" 
+                : "bg-white/5 backdrop-blur-xl border-white/5 text-slate-200 rounded-tl-none"
             )}>
               {m.content}
             </div>
+
             {m.reasoning_details && (
-              <details className="text-[10px] text-slate-500 bg-slate-900/50 p-2 rounded-lg border border-slate-800">
-                <summary className="cursor-pointer hover:text-slate-400 transition-colors font-bold uppercase tracking-wider">Reasoning Process</summary>
-                <div className="mt-2 whitespace-pre-wrap leading-relaxed opacity-70">
-                  {m.reasoning_details}
-                </div>
-              </details>
+              <div className="w-full mt-2">
+                <details className="group">
+                    <summary className="text-[10px] cursor-pointer text-slate-500 hover:text-white transition-all font-black uppercase tracking-widest list-none flex items-center gap-3 bg-white/5 py-2 px-4 rounded-full border border-white/5 w-fit">
+                        <Zap className="w-3 h-3 text-yellow-400 group-open:animate-bounce" />
+                        Logic Trace
+                    </summary>
+                    <div className="mt-4 text-[11px] leading-relaxed text-slate-400 bg-black/50 p-5 rounded-[20px] border border-white/5 italic font-mono shadow-2xl backdrop-blur-2xl">
+                        <div className="flex gap-1 mb-2">
+                            <div className="w-1.5 h-1.5 bg-yellow-400/50 rounded-full"></div>
+                            <div className="w-1.5 h-1.5 bg-green-400/50 rounded-full"></div>
+                            <div className="w-1.5 h-1.5 bg-red-400/50 rounded-full"></div>
+                        </div>
+                        {renderReasoning(m.reasoning_details)}
+                    </div>
+                </details>
+              </div>
             )}
           </div>
         ))}
         {loading && (
-          <div className="flex items-center gap-3 text-slate-400 text-xs italic animate-pulse">
-            <Loader2 className="w-4 h-4 animate-spin text-[#0047AB]"/> 
-            AI is analyzing your request...
+          <div className="flex flex-col gap-3 animate-pulse">
+            <div className="flex items-center gap-2 opacity-30">
+                <Bot className="w-3 h-3 text-primary" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Synthesizing</span>
+            </div>
+            <div className="bg-white/5 backdrop-blur-xl border border-white/5 rounded-[24px] p-5 flex items-center gap-4 max-w-[70%]">
+                <div className="relative">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    <Sparkles className="absolute inset-0 m-auto w-2 h-2 text-primary animate-pulse" />
+                </div>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 italic">Neural Pathways Converging...</span>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="p-4 border-t border-slate-800 flex gap-2">
-        <input 
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="e.g. FDP on GenAI March 23-27..."
-          className="flex-1 bg-slate-800 border-none rounded-lg px-4 py-2 text-sm focus:ring-1 focus:ring-[#0047AB] outline-none"
-        />
-        <button 
-          onClick={handleSend}
-          disabled={loading}
-          className="p-2 bg-[#0047AB] hover:bg-blue-600 rounded-lg transition-colors"
-        >
-          <Send className="w-4 h-4"/>
-        </button>
+      {/* Cyber Input Area */}
+      <div className="p-6 bg-slate-950/80 border-t border-white/10 backdrop-blur-3xl relative">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
+        <div className="relative flex items-center gap-3">
+            <div className="absolute left-5 text-primary/40 group-focus-within:text-primary transition-colors">
+                <MessageCircle className="w-4 h-4" />
+            </div>
+            <input 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Inject event parameters..."
+              className="w-full bg-white/5 border border-white/10 rounded-[20px] pl-12 pr-16 py-5 text-sm text-slate-100 focus:border-primary/50 outline-none transition-all placeholder:text-slate-600 focus:ring-4 focus:ring-primary/5"
+            />
+            <button 
+              onClick={handleSend}
+              disabled={loading}
+              className="absolute right-2 p-3.5 bg-primary hover:bg-blue-600 text-white rounded-[16px] transition-all shadow-[0_4px_20px_rgba(0,71,171,0.4)] active:scale-95 disabled:opacity-50 group overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <Send className="w-4 h-4 relative z-10" />
+            </button>
+        </div>
       </div>
     </div>
   );

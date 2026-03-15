@@ -1,29 +1,36 @@
-import axios from 'axios';
+import { fal } from "@fal-ai/client";
+import { logger } from "./logger";
 
-const FAL_API_KEY = process.env.NEXT_PUBLIC_FAL_API_KEY;
+// No need to manually read from env here if using the official client in a standard way,
+// but we'll ensure the key is configured.
+if (typeof window !== "undefined") {
+    // In browser, the client expects NEXT_PUBLIC_FAL_KEY or we can set it:
+    // fal.config({ credentials: process.env.NEXT_PUBLIC_FAL_API_KEY });
+}
 
 export async function generateEventImage(prompt: string) {
   try {
-    const response = await axios.post(
-      'https://fal.run/fal-ai/nano-banana-pro', // New model name
-      {
+    const result: any = await fal.subscribe("fal-ai/nano-banana-pro", {
+      input: {
         prompt: `Professional academic conference poster illustration, ${prompt}, technology theme, vector style, blue and white color palette, high resolution, minimalist`,
         aspect_ratio: '16:9',
         resolution: '1K',
         num_images: 1,
         output_format: 'png'
       },
-      {
-        headers: {
-          Authorization: `Key ${FAL_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === "IN_PROGRESS") {
+          update.logs.map((log) => log.message).forEach(console.log);
+        }
+      },
+    });
 
-    return response.data.images[0].url;
-  } catch (error) {
-    console.error('Error calling FAL AI:', error);
+    logger.log('FAL_AI', 'GENERATE_IMAGE', { prompt }, { url: result.data.images[0].url });
+    return result.data.images[0].url;
+  } catch (error: any) {
+    logger.log('FAL_AI', 'ERROR', { prompt }, { error: error.message }, 'ERROR');
+    console.error('Error calling FAL AI with client:', error);
     return null;
   }
 }

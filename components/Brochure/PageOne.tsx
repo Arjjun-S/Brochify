@@ -6,15 +6,23 @@ import { cn } from '@/lib/utils';
 
 interface PageOneProps {
   data: any;
+  selectedLogos: string[];
   onEdit?: (path: string, value: any) => void;
 }
 
+const availableLogos = [
+  { id: 'srm', src: '/logos/srm.svg' },
+  { id: 'ieee', src: '/logos/ieee.svg' },
+  { id: 'ctech', src: '/logos/ctech.svg' },
+  { id: 'naac', src: '/logos/naac.svg' },
+];
+
 import { truncateWords, LIMITS } from '@/lib/limits';
 
-export default function PageOne({ data, onEdit }: PageOneProps) {
+export default function PageOne({ data, selectedLogos, onEdit }: PageOneProps) {
   return (
     <div id="brochure-page-1" className="brochure-page border border-gray-200">
-      {/* Column 1: Committees (White) */}
+      {/* ... (previous columns unchanged) */}
       <div className="column column-white border-r">
         <h3 className="bg-[#0047AB] text-white px-2 py-1 text-xs font-bold rounded inline-block mb-4">
           ADVISORY COMMITTEE
@@ -35,7 +43,6 @@ export default function PageOne({ data, onEdit }: PageOneProps) {
         </ul>
       </div>
 
-      {/* Column 2: Registration (Blue) */}
       <div className="column column-blue flex flex-col items-center text-center">
         <h2 className="text-xl font-bold bg-white text-[#0047AB] px-4 py-2 rounded-full mb-8">
           REGISTRATION DETAIL
@@ -75,12 +82,12 @@ export default function PageOne({ data, onEdit }: PageOneProps) {
         </div>
       </div>
 
-      {/* Column 3: Event Details (White) */}
       <div className="column column-white flex flex-col items-center">
-        <div className="flex justify-between w-full mb-8 px-4">
-            <img src="/logos/srm.svg" className="h-8 object-contain" alt="SRM" />
-            <img src="/logos/ieee.svg" className="h-8 object-contain" alt="IEEE" />
-            <img src="/logos/ctech.svg" className="h-8 object-contain" alt="CTECH" />
+        <div className="flex justify-center flex-wrap gap-4 w-full mb-8 px-4">
+            {selectedLogos.map(id => {
+                const logo = availableLogos.find(l => l.id === id);
+                return logo ? <img key={id} src={logo.src} className="h-8 object-contain" alt={id} /> : null;
+            })}
         </div>
 
         <h1 className="text-xl font-black text-center text-gray-800 leading-tight mb-4 uppercase">

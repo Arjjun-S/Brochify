@@ -1,94 +1,174 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AIChat from '@/components/Editor/AIChat';
 import PageOne from '@/components/Brochure/PageOne';
 import PageTwo from '@/components/Brochure/PageTwo';
 import LogoSelector from '@/components/Editor/LogoSelector';
-import { Download, Edit3, Type, Image as ImageIcon } from 'lucide-react';
-// html2pdf imported dynamically in handler
+import LoadingOverlay from '@/components/Layout/LoadingOverlay';
+import DevLogs from '@/components/Editor/DevLogs';
+import { cn } from '@/lib/utils';
+import { Download, Sparkles, Layout, Database, FileText, ChevronRight, Activity } from 'lucide-react';
+// Dynamically import browser-only libraries
+
 
 export default function Dashboard() {
   const [brochureData, setBrochureData] = useState<any>(null);
   const [selectedLogos, setSelectedLogos] = useState<string[]>(['srm', 'ieee', 'ctech']);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [mounted, setMounted] = useState(false);
+  const [showDevLogs, setShowDevLogs] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleDownload = async () => {
-    // @ts-ignore
-    const html2pdf = (await import('html2pdf.js')).default;
-    const element = document.getElementById('brochure-export-container');
+    const element = document.getElementById('brochure-preview');
     if (!element) return;
     
     const opt = {
       margin: 0,
-      filename: `brochure-${brochureData?.eventTitle || 'event'}.pdf`,
+      filename: `brochure-${Date.now()}.pdf`,
       image: { type: 'jpeg' as const, quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'landscape' as const }
     };
+    
+    // @ts-ignore
+    const html2pdf = (await import('html2pdf.js')).default;
     html2pdf().from(element).set(opt).save();
   };
 
+  const toggleLogo = (id: string) => {
+    setSelectedLogos(prev => 
+      prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]
+    );
+  };
+
+  if (!mounted) return null;
+
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b px-8 py-4 flex justify-between items-center sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Type className="text-white w-5 h-5" />
+    <main className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
+      {/* Cinematic Header */}
+      <header className="h-20 bg-white border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-[100] shadow-sm">
+        <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 group cursor-pointer">
+                <div className="w-12 h-12 bg-primary rounded-[18px] flex items-center justify-center shadow-[0_8px_20px_-6px_rgba(0,71,171,0.5)] transition-transform group-hover:rotate-6">
+                    <Layout className="text-white w-6 h-6" />
+                </div>
+                <div>
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tighter italic">BROCHIFY<span className="text-primary not-italic">.</span></h1>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">AI Layout Engine</p>
+                </div>
             </div>
-            <h1 className="text-xl font-black text-slate-800">BROCHIFY</h1>
+            <div className="h-8 w-px bg-slate-200 mx-4" />
+            <nav className="flex items-center gap-8">
+                {['Architect', 'Gallery', 'Presets'].map(item => (
+                    <button key={item} className="text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-primary transition-colors">{item}</button>
+                ))}
+            </nav>
         </div>
         
-        {brochureData && (
+        <div className="flex items-center gap-4">
             <button 
-                onClick={handleDownload}
-                className="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-full font-bold transition-all shadow-lg active:scale-95"
+              onClick={() => setShowDevLogs(!showDevLogs)}
+              className={cn(
+                "p-3 rounded-xl transition-all border",
+                showDevLogs ? "bg-primary/10 border-primary text-primary" : "bg-slate-50 border-slate-200 text-slate-400 hover:border-slate-300"
+              )}
+              title="Inspect Telemetry"
             >
-                <Download className="w-4 h-4" />
-                Download PDF
+              <Activity className="w-5 h-5" />
             </button>
-        )}
+
+            {brochureData && (
+                 <button 
+                  onClick={handleDownload}
+                  className="flex items-center gap-3 bg-slate-900 hover:bg-black text-white px-8 py-3.5 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all shadow-xl hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  <Download className="w-4 h-4" />
+                  Materialize PDF
+                </button>
+            )}
+        </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-12 gap-0">
-        {/* Left Side: Editor */}
-        <div className="col-span-4 border-r bg-white p-6 space-y-6 overflow-y-auto max-h-[calc(100vh-73px)]">
-          <AIChat onDataGenerated={setBrochureData} />
-          
-          <LogoSelector 
-            selectedLogos={selectedLogos} 
-            onToggle={(id) => setSelectedLogos(prev => 
-                prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-            )} 
-          />
+      <div className="flex-1 grid grid-cols-12 overflow-hidden relative">
+        {/* Dev Logs Panel (Drawer) */}
+        {showDevLogs && (
+            <div className="absolute right-0 top-0 bottom-0 w-1/3 z-[200] animate-in slide-in-from-right duration-500 shadow-[-20px_0_50px_rgba(0,0,0,0.1)]">
+                <DevLogs />
+                <button 
+                    onClick={() => setShowDevLogs(false)}
+                    className="absolute left-0 top-1/2 -translate-x-full bg-slate-900 border border-white/10 p-2 rounded-l-lg text-white/50 hover:text-white"
+                >
+                    <ChevronRight className="w-4 h-4" />
+                </button>
+            </div>
+        )}
 
-          <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-gray-300">
-             <div className="flex items-center gap-2 text-gray-500 mb-2">
-                <Edit3 className="w-4 h-4" />
-                <span className="text-sm font-bold">Manual Overrides</span>
-             </div>
-             <p className="text-xs text-gray-400">Content on the right is directly editable. Just click and type.</p>
-          </div>
+        {/* Left Side: Modular Controls */}
+        <div className="col-span-4 border-r border-slate-200 bg-white p-8 overflow-y-auto scrollbar-hide space-y-10">
+            <div className="space-y-1">
+                <h2 className="text-lg font-black text-slate-900 tracking-tight">Project Parameters</h2>
+                <p className="text-xs text-slate-400 font-medium">Configure the core logic and institutional identity.</p>
+            </div>
+
+            <LogoSelector selectedLogos={selectedLogos} onToggle={toggleLogo} />
+            
+            <div className="h-px bg-slate-100" />
+            
+            <AIChat 
+                onDataGenerated={(data) => setBrochureData(data)} 
+                onLoading={(loading, msg) => {
+                    setIsLoading(loading);
+                    if (msg) setLoadingMessage(msg);
+                }}
+            />
         </div>
 
-        {/* Right Side: Preview */}
-        <div className="col-span-8 bg-slate-200 p-12 overflow-y-auto max-h-[calc(100vh-73px)] flex flex-col items-center gap-12">
-          {!brochureData ? (
-            <div className="mt-24 text-center">
-                <div className="w-20 h-20 bg-white rounded-3xl shadow-xl flex items-center justify-center mx-auto mb-6 transform rotate-12 transition-transform hover:rotate-0 cursor-pointer">
-                    <ImageIcon className="text-primary w-10 h-10" />
+        {/* Right Side: Production Canvas */}
+        <div className="col-span-8 bg-[#F0F4F8] p-12 overflow-y-auto max-h-[calc(100vh-80px)] flex flex-col items-center relative group">
+            {/* Background Texture */}
+            <div className="absolute inset-0 opacity-[0.4] mix-blend-multiply pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+            
+            {brochureData ? (
+                <div className="w-full flex flex-col items-center gap-16 py-8 relative z-10">
+                    <div className="flex flex-col items-center gap-4 mb-4">
+                        <div className="flex items-center gap-3 py-2 px-6 bg-white rounded-full shadow-sm border border-slate-200">
+                            <FileText className="w-4 h-4 text-primary" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Production Draft • Phase 1</span>
+                        </div>
+                    </div>
+                    
+                    <div id="brochure-preview" className="transform scale-[0.8] origin-top transition-transform hover:scale-[0.82] duration-700">
+                        <PageOne data={brochureData} selectedLogos={selectedLogos} />
+                        <div className="h-20" />
+                        <PageTwo data={brochureData} selectedLogos={selectedLogos} />
+                    </div>
                 </div>
-                <h2 className="text-2xl font-black text-slate-800 mb-2">Start your Brochure</h2>
-                <p className="text-slate-500 max-w-xs mx-auto">Use the AI chat on the left to provide event details. I'll handle the design.</p>
-            </div>
-          ) : (
-            <div id="brochure-export-container" className="flex flex-col gap-0 shadow-2xl">
-                <PageOne data={brochureData} />
-                <PageTwo data={brochureData} />
-            </div>
-          )}
+            ) : (
+                <div className="mt-36 text-center animate-in fade-in zoom-in-95 duration-1000 relative z-10">
+                    <div className="w-28 h-28 bg-white rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] flex items-center justify-center mx-auto mb-10 transform rotate-6 hover:rotate-0 transition-transform cursor-pointer border border-white ring-[12px] ring-white/30">
+                        <Database className="text-primary w-12 h-12 animate-pulse" />
+                    </div>
+                    <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter italic">Waiting for Command</h2>
+                    <p className="text-slate-400 text-xs font-black uppercase tracking-[0.4em] max-w-sm mx-auto leading-relaxed border-t border-slate-200 pt-6 opacity-60">
+                        Neural Draftsman is currently dormant. <br/>Initiate event description to bootstrap production.
+                    </p>
+                    <div className="mt-12 flex items-center justify-center gap-3 text-primary animate-bounce">
+                        <ChevronRight className="w-4 h-4 rotate-90" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">Begin Protocol</span>
+                        <ChevronRight className="w-4 h-4 rotate-90" />
+                    </div>
+                </div>
+            )}
         </div>
       </div>
+
+      <LoadingOverlay isVisible={isLoading} message={loadingMessage} />
     </main>
   );
 }

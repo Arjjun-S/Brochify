@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 
 interface PageTwoProps {
   data: any;
+  selectedLogos: string[];
   onEdit?: (path: string, value: any) => void;
 }
 

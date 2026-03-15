@@ -1,31 +1,40 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+@theme {
+  --color-primary: #0047AB;
+  --color-secondary: #E0F2FE;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: white;
-}
-
-/* Print specific styles */
-@media print {
-  .no-print {
-    display: none;
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-950 antialiased;
   }
 }
 
+/* Custom Utilities for Premium Look */
+@utility glass {
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+@utility glass-dark {
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Brochure Layout */
 .brochure-page {
-  width: 297mm; /* A4 Landscape */
+  width: 297mm;
   height: 210mm;
   background: white;
   margin: 0 auto;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   overflow: hidden;
   position: relative;
   display: flex;
@@ -46,4 +55,13 @@ body {
 .column-white {
   background-color: white;
   color: black;
+}
+
+/* Scrollbar Utility */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
