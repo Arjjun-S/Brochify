@@ -1,14 +1,23 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Bot, User, BrainCircuit, Sparkles, MessageCircle, Zap } from 'lucide-react';
+import { Send, Loader2, Bot, User, BrainCircuit, Sparkles, MessageCircle, Zap, Plus, Check } from 'lucide-react';
 import { generateBrochureData } from '@/lib/openrouter';
 import { generateEventImage } from '@/lib/imageGen';
 import { cn } from '@/lib/utils';
 
+const availableLogos = [
+  { id: 'srm', name: 'SRM Institute of Tech', src: '/logos/srm.svg' },
+  { id: 'ieee', name: 'IEEE Student Branch', src: '/logos/ieee.svg' },
+  { id: 'ctech', name: 'Dept. of C. Tech', src: '/logos/ctech.svg' },
+  { id: 'naac', name: 'NAAC Accredited', src: '/logos/naac.svg' },
+];
+
 interface AIChatProps {
   onDataGenerated: (data: any) => void;
   onLoading: (isLoading: boolean, message?: string) => void;
+  selectedLogos: string[];
+  onToggleLogo: (id: string) => void;
 }
 
 const renderReasoning = (details: any) => {
@@ -27,11 +36,12 @@ const renderReasoning = (details: any) => {
     return String(details);
 };
 
-export default function AIChat({ onDataGenerated, onLoading }: AIChatProps) {
+export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onToggleLogo }: AIChatProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showLogoSelect, setShowLogoSelect] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -96,9 +106,9 @@ export default function AIChat({ onDataGenerated, onLoading }: AIChatProps) {
       }
     } catch (error: any) {
        setMessages(prev => [...prev, { 
-           role: 'assistant', 
-           content: "Signal termination encountered. Please re-initiate command or verify API availability.",
-           timestamp: new Date()
+            role: 'assistant', 
+            content: "Signal termination encountered. Please re-initiate command or verify API availability.",
+            timestamp: new Date()
        }]);
     } finally {
       setLoading(false);
@@ -109,29 +119,7 @@ export default function AIChat({ onDataGenerated, onLoading }: AIChatProps) {
   if (!mounted) return null;
 
   return (
-    <div className="flex flex-col h-[580px] bg-slate-900 border border-white/10 rounded-[32px] overflow-hidden shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] relative">
-      {/* Glossy Header */}
-      <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
-        <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-[18px] flex items-center justify-center border border-primary/40 shadow-[0_0_20px_rgba(0,71,171,0.3)]">
-                <BrainCircuit className="w-6 h-6 text-primary animate-pulse" />
-            </div>
-            <div>
-                <h2 className="font-black text-xs tracking-[0.25em] text-white uppercase opacity-90">Neural Draftsman</h2>
-                <div className="flex items-center gap-2 mt-1">
-                    <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Sync Active • v2.0</span>
-                </div>
-            </div>
-        </div>
-        <div className="flex gap-1">
-            {[1,2,3].map(i => <div key={i} className="w-1 h-1 bg-white/20 rounded-full"></div>)}
-        </div>
-      </div>
-
+    <div className="flex flex-col h-full bg-slate-900 border-none overflow-hidden relative">
       {/* Futuristic Message Area */}
       <div 
         ref={scrollRef} 
@@ -201,16 +189,52 @@ export default function AIChat({ onDataGenerated, onLoading }: AIChatProps) {
       {/* Cyber Input Area */}
       <div className="p-6 bg-slate-950/80 border-t border-white/10 backdrop-blur-3xl relative">
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
-        <div className="relative flex items-center gap-3">
-            <div className="absolute left-5 text-primary/40 group-focus-within:text-primary transition-colors">
-                <MessageCircle className="w-4 h-4" />
+        
+        {/* Logo Selection Popover */}
+        {showLogoSelect && (
+            <div className="absolute bottom-full left-6 mb-4 w-64 bg-[#2D5B9A] text-white p-5 rounded-[24px] shadow-2xl animate-in zoom-in-95 fade-in slide-in-from-bottom-4 duration-300 z-50 border border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest">Logo select</h3>
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/20"></div>
+                </div>
+                <div className="space-y-3">
+                    {availableLogos.map(logo => (
+                        <button 
+                            key={logo.id} 
+                            onClick={() => onToggleLogo(logo.id)}
+                            className="w-full flex items-center justify-between group/logo"
+                        >
+                            <span className={cn(
+                                "text-xs font-bold transition-all",
+                                selectedLogos.includes(logo.id) ? "text-white" : "text-white/40 group-hover/logo:text-white/60"
+                            )}>
+                                • {logo.id}
+                            </span>
+                            {selectedLogos.includes(logo.id) && <Check className="w-3 h-3 text-blue-300" />}
+                        </button>
+                    ))}
+                </div>
+                {/* Speech bubble tail */}
+                <div className="absolute top-full left-6 w-4 h-4 bg-[#2D5B9A] rotate-45 -translate-y-2 border-r border-b border-white/10"></div>
             </div>
+        )}
+
+        <div className="relative flex items-center gap-3">
+            <button 
+                onClick={() => setShowLogoSelect(!showLogoSelect)}
+                className={cn(
+                    "w-12 h-12 rounded-[18px] flex items-center justify-center transition-all border shrink-0",
+                    showLogoSelect ? "bg-primary border-primary text-white" : "bg-white/5 border-white/10 text-primary hover:border-primary/50"
+                )}
+            >
+                <Plus className={cn("w-6 h-6 transition-transform", showLogoSelect && "rotate-45")} />
+            </button>
             <input 
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder="Inject event parameters..."
-              className="w-full bg-white/5 border border-white/10 rounded-[20px] pl-12 pr-16 py-5 text-sm text-slate-100 focus:border-primary/50 outline-none transition-all placeholder:text-slate-600 focus:ring-4 focus:ring-primary/5"
+              className="w-full bg-white/5 border border-white/10 rounded-[20px] px-6 py-5 text-sm text-slate-100 focus:border-primary/50 outline-none transition-all placeholder:text-slate-600 focus:ring-4 focus:ring-primary/5"
             />
             <button 
               onClick={handleSend}

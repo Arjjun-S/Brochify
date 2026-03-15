@@ -20,8 +20,53 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
         messages: [
           {
             role: 'system',
-            content: `You are a helpful assistant that generates structured JSON for university brochures. 
-            ALWAYS return ONLY valid JSON. If fields are missing, ask for them.`
+            content: `You are an elite academic brochure architect. Your goal is to generate HIGH-DENSITY, PROFESSIONAL content for a 3-column, 2-page brochure. 
+            The output MUST be a valid JSON object matching this SPECIFIC structure:
+            {
+              "eventTitle": "Full Title with Subtitle",
+              "department": "Organizing Department Name",
+              "dates": "Inclusive Dates (e.g. 23rd-27th March 2026)",
+              "googleForm": "Actual registration URL or placeholder",
+              "committee": [
+                { "name": "Name", "role": "Specific Role (e.g. Chief Patron, Patron, Convener, Advisory Committee Member)" }
+              ],
+              "registration": {
+                "ieeePrice": "Number",
+                "nonIeeePrice": "Number",
+                "deadline": "Date",
+                "notes": [
+                    "Detailed instruction 1 (e.g. Registration confirmation date)",
+                    "Detailed instruction 2 (e.g. Session timings 9:30 AM - 4:00 PM)",
+                    "Detailed instruction 3 (e.g. Participation certificate will be provided)",
+                    "Detailed instruction 4 (e.g. Bring your own Laptops)"
+                ]
+              },
+              "accountDetails": {
+                "bankName": "Bank Name",
+                "accountNo": "AccountNumber",
+                "accountName": "Official Account Name",
+                "accountType": "SB/Current",
+                "branch": "Specific Branch",
+                "ifscCode": "IFSC8888"
+              },
+              "aboutCollege": "200-300 words detailed history of the university",
+              "aboutSchool": "150-200 words about the specific computing school",
+              "aboutDepartment": "150-200 words about the organizing department focus",
+              "aboutFdp": "150-200 words about this specific Faculty Development Program objective",
+              "topics": [
+                { "date": "Date", "forenoon": "Forenoon Topic", "afternoon": "Afternoon Topic" }
+              ],
+              "speakers": [
+                { "name": "Dr. Name", "org": "Institution/Organization", "role": "Designation" }
+              ],
+              "contact": { "name": "Prof. Name", "mobile": "9999999999" }
+            }
+            REQUIREMENTS:
+            1. FILL ALL PLACES: Do not leave empty arrays or strings.
+            2. PROFESSIONAL TONE: Use formal, academic language.
+            3. ROLE DIVERSITY: Include Chief Patrons, Patrons, Advisory Committee, and Organizing Committee.
+            4. DENSITY: For 'About' sections, write full paragraphs as specified.
+            5. CONSISTENCY: Ensure all dates match the event title.`
           },
           ...formattedHistory,
           { role: 'user', content: prompt }

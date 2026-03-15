@@ -33,7 +33,8 @@ export default function Dashboard() {
       filename: `brochure-${Date.now()}.pdf`,
       image: { type: 'jpeg' as const, quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'landscape' as const }
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'landscape' as const },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
     
     // @ts-ignore
@@ -110,42 +111,28 @@ export default function Dashboard() {
         )}
 
         {/* Left Side: Modular Controls */}
-        <div className="col-span-4 border-r border-slate-200 bg-white p-8 overflow-y-auto scrollbar-hide space-y-10">
-            <div className="space-y-1">
-                <h2 className="text-lg font-black text-slate-900 tracking-tight">Project Parameters</h2>
-                <p className="text-xs text-slate-400 font-medium">Configure the core logic and institutional identity.</p>
-            </div>
-
-            <LogoSelector selectedLogos={selectedLogos} onToggle={toggleLogo} />
-            
-            <div className="h-px bg-slate-100" />
-            
+        <div className="col-span-3 border-r border-slate-200 bg-slate-900 p-0 overflow-hidden flex flex-col">
             <AIChat 
                 onDataGenerated={(data) => setBrochureData(data)} 
                 onLoading={(loading, msg) => {
                     setIsLoading(loading);
                     if (msg) setLoadingMessage(msg);
                 }}
+                selectedLogos={selectedLogos}
+                onToggleLogo={toggleLogo}
             />
         </div>
 
         {/* Right Side: Production Canvas */}
-        <div className="col-span-8 bg-[#F0F4F8] p-12 overflow-y-auto max-h-[calc(100vh-80px)] flex flex-col items-center relative group">
-            {/* Background Texture */}
-            <div className="absolute inset-0 opacity-[0.4] mix-blend-multiply pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+        <div className="col-span-9 bg-[#F0F4F8] p-4 overflow-y-auto max-h-[calc(100vh-80px)] flex flex-col items-center relative group">
+            {/* Background Texture - Grid Style */}
+            <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[radial-gradient(#0047AB_1px,transparent_1px)] [background-size:20px_20px]"></div>
             
             {brochureData ? (
-                <div className="w-full flex flex-col items-center gap-16 py-8 relative z-10">
-                    <div className="flex flex-col items-center gap-4 mb-4">
-                        <div className="flex items-center gap-3 py-2 px-6 bg-white rounded-full shadow-sm border border-slate-200">
-                            <FileText className="w-4 h-4 text-primary" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Production Draft • Phase 1</span>
-                        </div>
-                    </div>
-                    
-                    <div id="brochure-preview" className="transform scale-[0.8] origin-top transition-transform hover:scale-[0.82] duration-700">
+                <div className="w-full flex flex-col items-center gap-10 py-6 relative z-10">
+                    <div id="brochure-preview" className="transform scale-[0.95] origin-top transition-all duration-700 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] hover:scale-[1.0] cursor-zoom-in">
                         <PageOne data={brochureData} selectedLogos={selectedLogos} />
-                        <div className="h-20" />
+                        <div className="h-6" />
                         <PageTwo data={brochureData} selectedLogos={selectedLogos} />
                     </div>
                 </div>

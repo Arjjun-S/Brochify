@@ -4,10 +4,9 @@ import { logger } from "./logger";
 // No need to manually read from env here if using the official client in a standard way,
 // but we'll ensure the key is configured.
 if (typeof window !== "undefined") {
-    // In browser, the client expects NEXT_PUBLIC_FAL_KEY or we can set it:
-    // fal.config({ credentials: process.env.NEXT_PUBLIC_FAL_API_KEY });
+  // In browser, the client expects NEXT_PUBLIC_FAL_KEY or we can set it:
+  // fal.config({ credentials: process.env.NEXT_PUBLIC_FAL_API_KEY });
 }
-
 export async function generateEventImage(prompt: string) {
   try {
     const result: any = await fal.subscribe("fal-ai/nano-banana-pro", {
@@ -25,7 +24,6 @@ export async function generateEventImage(prompt: string) {
         }
       },
     });
-
     logger.log('FAL_AI', 'GENERATE_IMAGE', { prompt }, { url: result.data.images[0].url });
     return result.data.images[0].url;
   } catch (error: any) {

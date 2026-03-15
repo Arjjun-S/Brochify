@@ -20,91 +20,143 @@ const availableLogos = [
 import { truncateWords, LIMITS } from '@/lib/limits';
 
 export default function PageOne({ data, selectedLogos, onEdit }: PageOneProps) {
+  const chiefPatrons = data.committee?.filter((c: any) => c.role?.toLowerCase().includes('chief patron')) || [];
+  const patrons = data.committee?.filter((c: any) => c.role?.toLowerCase().includes('patron') && !c.role?.toLowerCase().includes('chief')) || [];
+  const advisory = data.committee?.filter((c: any) => c.role?.toLowerCase().includes('advisory')) || [];
+  const organizing = data.committee?.filter((c: any) => !c.role?.toLowerCase().includes('patron') && !c.role?.toLowerCase().includes('advisory')) || [];
+
   return (
-    <div id="brochure-page-1" className="brochure-page border border-gray-200">
-      {/* ... (previous columns unchanged) */}
-      <div className="column column-white border-r">
-        <h3 className="bg-[#0047AB] text-white px-2 py-1 text-xs font-bold rounded inline-block mb-4">
-          ADVISORY COMMITTEE
-        </h3>
-        <ul className="text-[10px] space-y-1 mb-6">
-          {data.committee?.filter((c: any) => c.role.includes('Advisory'))?.slice(0, 10).map((c: any, i: number) => (
-            <li key={i}><strong>{truncateWords(c.name, 5)}</strong>, {truncateWords(c.role, 5)}</li>
-          ))}
-        </ul>
+    <div id="brochure-page-1" className="brochure-page border border-gray-200" style={{ backgroundColor: '#ffffff' }}>
+      {/* Column 1: Committees (White) */}
+      <div className="column column-white border-r !p-4" style={{ backgroundColor: '#ffffff' }}>
+        <div className="space-y-4">
+            {chiefPatrons.length > 0 && (
+                <div>
+                    <h4 className="text-white text-[9px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>CHIEF PATRONS</h4>
+                    <ul className="text-[9px] leading-tight" style={{ color: '#1e293b' }}>
+                        {chiefPatrons.map((c: any, i: number) => (
+                            <li key={i}><span className="font-bold">{c.name}</span>, {c.role}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            
+            {patrons.length > 0 && (
+                <div>
+                    <h4 className="text-white text-[9px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>PATRONS</h4>
+                    <ul className="text-[9px] leading-tight" style={{ color: '#1e293b' }}>
+                        {patrons.map((c: any, i: number) => (
+                            <li key={i}><span className="font-bold">{c.name}</span>, {c.role}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
 
-        <h3 className="bg-[#0047AB] text-white px-2 py-1 text-xs font-bold rounded inline-block mb-4">
-          ORGANIZING COMMITTEE
-        </h3>
-        <ul className="text-[10px] space-y-1">
-          {data.committee?.filter((c: any) => !c.role.includes('Advisory'))?.slice(0, 15).map((c: any, i: number) => (
-            <li key={i}><strong>{truncateWords(c.name, 5)}</strong>, {truncateWords(c.role, 5)}</li>
-          ))}
-        </ul>
-      </div>
+            <div>
+                <h4 className="text-[9px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ACADEMIC ADVISORY COMMITTEE</h4>
+                <ul className="text-[8px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
+                    {advisory.slice(0, 10).map((c: any, i: number) => (
+                        <li key={i} className="truncate"><span className="font-bold">{c.name}</span>, {c.role}</li>
+                    ))}
+                </ul>
+            </div>
 
-      <div className="column column-blue flex flex-col items-center text-center">
-        <h2 className="text-xl font-bold bg-white text-[#0047AB] px-4 py-2 rounded-full mb-8">
-          REGISTRATION DETAIL
-        </h2>
-        
-        <div className="bg-white/10 p-4 rounded-lg w-full text-left mb-6">
-          <p className="font-bold mb-2">Registration Fee:</p>
-          <div className="flex justify-between text-xs">
-            <span>IEEE Member</span>
-            <span>: Rs. {data.registration?.ieeePrice}/-</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span>Non IEEE Member</span>
-            <span>: Rs. {data.registration?.nonIeeePrice}/-</span>
-          </div>
-        </div>
-
-        <p className="font-bold text-yellow-300 mb-4 text-xs">
-          Last date: {data.registration?.deadline}
-        </p>
-
-        <div className="bg-white p-4 rounded-lg mb-4 flex items-center justify-center">
-          <QRCodeSVG value={data.googleForm || ""} size={100} />
-        </div>
-        
-        <p className="text-[8px] break-all px-2 overflow-hidden max-h-12 text-white/70">
-          {data.googleForm}
-        </p>
-
-        <div className="mt-auto pt-4 border-t border-white/20 w-full">
-            <h4 className="bg-white text-[#0047AB] text-[10px] font-bold py-1 px-4 rounded-full inline-block mb-2 uppercase">ACCOUNT DETAIL</h4>
-            <div className="text-[9px] text-left">
-                <p>Bank: Indian Bank</p>
-                <p>Acc No: 7111751848</p>
-                <p>IFSC: IDIB000S181</p>
+            <div>
+                <h4 className="text-[9px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ORGANIZING COMMITTEE</h4>
+                <ul className="text-[8px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
+                    {organizing.slice(0, 15).map((c: any, i: number) => (
+                        <li key={i} className="truncate"><span className="font-bold">{c.name}</span>, {c.role}</li>
+                    ))}
+                </ul>
             </div>
         </div>
       </div>
 
-      <div className="column column-white flex flex-col items-center">
-        <div className="flex justify-center flex-wrap gap-4 w-full mb-8 px-4">
+      {/* Column 2: Registration (Blue) */}
+      <div className="column column-blue flex flex-col items-center !p-4" style={{ backgroundColor: '#0047AB', color: '#ffffff' }}>
+        <h2 className="text-sm font-black bg-white px-4 py-1 rounded-full mb-4 uppercase tracking-tighter" style={{ color: '#0047AB' }}>
+          REGISTRATION DETAIL
+        </h2>
+        
+        <div className="w-full space-y-2 mb-4">
+            <div className="flex justify-between text-[10px] font-bold pb-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                <span style={{ color: '#fde047' }}>Registration Fee:</span>
+            </div>
+            <div className="flex justify-between text-[9px] text-white">
+                <span>IEEE Member</span>
+                <span className="font-bold">: Rs. {data.registration?.ieeePrice}/-</span>
+            </div>
+            <div className="flex justify-between text-[9px] text-white">
+                <span>Non IEEE Member</span>
+                <span className="font-bold">: Rs. {data.registration?.nonIeeePrice}/-</span>
+            </div>
+            <p className="text-[8px] italic" style={{ color: 'rgba(255,255,255,0.8)' }}>(Rs. 250 refundable upon IEEE Membership enrollment)</p>
+        </div>
+
+        <div className="w-full text-left p-2 rounded-lg mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <p className="text-[8px] font-black mb-1 uppercase tracking-widest" style={{ color: '#fde047' }}>Note:</p>
+            <ul className="text-[7.5px] space-y-1" style={{ color: 'rgba(255,255,255,0.9)' }}>
+                {data.registration?.notes?.map((n: string, i: number) => (
+                    <li key={i} className="flex gap-1">
+                        <span style={{ color: '#fde047' }}>•</span> {n}
+                    </li>
+                )) || (
+                    <>
+                        <li><span style={{ color: '#fde047' }}>•</span> Registration Confirmation: 21st March 2026</li>
+                        <li><span style={{ color: '#fde047' }}>•</span> Session Timings: 9:30 AM - 4:00 PM</li>
+                        <li><span style={{ color: '#fde047' }}>•</span> Registration is compulsory for all</li>
+                        <li><span style={{ color: '#fde047' }}>•</span> Certificates will be provided by IEEE</li>
+                    </>
+                )}
+            </ul>
+        </div>
+
+        <div className="bg-white p-2 rounded-lg mb-2 shadow-inner">
+          <QRCodeSVG value={data.googleForm || ""} size={64} marginSize={1} />
+        </div>
+        <p className="text-[7px] mb-4 break-all max-w-[120px] text-center" style={{ color: 'rgba(255,255,255,0.6)' }}>{data.googleForm}</p>
+
+        <div className="mt-auto w-full">
+            <div className="bg-white text-[#0047AB] text-[10px] font-black py-0.5 px-4 rounded-full text-center mb-2 uppercase tracking-widest shadow-md">ACCOUNT DETAIL</div>
+            <div className="text-[8px] space-y-0.5 font-medium leading-tight px-1" style={{ color: 'rgba(255,255,255,0.9)' }}>
+                <p className="flex justify-between"><span>Bank Name</span> <span>: {data.accountDetails?.bankName || 'Indian Bank'}</span></p>
+                <p className="flex justify-between"><span>Acc No</span> <span>: {data.accountDetails?.accountNo || '7111751848'}</span></p>
+                <p className="flex justify-between"><span>Acc Name</span> <span className="text-right truncate max-w-[80px]">: {data.accountDetails?.accountName || 'C TECH ASSOCIATION'}</span></p>
+                <p className="flex justify-between"><span>IFSC Code</span> <span>: {data.accountDetails?.ifscCode || 'IDIB000S181'}</span></p>
+            </div>
+            <div className="mt-3 py-1 px-3 bg-white text-[#0047AB] rounded-sm text-center text-[8px] font-black uppercase tracking-tighter">
+                Contact: {data.contact?.name || 'Convener'} • {data.contact?.mobile || '9999999999'}
+            </div>
+        </div>
+      </div>
+
+      {/* Column 3: Event Details (White) */}
+      <div className="column column-white flex flex-col items-center !p-4" style={{ backgroundColor: '#ffffff' }}>
+        <div className="flex justify-center flex-wrap gap-2 w-full mb-4">
             {selectedLogos.map(id => {
                 const logo = availableLogos.find(l => l.id === id);
-                return logo ? <img key={id} src={logo.src} className="h-8 object-contain" alt={id} /> : null;
+                return logo ? <img key={id} src={logo.src} className="h-6 object-contain" alt={id} /> : null;
             })}
         </div>
 
-        <h1 className="text-xl font-black text-center text-gray-800 leading-tight mb-4 uppercase">
-            {truncateWords(data.eventTitle, LIMITS.eventTitle)}
+        <p className="text-[9px] font-black text-[#0047AB] uppercase tracking-[0.2em] mb-1">IEEE Madras Section Sponsored</p>
+        <h1 className="text-base font-black text-center text-slate-900 leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: '#0f172a' }}>
+            {data.eventTitle}
         </h1>
+        <p className="text-[10px] font-bold text-[#0047AB] mb-4">{data.dates}</p>
 
-        <div className="text-center mb-8">
-            <p className="text-lg font-bold text-[#0047AB]">{data.dates}</p>
+        <div className="flex-1 w-full rounded-xl overflow-hidden border shadow-inner mb-4 relative min-h-[160px]" style={{ backgroundColor: '#f8fafc', borderColor: '#f1f5f9' }}>
+            {data.eventImage ? (
+                <img src={data.eventImage} alt="Event AI" className="w-full h-full object-cover" />
+            ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-[8px] uppercase tracking-widest" style={{ color: '#94a3b8' }}>Synthesizing Visual Identity...</div>
+            )}
         </div>
 
-        {data.eventImage && (
-            <img src={data.eventImage} alt="Event AI" className="w-full h-44 object-cover rounded-xl shadow-lg mb-8" />
-        )}
-
-        <div className="mt-auto text-center">
-            <p className="text-xs font-bold text-gray-500">Organized by</p>
-            <p className="text-sm font-black text-[#0047AB] uppercase leading-tight">{data.department}</p>
+        <div className="text-center mt-auto pt-3 flex flex-col items-center" style={{ borderTop: '1px solid #f1f5f9' }}>
+            <p className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>Organized by</p>
+            <p className="text-[10px] font-black text-[#0047AB] uppercase leading-tight max-w-[180px]">{data.department}</p>
+            <p className="text-[8px] font-bold mt-0.5" style={{ color: '#64748b' }}>SRM Institute of Science and Technology</p>
         </div>
       </div>
     </div>

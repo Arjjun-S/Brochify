@@ -38,6 +38,7 @@
   overflow: hidden;
   position: relative;
   display: flex;
+  break-after: page;
 }
 
 .column {
