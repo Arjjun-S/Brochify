@@ -3,10 +3,10 @@
 import React from 'react';
 
 const availableLogos = [
-  { id: 'srm', name: 'SRM', src: '/logos/srm.png' },
-  { id: 'ieee', name: 'IEEE', src: '/logos/ieee.png' },
-  { id: 'ctech', name: 'CTECH', src: '/logos/ctech.png' },
-  { id: 'naac', name: 'NAAC', src: '/logos/naac.png' },
+  { id: 'srm', name: 'SRM', src: '/logos/srm.svg' },
+  { id: 'ieee', name: 'IEEE', src: '/logos/ieee.svg' },
+  { id: 'ctech', name: 'CTECH', src: '/logos/ctech.svg' },
+  { id: 'naac', name: 'NAAC', src: '/logos/naac.svg' },
 ];
 
 interface LogoSelectorProps {
@@ -24,11 +24,11 @@ export default function LogoSelector({ selectedLogos, onToggle }: LogoSelectorPr
             key={logo.id}
             onClick={() => onToggle(logo.id)}
             className={cn(
-              "p-2 rounded-lg border-2 transition-all hover:bg-gray-50",
-              selectedLogos.includes(logo.id) ? "border-primary bg-blue-50" : "border-gray-100"
+              "p-2 rounded-lg border-2 transition-all hover:bg-gray-50 flex flex-col items-center",
+              selectedLogos.includes(logo.id) ? "border-[#0047AB] bg-blue-50" : "border-gray-100"
             )}
           >
-            <div className="w-10 h-10 bg-gray-200 rounded animate-pulse mb-1"></div> {/* Placeholder until real images are added */}
+            <img src={logo.src} alt={logo.name} className="h-8 w-auto mb-1 object-contain" />
             <span className="text-[10px] block font-bold">{logo.name}</span>
           </button>
         ))}

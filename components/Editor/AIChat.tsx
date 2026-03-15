@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { generateBrochureData } from '@/lib/openrouter';
 import { generateEventImage } from '@/lib/imageGen';
+import { cn } from '@/lib/utils';
 
 interface AIChatProps {
   onDataGenerated: (data: any) => void;
@@ -25,21 +26,44 @@ export default function AIChat({ onDataGenerated }: AIChatProps) {
     setLoading(true);
 
     try {
-      const data = await generateBrochureData(input, messages);
+      const result = await generateBrochureData(input, messages);
+      const { data, rawMessage } = result;
       
       if (data.eventTitle && data.department) {
-        setMessages(prev => [...prev, { role: 'assistant', content: "Great! I've generated the brochure data. Now generating an AI image for the cover..." }]);
+        setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: "Great! I've generated the brochure data. Now generating an AI image for the cover...",
+            reasoning_details: rawMessage?.reasoning_details 
+        }]);
         
         const imageUrl = await generateEventImage(data.eventTitle);
         data.eventImage = imageUrl;
         
         onDataGenerated(data);
-        setMessages(prev => [...prev, { role: 'assistant', content: "Done! Check the preview on the right. You can still edit anything manually." }]);
+        setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: "Done! Check the preview on the right. You can still edit anything manually." 
+        }]);
       } else {
-         setMessages(prev => [...prev, { role: 'assistant', content: "I need a bit more information. Please provide the registration fees and speakers if possible." }]);
+         setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: "I need a bit more information. Please provide the registration fees and speakers if possible.",
+            reasoning_details: rawMessage?.reasoning_details
+         }]);
       }
-    } catch (error) {
-       setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I hit a snag. Please check your API keys or try again." }]);
+    } catch (error: any) {
+       console.error('Error during generation:', error);
+       let errorMsg = "Sorry, I hit a snag. Please try again.";
+       if (error.response?.status === 429) {
+         errorMsg = "API Rate Limit reached (429). Please wait a few moments and try again.";
+       } else if (error.message?.includes('network')) {
+         errorMsg = "Network error. Please check your connection.";
+       }
+       
+       setMessages(prev => [...prev, { 
+           role: 'assistant', 
+           content: errorMsg 
+       }]);
     } finally {
       setLoading(false);
     }
@@ -54,14 +78,29 @@ export default function AIChat({ onDataGenerated }: AIChatProps) {
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((m, i) => (
-          <div key={i} className={cn(
-            "max-w-[80%] p-3 rounded-2xl text-sm",
-            m.role === 'user' ? "bg-[#0047AB] ml-auto rounded-tr-none" : "bg-slate-800 rounded-tl-none"
-          )}>
-            {m.content}
+          <div key={i} className="space-y-2">
+            <div className={cn(
+              "max-w-[80%] p-3 rounded-2xl text-sm shadow-sm",
+              m.role === 'user' ? "bg-[#0047AB] ml-auto rounded-tr-none text-white" : "bg-slate-800 rounded-tl-none text-slate-100"
+            )}>
+              {m.content}
+            </div>
+            {m.reasoning_details && (
+              <details className="text-[10px] text-slate-500 bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+                <summary className="cursor-pointer hover:text-slate-400 transition-colors font-bold uppercase tracking-wider">Reasoning Process</summary>
+                <div className="mt-2 whitespace-pre-wrap leading-relaxed opacity-70">
+                  {m.reasoning_details}
+                </div>
+              </details>
+            )}
           </div>
         ))}
-        {loading && <div className="flex gap-2 text-slate-400 text-xs italic"><Loader2 className="w-3 h-3 animate-spin"/> AI is thinking...</div>}
+        {loading && (
+          <div className="flex items-center gap-3 text-slate-400 text-xs italic animate-pulse">
+            <Loader2 className="w-4 h-4 animate-spin text-[#0047AB]"/> 
+            AI is analyzing your request...
+          </div>
+        )}
       </div>
 
       <div className="p-4 border-t border-slate-800 flex gap-2">
@@ -83,5 +122,3 @@ export default function AIChat({ onDataGenerated }: AIChatProps) {
     </div>
   );
 }
-
-import { cn } from '@/lib/utils';

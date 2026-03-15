@@ -5,11 +5,13 @@ const FAL_API_KEY = process.env.NEXT_PUBLIC_FAL_API_KEY;
 export async function generateEventImage(prompt: string) {
   try {
     const response = await axios.post(
-      'https://fal.run/fal-ai/flux/schnell',
+      'https://fal.run/fal-ai/nano-banana-pro', // New model name
       {
         prompt: `Professional academic conference poster illustration, ${prompt}, technology theme, vector style, blue and white color palette, high resolution, minimalist`,
-        image_size: 'landscape_4_3',
-        num_inference_steps: 4,
+        aspect_ratio: '16:9',
+        resolution: '1K',
+        num_images: 1,
+        output_format: 'png'
       },
       {
         headers: {

@@ -6,14 +6,15 @@ import PageOne from '@/components/Brochure/PageOne';
 import PageTwo from '@/components/Brochure/PageTwo';
 import LogoSelector from '@/components/Editor/LogoSelector';
 import { Download, Edit3, Type, Image as ImageIcon } from 'lucide-react';
-// @ts-ignore
-import html2pdf from 'html2pdf.js';
+// html2pdf imported dynamically in handler
 
 export default function Dashboard() {
   const [brochureData, setBrochureData] = useState<any>(null);
   const [selectedLogos, setSelectedLogos] = useState<string[]>(['srm', 'ieee', 'ctech']);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    // @ts-ignore
+    const html2pdf = (await import('html2pdf.js')).default;
     const element = document.getElementById('brochure-export-container');
     if (!element) return;
     
