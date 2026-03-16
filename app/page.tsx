@@ -31,8 +31,8 @@ export default function Dashboard() {
     const opt = {
       margin: 0,
       filename: `brochure-${Date.now()}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
+      image: { type: 'jpeg' as const, quality: 0.95 },
+      html2canvas: { scale: 1.2, useCORS: true, logging: false },
       jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'landscape' as const },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
@@ -51,9 +51,9 @@ export default function Dashboard() {
   if (!mounted) return null;
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
+    <main className="h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
       {/* Cinematic Header */}
-      <header className="h-20 bg-white border-b border-slate-200 px-10 flex items-center justify-between sticky top-0 z-[100] shadow-sm">
+      <header className="h-20 bg-white border-b border-slate-200 px-10 flex items-center justify-between shrink-0 z-[100] shadow-sm">
         <div className="flex items-center gap-6">
             <div className="flex items-center gap-3 group cursor-pointer">
                 <div className="w-12 h-12 bg-primary rounded-[18px] flex items-center justify-center shadow-[0_8px_20px_-6px_rgba(0,71,171,0.5)] transition-transform group-hover:rotate-6">
@@ -96,7 +96,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-12 overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Dev Logs Panel (Drawer) */}
         {showDevLogs && (
             <div className="absolute right-0 top-0 bottom-0 w-1/3 z-[200] animate-in slide-in-from-right duration-500 shadow-[-20px_0_50px_rgba(0,0,0,0.1)]">
@@ -110,8 +110,8 @@ export default function Dashboard() {
             </div>
         )}
 
-        {/* Left Side: Modular Controls */}
-        <div className="col-span-3 border-r border-slate-200 bg-slate-900 p-0 overflow-hidden flex flex-col">
+        {/* Left Side: Modular Controls (Independent Scroll) */}
+        <div className="w-[30%] border-r border-slate-200 bg-slate-900 p-0 overflow-hidden flex flex-col h-full">
             <AIChat 
                 onDataGenerated={(data) => setBrochureData(data)} 
                 onLoading={(loading, msg) => {
@@ -123,14 +123,14 @@ export default function Dashboard() {
             />
         </div>
 
-        {/* Right Side: Production Canvas */}
-        <div className="col-span-9 bg-[#F0F4F8] p-4 overflow-y-auto max-h-[calc(100vh-80px)] flex flex-col items-center relative group">
+        {/* Right Side: Production Canvas (Independent Scroll) */}
+        <div className="flex-1 bg-[#F0F4F8] p-4 overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
             {/* Background Texture - Grid Style */}
             <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[radial-gradient(#0047AB_1px,transparent_1px)] [background-size:20px_20px]"></div>
             
             {brochureData ? (
                 <div className="w-full flex flex-col items-center gap-10 py-6 relative z-10">
-                    <div id="brochure-preview" className="transform scale-[0.95] origin-top transition-all duration-700 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] hover:scale-[1.0] cursor-zoom-in">
+                    <div id="brochure-preview" className="transform scale-[0.85] origin-top transition-all duration-700 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] hover:scale-[0.88] cursor-zoom-in">
                         <PageOne data={brochureData} selectedLogos={selectedLogos} />
                         <div className="h-6" />
                         <PageTwo data={brochureData} selectedLogos={selectedLogos} />

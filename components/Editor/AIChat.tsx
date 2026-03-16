@@ -82,7 +82,7 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
         
         setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: "Architecture parameters verified. Now initializing generative visual engine for your cover illustration...",
+            content: `Architecture parameters for "${data.eventTitle}" verified. Initializing generative visual engine...`,
             reasoning_details: rawMessage?.reasoning_details,
             timestamp: new Date()
         }]);
@@ -99,15 +99,18 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
       } else {
          setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: "Broad architecture established. However, I require more granular data (Registration tokens, specific dates, or keynote speakers) to reach final production state.",
+            content: "Broad architecture established, but I need more specific details (e.g. key dates, registration fees, or committee names) to reach production state.",
             reasoning_details: rawMessage?.reasoning_details,
             timestamp: new Date()
          }]);
       }
     } catch (error: any) {
+       console.error("AIChat Process Error:", error);
+       const errorMessage = error.response?.data?.error?.message || error.message || "Unknown API disruption";
+       
        setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: "Signal termination encountered. Please re-initiate command or verify API availability.",
+            content: `Signal termination encountered: ${errorMessage}. Please verify your network connection or try a different event prompt.`,
             timestamp: new Date()
        }]);
     } finally {

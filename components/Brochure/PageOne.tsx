@@ -28,12 +28,12 @@ export default function PageOne({ data, selectedLogos, onEdit }: PageOneProps) {
   return (
     <div id="brochure-page-1" className="brochure-page border border-gray-200" style={{ backgroundColor: '#ffffff' }}>
       {/* Column 1: Committees (White) */}
-      <div className="column column-white border-r !p-4" style={{ backgroundColor: '#ffffff' }}>
-        <div className="space-y-4">
+      <div className="column column-white border-r !p-4 flex flex-col" style={{ backgroundColor: '#ffffff' }}>
+        <div className="flex-1 p-5 rounded-[32px] border border-[#0047AB]/20 bg-slate-50/80 space-y-6 shadow-sm">
             {chiefPatrons.length > 0 && (
                 <div>
-                    <h4 className="text-white text-[9px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>CHIEF PATRONS</h4>
-                    <ul className="text-[9px] leading-tight" style={{ color: '#1e293b' }}>
+                    <h4 className="text-white text-[10px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>CHIEF PATRONS</h4>
+                    <ul className="text-[10px] leading-tight" style={{ color: '#1e293b' }}>
                         {chiefPatrons.map((c: any, i: number) => (
                             <li key={i}><span className="font-bold">{c.name}</span>, {c.role}</li>
                         ))}
@@ -43,8 +43,8 @@ export default function PageOne({ data, selectedLogos, onEdit }: PageOneProps) {
             
             {patrons.length > 0 && (
                 <div>
-                    <h4 className="text-white text-[9px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>PATRONS</h4>
-                    <ul className="text-[9px] leading-tight" style={{ color: '#1e293b' }}>
+                    <h4 className="text-white text-[10px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>PATRONS</h4>
+                    <ul className="text-[10px] leading-tight" style={{ color: '#1e293b' }}>
                         {patrons.map((c: any, i: number) => (
                             <li key={i}><span className="font-bold">{c.name}</span>, {c.role}</li>
                         ))}
@@ -53,8 +53,8 @@ export default function PageOne({ data, selectedLogos, onEdit }: PageOneProps) {
             )}
 
             <div>
-                <h4 className="text-[9px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ACADEMIC ADVISORY COMMITTEE</h4>
-                <ul className="text-[8px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
+                <h4 className="text-[10px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ACADEMIC ADVISORY COMMITTEE</h4>
+                <ul className="text-[9px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
                     {advisory.slice(0, 10).map((c: any, i: number) => (
                         <li key={i} className="truncate"><span className="font-bold">{c.name}</span>, {c.role}</li>
                     ))}
@@ -62,8 +62,8 @@ export default function PageOne({ data, selectedLogos, onEdit }: PageOneProps) {
             </div>
 
             <div>
-                <h4 className="text-[9px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ORGANIZING COMMITTEE</h4>
-                <ul className="text-[8px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
+                <h4 className="text-[10px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ORGANIZING COMMITTEE</h4>
+                <ul className="text-[9px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
                     {organizing.slice(0, 15).map((c: any, i: number) => (
                         <li key={i} className="truncate"><span className="font-bold">{c.name}</span>, {c.role}</li>
                     ))}
@@ -133,17 +133,17 @@ export default function PageOne({ data, selectedLogos, onEdit }: PageOneProps) {
       {/* Column 3: Event Details (White) */}
       <div className="column column-white flex flex-col items-center !p-4" style={{ backgroundColor: '#ffffff' }}>
         <div className="flex justify-center flex-wrap gap-2 w-full mb-4">
-            {selectedLogos.map(id => {
+            {selectedLogos.slice(0, selectedLogos.length > 1 ? -1 : undefined).map(id => {
                 const logo = availableLogos.find(l => l.id === id);
-                return logo ? <img key={id} src={logo.src} className="h-6 object-contain" alt={id} /> : null;
+                return logo ? <img key={id} src={logo.src} className="h-8 object-contain" alt={id} /> : null;
             })}
         </div>
 
-        <p className="text-[9px] font-black text-[#0047AB] uppercase tracking-[0.2em] mb-1">IEEE Madras Section Sponsored</p>
-        <h1 className="text-base font-black text-center text-slate-900 leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: '#0f172a' }}>
+        <p className="text-[10px] font-black text-[#0047AB] uppercase tracking-[0.2em] mb-1">IEEE Madras Section Sponsored</p>
+        <h1 className="text-2xl font-black text-center leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: '#0047AB' }}>
             {data.eventTitle}
         </h1>
-        <p className="text-[10px] font-bold text-[#0047AB] mb-4">{data.dates}</p>
+        <p className="text-[12px] font-bold text-[#0047AB] mb-4">{data.dates}</p>
 
         <div className="flex-1 w-full rounded-xl overflow-hidden border shadow-inner mb-4 relative min-h-[160px]" style={{ backgroundColor: '#f8fafc', borderColor: '#f1f5f9' }}>
             {data.eventImage ? (
@@ -153,10 +153,21 @@ export default function PageOne({ data, selectedLogos, onEdit }: PageOneProps) {
             )}
         </div>
 
-        <div className="text-center mt-auto pt-3 flex flex-col items-center" style={{ borderTop: '1px solid #f1f5f9' }}>
-            <p className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>Organized by</p>
-            <p className="text-[10px] font-black text-[#0047AB] uppercase leading-tight max-w-[180px]">{data.department}</p>
-            <p className="text-[8px] font-bold mt-0.5" style={{ color: '#64748b' }}>SRM Institute of Science and Technology</p>
+        <div className="text-center mt-auto pt-3 flex flex-col items-center w-full" style={{ borderTop: '1px solid #f1f5f9' }}>
+            <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>Organized by</p>
+            <p className="text-[12px] font-black text-[#0047AB] uppercase leading-tight max-w-[180px] mb-4">{data.department}</p>
+            
+            {selectedLogos.length > 1 && (
+                <div className="mt-2 mb-4">
+                    {(() => {
+                        const lastId = selectedLogos[selectedLogos.length - 1];
+                        const logo = availableLogos.find(l => l.id === lastId);
+                        return logo ? <img src={logo.src} className="h-10 object-contain" alt="Bottom Logo" /> : null;
+                    })()}
+                </div>
+            )}
+            
+            <p className="text-[10px] font-bold mt-0.5" style={{ color: '#64748b' }}>SRM Institute of Science and Technology</p>
         </div>
       </div>
     </div>
