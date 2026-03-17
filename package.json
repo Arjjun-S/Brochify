@@ -32,10 +32,8 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "chrome-aws-lambda": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "puppeteer-core": "^24.39.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
