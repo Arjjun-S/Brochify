@@ -29,7 +29,17 @@ export default function MovableSegment({
 }: MovableSegmentProps) {
   const [isDragging, setIsDragging] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const dragStartRef = useRef<{ x: number; y: number; baseX: number; baseY: number } | null>(null);
+  const dragStartRef = useRef<{
+    x: number;
+    y: number;
+    baseX: number;
+    baseY: number;
+    scale: number;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  } | null>(null);
 
   const currentPosition = useMemo(
     () => position ?? { x: 0, y: 0 },
@@ -46,6 +56,18 @@ export default function MovableSegment({
     const parent = host.parentElement;
     if (!parent) return;
 
+    const stage = host.closest(".preview-stage") as HTMLElement | null;
+    const matrix = stage ? window.getComputedStyle(stage).transform : "none";
+    const scale = matrix && matrix !== "none" ? Number(matrix.split("(")[1]?.split(",")[0]) || 1 : 1;
+
+    const parentRect = parent.getBoundingClientRect();
+    const hostRect = host.getBoundingClientRect();
+
+    const leftSpace = Math.max(0, hostRect.left - parentRect.left) / scale;
+    const rightSpace = Math.max(0, parentRect.right - hostRect.right) / scale;
+    const topSpace = Math.max(0, hostRect.top - parentRect.top) / scale;
+    const bottomSpace = Math.max(0, parentRect.bottom - hostRect.bottom) / scale;
+
     e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
 
@@ -54,33 +76,26 @@ export default function MovableSegment({
       y: e.clientY,
       baseX: currentPosition.x,
       baseY: currentPosition.y,
+      scale,
+      minX: -leftSpace - 4,
+      maxX: rightSpace + 4,
+      minY: -topSpace - 4,
+      maxY: bottomSpace + 4,
     };
   };
 
   const onHandlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (!onMove || !hostRef.current || !dragStartRef.current || !isDragging) return;
 
-    const host = hostRef.current;
-    const parent = host.parentElement;
-    if (!parent) return;
-
-    const dx = e.clientX - dragStartRef.current.x;
-    const dy = e.clientY - dragStartRef.current.y;
-
-    const parentRect = parent.getBoundingClientRect();
-    const hostRect = host.getBoundingClientRect();
+    const dx = (e.clientX - dragStartRef.current.x) / dragStartRef.current.scale;
+    const dy = (e.clientY - dragStartRef.current.y) / dragStartRef.current.scale;
 
     const rawX = dragStartRef.current.baseX + dx;
     const rawY = dragStartRef.current.baseY + dy;
 
-    const minX = -Math.max(0, hostRect.left - parentRect.left) - 4;
-    const maxX = Math.max(0, parentRect.right - hostRect.right) + 4;
-    const minY = -Math.max(0, hostRect.top - parentRect.top) - 4;
-    const maxY = Math.max(0, parentRect.bottom - hostRect.bottom) + 4;
-
     onMove(id, {
-      x: clamp(rawX, minX, maxX),
-      y: clamp(rawY, minY, maxY),
+      x: clamp(rawX, dragStartRef.current.minX, dragStartRef.current.maxX),
+      y: clamp(rawY, dragStartRef.current.minY, dragStartRef.current.maxY),
     });
   };
 

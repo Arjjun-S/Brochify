@@ -1,29 +1,15 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Calendar,
   ChevronDown,
-  Clock3,
-  ImagePlus,
-  Plus,
-  Search,
   Sparkles,
-  Trash2,
   Wand2,
 } from "lucide-react";
-import Image from "next/image";
-import { BrandAsset, BrochureData } from "@/lib/brochure";
+import { BrochureData } from "@/lib/brochure";
 import { cn } from "@/lib/utils";
-
-type LogoOption = {
-  id: string;
-  name: string;
-  src: string;
-  custom?: boolean;
-};
 
 type GuidedFlowPanelProps = {
   data: BrochureData;
@@ -31,13 +17,6 @@ type GuidedFlowPanelProps = {
   onEnhance: () => Promise<void>;
   onCreate: () => void;
   isBusy: boolean;
-  logoOptions: LogoOption[];
-  selectedLogos: string[];
-  onToggleLogo: (id: string) => void;
-  assets: BrandAsset[];
-  onUploadAssets: (files: FileList | null, tagsInput: string) => Promise<void>;
-  onDeleteAsset: (id: string) => void;
-  onInsertAssetAsOverlay: (id: string) => void;
   fullPage?: boolean;
 };
 
@@ -143,30 +122,79 @@ function CustomSelect({
 }
 
 function DatePicker({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const months: SelectOption[] = [
+    { value: "01", label: "Jan" },
+    { value: "02", label: "Feb" },
+    { value: "03", label: "Mar" },
+    { value: "04", label: "Apr" },
+    { value: "05", label: "May" },
+    { value: "06", label: "Jun" },
+    { value: "07", label: "Jul" },
+    { value: "08", label: "Aug" },
+    { value: "09", label: "Sep" },
+    { value: "10", label: "Oct" },
+    { value: "11", label: "Nov" },
+    { value: "12", label: "Dec" },
+  ];
+  const currentYear = new Date().getFullYear();
+  const years: SelectOption[] = Array.from({ length: 7 }, (_, i) => {
+    const year = currentYear - 2 + i;
+    return { value: String(year), label: String(year) };
+  });
+  const parts = value ? value.split("-") : ["", "", ""];
+  const year = parts[0] ?? "";
+  const month = parts[1] ?? "";
+  const day = parts[2] ?? "";
+
+  const dayOptions: SelectOption[] = Array.from({ length: 31 }, (_, i) => {
+    const d = String(i + 1).padStart(2, "0");
+    return { value: d, label: d };
+  });
+
+  const update = (nextYear: string, nextMonth: string, nextDay: string) => {
+    if (nextYear && nextMonth && nextDay) {
+      onChange(`${nextYear}-${nextMonth}-${nextDay}`);
+      return;
+    }
+    onChange("");
+  };
+
   return (
-    <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-primary/60 focus-within:ring-4 focus-within:ring-primary/10">
-      <Calendar className="h-4 w-4 text-slate-400" />
-      <input
-        type="date"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none"
-      />
-    </label>
+    <div className="grid grid-cols-3 gap-2">
+      <CustomSelect value={day} options={dayOptions} onChange={(nextDay) => update(year, month, nextDay)} />
+      <CustomSelect value={month} options={months} onChange={(nextMonth) => update(year, nextMonth, day)} />
+      <CustomSelect value={year} options={years} onChange={(nextYear) => update(nextYear, month, day)} />
+    </div>
   );
 }
 
 function TimePicker({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const [hour = "09", minute = "00"] = value.split(":");
+  const hours: SelectOption[] = Array.from({ length: 12 }, (_, idx) => {
+    const h = String(idx + 1).padStart(2, "0");
+    return { value: h, label: h };
+  });
+  const minutes: SelectOption[] = ["00", "15", "30", "45"].map((m) => ({ value: m, label: m }));
+  const period = Number(hour) >= 12 ? "PM" : "AM";
+  const displayHour = String(((Number(hour) + 11) % 12) + 1).padStart(2, "0");
+
+  const update = (h12: string, m: string, p: string) => {
+    const hourNum = Number(h12);
+    if (!Number.isFinite(hourNum) || !m) return;
+    const twentyFour = p === "PM" ? (hourNum % 12) + 12 : hourNum % 12;
+    onChange(`${String(twentyFour).padStart(2, "0")}:${m}`);
+  };
+
   return (
-    <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-primary/60 focus-within:ring-4 focus-within:ring-primary/10">
-      <Clock3 className="h-4 w-4 text-slate-400" />
-      <input
-        type="time"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none"
+    <div className="grid grid-cols-3 gap-2">
+      <CustomSelect value={displayHour} options={hours} onChange={(next) => update(next, minute, period)} />
+      <CustomSelect value={minute} options={minutes} onChange={(next) => update(displayHour, next, period)} />
+      <CustomSelect
+        value={period}
+        options={[{ value: "AM", label: "AM" }, { value: "PM", label: "PM" }]}
+        onChange={(next) => update(displayHour, minute, next)}
       />
-    </label>
+    </div>
   );
 }
 
@@ -176,19 +204,10 @@ export default function GuidedFlowPanel({
   onEnhance,
   onCreate,
   isBusy,
-  logoOptions,
-  selectedLogos,
-  onToggleLogo,
-  assets,
-  onUploadAssets,
-  onDeleteAsset,
-  onInsertAssetAsOverlay,
   fullPage = false,
 }: GuidedFlowPanelProps) {
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
-  const [assetSearch, setAssetSearch] = useState("");
-  const [assetTagsInput, setAssetTagsInput] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [startTime, setStartTime] = useState("09:30");
@@ -211,12 +230,6 @@ export default function GuidedFlowPanel({
     const composed = `${dateText}${dateText ? " | " : ""}${sessionWindow}`;
     onFieldChange("dates", composed.trim());
   }, [endDate, onFieldChange, sessionWindow, startDate]);
-
-  const filteredAssets = useMemo(() => {
-    const query = assetSearch.trim().toLowerCase();
-    if (!query) return assets;
-    return assets.filter((asset) => asset.searchIndex.includes(query));
-  }, [assets, assetSearch]);
 
   const steps = [
     {
@@ -262,7 +275,7 @@ export default function GuidedFlowPanel({
     },
     {
       title: "Registration",
-      subtitle: "Add fee and enrollment details.",
+      subtitle: "Add fee, notes, account and contact details.",
       content: (
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
@@ -273,12 +286,72 @@ export default function GuidedFlowPanel({
               <input className={inputClassName} value={data.registration.nonIeeePrice} onChange={(e) => onFieldChange("registration.nonIeeePrice", e.target.value)} />
             </Field>
           </div>
+          <Field label="Registration Deadline">
+            <input className={inputClassName} value={data.registration.deadline} onChange={(e) => onFieldChange("registration.deadline", e.target.value)} />
+          </Field>
           <Field label="Registration URL">
             <input className={inputClassName} value={data.googleForm} onChange={(e) => onFieldChange("googleForm", e.target.value)} />
           </Field>
-          <Field label="Registration Note 1">
-            <textarea className={areaClassName} value={data.registration.notes[0] || ""} onChange={(e) => onFieldChange("registration.notes.0", e.target.value)} />
-          </Field>
+
+          {[0, 1, 2, 3].map((index) => (
+            <Field key={index} label={`Registration Note ${index + 1}`}>
+              <textarea className={areaClassName} value={data.registration.notes[index] || ""} onChange={(e) => onFieldChange(`registration.notes.${index}`, e.target.value)} />
+            </Field>
+          ))}
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Account Details</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Bank Name">
+                <input className={inputClassName} value={data.accountDetails.bankName} onChange={(e) => onFieldChange("accountDetails.bankName", e.target.value)} />
+              </Field>
+              <Field label="Account Number">
+                <input className={inputClassName} value={data.accountDetails.accountNo} onChange={(e) => onFieldChange("accountDetails.accountNo", e.target.value)} />
+              </Field>
+              <Field label="Account Name">
+                <input className={inputClassName} value={data.accountDetails.accountName} onChange={(e) => onFieldChange("accountDetails.accountName", e.target.value)} />
+              </Field>
+              <Field label="Account Type">
+                <input className={inputClassName} value={data.accountDetails.accountType} onChange={(e) => onFieldChange("accountDetails.accountType", e.target.value)} />
+              </Field>
+              <Field label="Branch">
+                <input className={inputClassName} value={data.accountDetails.branch} onChange={(e) => onFieldChange("accountDetails.branch", e.target.value)} />
+              </Field>
+              <Field label="IFSC">
+                <input className={inputClassName} value={data.accountDetails.ifscCode} onChange={(e) => onFieldChange("accountDetails.ifscCode", e.target.value)} />
+              </Field>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Contact Name">
+              <input className={inputClassName} value={data.contact.name} onChange={(e) => onFieldChange("contact.name", e.target.value)} />
+            </Field>
+            <Field label="Contact Mobile">
+              <input className={inputClassName} value={data.contact.mobile} onChange={(e) => onFieldChange("contact.mobile", e.target.value)} />
+            </Field>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Committee",
+      subtitle: "Capture patron, advisory and organizing teams.",
+      content: (
+        <div className="space-y-3">
+          {data.committee.map((member, index) => (
+            <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Member {index + 1}</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Name">
+                  <input className={inputClassName} value={member.name} onChange={(e) => onFieldChange(`committee.${index}.name`, e.target.value)} />
+                </Field>
+                <Field label="Role">
+                  <input className={inputClassName} value={member.role} onChange={(e) => onFieldChange(`committee.${index}.role`, e.target.value)} />
+                </Field>
+              </div>
+            </div>
+          ))}
         </div>
       ),
     },
@@ -290,6 +363,9 @@ export default function GuidedFlowPanel({
           <Field label="About College">
             <textarea className={areaClassName} value={data.aboutCollege} onChange={(e) => onFieldChange("aboutCollege", e.target.value)} />
           </Field>
+          <Field label="About School">
+            <textarea className={areaClassName} value={data.aboutSchool} onChange={(e) => onFieldChange("aboutSchool", e.target.value)} />
+          </Field>
           <Field label="About Department">
             <textarea className={areaClassName} value={data.aboutDepartment} onChange={(e) => onFieldChange("aboutDepartment", e.target.value)} />
           </Field>
@@ -300,117 +376,50 @@ export default function GuidedFlowPanel({
       ),
     },
     {
-      title: "Brand Assets",
-      subtitle: "Upload logos and searchable assets for reuse.",
+      title: "Topics & Speakers",
+      subtitle: "Define the complete agenda and speaker list.",
       content: (
-        <div className="space-y-4">
-          <Field label="Upload Logos / Images">
-            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                className="block w-full cursor-pointer text-xs text-slate-500"
-                onChange={async (event) => {
-                  await onUploadAssets(event.target.files, assetTagsInput);
-                  event.currentTarget.value = "";
-                }}
-              />
-              <input
-                className={inputClassName}
-                placeholder="Tags for all selected files, e.g. university logo dark"
-                value={assetTagsInput}
-                onChange={(event) => setAssetTagsInput(event.target.value)}
-              />
-              <p className="text-xs text-slate-500">Files are indexed with slug + fingerprint for precise search and re-use.</p>
-            </div>
-          </Field>
-
+        <div className="space-y-5">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="mb-3 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2">
-              <Search className="h-4 w-4 text-slate-400" />
-              <input
-                className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-500"
-                placeholder="Search assets by name, slug, tags, fingerprint"
-                value={assetSearch}
-                onChange={(event) => setAssetSearch(event.target.value)}
-              />
-            </div>
-
-            <div className="max-h-64 space-y-3 overflow-y-auto pr-1 scrollbar-hide">
-              {filteredAssets.map((asset) => (
-                <div key={asset.id} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">{asset.name}</p>
-                      <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-slate-500">{asset.slug}</p>
-                      <p className="mt-1 text-[10px] text-slate-600">ID: {asset.fingerprint}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteAsset(asset.id)}
-                      className="rounded-full border border-red-400/20 bg-red-500/10 p-2 text-red-300 transition-colors hover:bg-red-500/20"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <Image
-                      src={asset.dataUrl}
-                      alt={asset.name}
-                      width={40}
-                      height={40}
-                      className="h-10 w-10 rounded-lg border border-white/10 object-contain bg-white/90"
-                      unoptimized
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onInsertAssetAsOverlay(asset.id)}
-                      className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-primary"
-                    >
-                      <ImagePlus className="h-3.5 w-3.5" />
-                      Add To Canvas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onToggleLogo(asset.id)}
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em]",
-                        selectedLogos.includes(asset.id)
-                          ? "border-sky-300/30 bg-sky-500/15 text-sky-100"
-                          : "border-slate-300 bg-white text-slate-600",
-                      )}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Use As Logo
-                    </button>
+            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Daily Topics</p>
+            <div className="space-y-3">
+              {data.topics.map((topic, index) => (
+                <div key={index} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="mb-2 text-xs font-black text-slate-500">Day {index + 1}</p>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Field label="Date">
+                      <input className={inputClassName} value={topic.date} onChange={(e) => onFieldChange(`topics.${index}.date`, e.target.value)} />
+                    </Field>
+                    <Field label="Forenoon">
+                      <input className={inputClassName} value={topic.forenoon} onChange={(e) => onFieldChange(`topics.${index}.forenoon`, e.target.value)} />
+                    </Field>
+                    <Field label="Afternoon">
+                      <input className={inputClassName} value={topic.afternoon} onChange={(e) => onFieldChange(`topics.${index}.afternoon`, e.target.value)} />
+                    </Field>
                   </div>
                 </div>
               ))}
-              {filteredAssets.length === 0 && (
-                <p className="text-center text-xs text-slate-500">No assets found for this query.</p>
-              )}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Active Logos</span>
-            <div className="grid grid-cols-2 gap-2">
-              {logoOptions.map((logo) => (
-                <button
-                  key={logo.id}
-                  type="button"
-                  onClick={() => onToggleLogo(logo.id)}
-                  className={cn(
-                    "rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors",
-                    selectedLogos.includes(logo.id)
-                      ? "border-primary/30 bg-primary/15 text-primary"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-primary/25",
-                  )}
-                >
-                  {logo.name}
-                  {logo.custom && <span className="ml-2 text-[10px] text-sky-300">custom</span>}
-                </button>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Speakers</p>
+            <div className="space-y-3">
+              {data.speakers.map((speaker, index) => (
+                <div key={index} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="mb-2 text-xs font-black text-slate-500">Speaker {index + 1}</p>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Field label="Name">
+                      <input className={inputClassName} value={speaker.name} onChange={(e) => onFieldChange(`speakers.${index}.name`, e.target.value)} />
+                    </Field>
+                    <Field label="Role">
+                      <input className={inputClassName} value={speaker.role} onChange={(e) => onFieldChange(`speakers.${index}.role`, e.target.value)} />
+                    </Field>
+                    <Field label="Organization">
+                      <input className={inputClassName} value={speaker.org} onChange={(e) => onFieldChange(`speakers.${index}.org`, e.target.value)} />
+                    </Field>
+                  </div>
+                </div>
               ))}
             </div>
           </div>

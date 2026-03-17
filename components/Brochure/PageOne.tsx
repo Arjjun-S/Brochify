@@ -34,20 +34,29 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
     const safeValue = value ?? '';
 
     if (!onEdit) {
+        const StaticTag = multiline ? 'div' : 'span';
         return (
-            <span className={className} style={style}>
+            <StaticTag className={className} style={style}>
                 {safeValue}
-            </span>
+            </StaticTag>
         );
     }
 
     const Tag = multiline ? 'div' : 'span';
     return (
         <Tag
-            className={className}
+            className={`${multiline ? 'editable-block' : 'editable-inline'} ${className ?? ''}`.trim()}
             style={style}
             contentEditable
             suppressContentEditableWarning
+            spellCheck={false}
+            onInput={(e) => {
+                if (multiline) {
+                    const node = e.currentTarget as HTMLElement;
+                    node.style.height = 'auto';
+                    node.style.height = `${node.scrollHeight}px`;
+                }
+            }}
             onBlur={(e) => onEdit(path, e.currentTarget.textContent ?? '')}
             onKeyDown={(e) => {
                 if (!multiline && e.key === 'Enter') {
@@ -119,7 +128,7 @@ export default function PageOne({
                             <li key={index}>
                               <EditableText path={`committee.${index}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
                               {', '}
-                              <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
+                                                            <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
                             </li>
                         ))}
                     </ul>
@@ -136,7 +145,7 @@ export default function PageOne({
                             <li key={index}>
                               <EditableText path={`committee.${index}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
                               {', '}
-                              <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
+                                                            <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
                             </li>
                         ))}
                     </ul>
@@ -178,10 +187,10 @@ export default function PageOne({
                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ACADEMIC ADVISORY COMMITTEE</h4>
                 <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
                     {advisory.slice(0, 10).map(({ member, index }) => (
-                        <li key={index} className="truncate">
+                                                <li key={index} className="break-words whitespace-normal">
                           <EditableText path={`committee.${index}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
                           {', '}
-                          <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
+                                                    <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
                         </li>
                     ))}
                 </ul>
@@ -193,10 +202,10 @@ export default function PageOne({
                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ORGANIZING COMMITTEE</h4>
                 <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
                     {organizing.slice(0, 15).map(({ member, index }) => (
-                        <li key={index} className="truncate">
+                                                <li key={index} className="break-words whitespace-normal">
                           <EditableText path={`committee.${index}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
                           {', '}
-                          <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
+                                                    <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
                         </li>
                     ))}
                 </ul>
@@ -235,7 +244,7 @@ export default function PageOne({
                 {data.registration?.notes?.map((n, i: number) => (
                     <li key={i} className="flex gap-1">
                         <span style={{ color: '#fde047' }}>•</span>
-                        <EditableText path={`registration.notes.${i}`} value={n} onEdit={onEdit} className="inline" />
+                        <EditableText path={`registration.notes.${i}`} value={n} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" />
                     </li>
                 )) || (
                     <>
@@ -264,7 +273,7 @@ export default function PageOne({
             <div className="text-[10px] space-y-0.5 font-medium leading-tight px-1" style={{ color: 'rgba(255,255,255,0.9)' }}>
                 <p className="flex justify-between"><span>Bank Name</span> <span>: <EditableText path="accountDetails.bankName" value={data.accountDetails?.bankName || 'Indian Bank'} onEdit={onEdit} className="inline" /></span></p>
                 <p className="flex justify-between"><span>Acc No</span> <span>: <EditableText path="accountDetails.accountNo" value={data.accountDetails?.accountNo || '7111751848'} onEdit={onEdit} className="inline" /></span></p>
-                <p className="flex justify-between"><span>Acc Name</span> <span className="text-right truncate max-w-[80px]">: <EditableText path="accountDetails.accountName" value={data.accountDetails?.accountName || 'C TECH ASSOCIATION'} onEdit={onEdit} className="inline" /></span></p>
+                <p className="flex justify-between gap-2"><span>Acc Name</span> <span className="text-right max-w-[140px] break-words">: <EditableText path="accountDetails.accountName" value={data.accountDetails?.accountName || 'C TECH ASSOCIATION'} onEdit={onEdit} className="inline" /></span></p>
                 <p className="flex justify-between"><span>IFSC Code</span> <span>: <EditableText path="accountDetails.ifscCode" value={data.accountDetails?.ifscCode || 'IDIB000S181'} onEdit={onEdit} className="inline" /></span></p>
             </div>
             <div className="mt-3 py-1 px-3 bg-white text-[#0047AB] rounded-sm text-center text-[10px] font-black uppercase tracking-tighter">
@@ -292,7 +301,7 @@ export default function PageOne({
         <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} index={10} className="w-full flex flex-col items-center">
         <p className="text-[10px] font-black text-[#0047AB] uppercase tracking-[0.2em] mb-1">IEEE Madras Section Sponsored</p>
         <h1 className="text-2xl font-black text-center leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: '#0047AB' }}>
-            <EditableText path="eventTitle" value={data.eventTitle} onEdit={onEdit} />
+            <EditableText path="eventTitle" value={data.eventTitle} onEdit={onEdit} className="whitespace-pre-wrap break-words" />
         </h1>
         <p className="text-[12px] font-bold text-[#0047AB] mb-4"><EditableText path="dates" value={data.dates} onEdit={onEdit} /></p>
         </MovableSegment>

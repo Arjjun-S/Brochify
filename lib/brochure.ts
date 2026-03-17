@@ -401,13 +401,17 @@ export function parseTagInput(raw: string): string[] {
 export function createImageOverlay(
   page: 1 | 2,
   asset: Pick<BrandAsset, "name" | "dataUrl">,
+  position?: { x: number; y: number },
 ): ImageOverlayItem {
+  const x = position?.x ?? 54;
+  const y = position?.y ?? 44;
+
   return {
     id: makeId("image"),
     type: "image",
     page,
-    x: 54,
-    y: 44,
+    x,
+    y,
     width: 180,
     height: 120,
     rotation: 0,

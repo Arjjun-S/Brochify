@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import PageOne from "@/components/Brochure/PageOne";
 import PageTwo from "@/components/Brochure/PageTwo";
 import GuidedFlowPanel from "@/components/Editor/GuidedFlowPanel";
+import CanvasSidebar from "@/components/Editor/CanvasSidebar";
 import LoadingOverlay from "@/components/Layout/LoadingOverlay";
 import DevLogs from "@/components/Editor/DevLogs";
 import { cn } from "@/lib/utils";
@@ -267,6 +268,20 @@ export default function Dashboard() {
     setSelectedOverlayId(nextItem.id);
   };
 
+  const addImageOverlayAtPoint = (
+    assetId: string,
+    page: 1 | 2,
+    position: { x: number; y: number },
+  ) => {
+    const asset = assets.find((item) => item.id === assetId);
+    if (!asset) return;
+    const x = Math.max(0, Math.min(PAGE_WIDTH - 180, position.x));
+    const y = Math.max(0, Math.min(PAGE_HEIGHT - 120, position.y));
+    const nextItem = createImageOverlay(page, asset, { x, y });
+    setOverlayItems((prev) => [...prev, nextItem]);
+    setSelectedOverlayId(nextItem.id);
+  };
+
   const removeSelectedOverlay = () => {
     if (!selectedOverlayId) return;
     setOverlayItems((prev) => prev.filter((item) => item.id !== selectedOverlayId));
@@ -414,13 +429,6 @@ export default function Dashboard() {
               onEnhance={handleEnhanceWithAI}
               onCreate={handleCreateBrochure}
               isBusy={isLoading}
-              logoOptions={logoOptions}
-              selectedLogos={selectedLogos}
-              onToggleLogo={toggleLogo}
-              assets={assets}
-              onUploadAssets={handleUploadAssets}
-              onDeleteAsset={handleDeleteAsset}
-              onInsertAssetAsOverlay={addImageOverlayFromAsset}
               fullPage
             />
           </div>
@@ -438,6 +446,17 @@ export default function Dashboard() {
               </button>
             </div>
           )}
+
+          <CanvasSidebar
+            assets={assets}
+            logoOptions={logoOptions}
+            selectedLogos={selectedLogos}
+            onToggleLogo={toggleLogo}
+            onUploadAssets={handleUploadAssets}
+            onDeleteAsset={handleDeleteAsset}
+            onInsertAssetAsOverlay={addImageOverlayFromAsset}
+            isBusy={isLoading}
+          />
 
           <div className="flex-1 bg-[#F0F4F8] p-4 overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
             <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[radial-gradient(#0047AB_1px,transparent_1px)] [background-size:20px_20px]"></div>
@@ -607,6 +626,30 @@ export default function Dashboard() {
             <div
               ref={previewViewportRef}
               className="w-full flex flex-col items-center gap-10 py-4 relative z-10"
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const assetId = event.dataTransfer.getData("application/x-brochify-asset-id");
+                if (!assetId) return;
+
+                const wrapper = event.currentTarget.querySelector("#brochure-preview") as HTMLElement | null;
+                if (!wrapper) {
+                  addImageOverlayFromAsset(assetId);
+                  return;
+                }
+
+                const rect = wrapper.getBoundingClientRect();
+                const localX = (event.clientX - rect.left) / previewScale;
+                const localY = (event.clientY - rect.top) / previewScale;
+                const page = localY > PAGE_HEIGHT + PAGE_GAP / 2 ? 2 : 1;
+                const yInPage = page === 2 ? localY - (PAGE_HEIGHT + PAGE_GAP) : localY;
+
+                setActivePage(page);
+                addImageOverlayAtPoint(assetId, page, { x: localX - 90, y: yInPage - 60 });
+              }}
             >
               <div className="preview-shell">
                 <div

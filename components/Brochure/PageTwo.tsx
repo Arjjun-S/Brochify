@@ -23,24 +23,34 @@ type EditableTextProps = {
     value?: string;
     onEdit?: (path: string, value: string) => void;
     className?: string;
+    multiline?: boolean;
 };
 
-const EditableText = ({ path, value, onEdit, className }: EditableTextProps) => {
+const EditableText = ({ path, value, onEdit, className, multiline = false }: EditableTextProps) => {
     const safeValue = value ?? '';
+    const Tag = multiline ? 'div' : 'span';
 
     if (!onEdit) {
-        return <span className={className}>{safeValue}</span>;
+        return <Tag className={className}>{safeValue}</Tag>;
     }
 
     return (
-        <span
-            className={className}
+        <Tag
+            className={`${multiline ? 'editable-block' : 'editable-inline'} ${className ?? ''}`.trim()}
             contentEditable
             suppressContentEditableWarning
+            spellCheck={false}
+            onInput={(e) => {
+                if (multiline) {
+                    const node = e.currentTarget as HTMLElement;
+                    node.style.height = 'auto';
+                    node.style.height = `${node.scrollHeight}px`;
+                }
+            }}
             onBlur={(e) => onEdit(path, e.currentTarget.textContent ?? '')}
         >
             {safeValue}
-        </span>
+        </Tag>
     );
 };
 
@@ -63,13 +73,13 @@ export default function PageTwo({
                 <MovableSegment id="p2-about-srm" position={segmentPositions?.['p2-about-srm']} onMove={onSegmentMove} index={0}>
                 <div className="text-center">
                     <h3 className="text-base font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>About SRM</h3>
-                                        <p className="leading-tight text-justify" style={{ opacity: 0.9 }}><EditableText path="aboutCollege" value={data.aboutCollege} onEdit={onEdit} /></p>
+                                        <EditableText path="aboutCollege" value={data.aboutCollege} onEdit={onEdit} multiline className="block text-left leading-[1.34] whitespace-pre-wrap break-words" />
                 </div>
                 </MovableSegment>
                 <MovableSegment id="p2-about-school" position={segmentPositions?.['p2-about-school']} onMove={onSegmentMove} index={1}>
                 <div className="text-center">
                     <h3 className="text-[14px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>About the School</h3>
-                                        <p className="leading-tight text-justify" style={{ opacity: 0.9 }}><EditableText path="aboutSchool" value={data.aboutSchool} onEdit={onEdit} /></p>
+                                        <EditableText path="aboutSchool" value={data.aboutSchool} onEdit={onEdit} multiline className="block text-left leading-[1.34] whitespace-pre-wrap break-words" />
                 </div>
                 </MovableSegment>
             </div>
@@ -79,13 +89,13 @@ export default function PageTwo({
                 <MovableSegment id="p2-about-dept" position={segmentPositions?.['p2-about-dept']} onMove={onSegmentMove} index={2}>
                 <div className="text-center">
                     <h3 className="text-[13px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ color: '#0047AB', backgroundColor: 'rgba(0, 71, 171, 0.1)', borderBottom: '1px solid rgba(0, 71, 171, 0.2)' }}>About Department</h3>
-                    <p className="leading-tight text-justify" style={{ color: '#334155' }}><EditableText path="aboutDepartment" value={data.aboutDepartment} onEdit={onEdit} /></p>
+                    <EditableText path="aboutDepartment" value={data.aboutDepartment} onEdit={onEdit} multiline className="block text-left leading-[1.34] whitespace-pre-wrap break-words" />
                 </div>
                 </MovableSegment>
                 <MovableSegment id="p2-about-fdp" position={segmentPositions?.['p2-about-fdp']} onMove={onSegmentMove} index={3}>
                 <div className="text-center">
                     <h3 className="text-[13px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ color: '#0047AB', backgroundColor: 'rgba(0, 71, 171, 0.1)', borderBottom: '1px solid rgba(0, 71, 171, 0.2)' }}>About the FDP</h3>
-                    <p className="leading-tight text-justify" style={{ color: '#334155' }}><EditableText path="aboutFdp" value={data.aboutFdp} onEdit={onEdit} /></p>
+                    <EditableText path="aboutFdp" value={data.aboutFdp} onEdit={onEdit} multiline className="block text-left leading-[1.34] whitespace-pre-wrap break-words" />
                 </div>
                 </MovableSegment>
 
@@ -94,7 +104,7 @@ export default function PageTwo({
                     <p className="text-[10px] font-black uppercase mb-1 underline" style={{ color: '#0047AB' }}>Program Highlights:</p>
                     <ul className="text-[10px] space-y-1" style={{ color: '#475569' }}>
                         {data.topics?.slice(0, 5).map((t, i: number) => (
-                            <li key={i}>• Day {i + 1}: <EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} /></li>
+                            <li key={i} className="break-words whitespace-normal">• Day {i + 1}: <EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></li>
                         ))}
                     </ul>
                 </div>
@@ -119,8 +129,8 @@ export default function PageTwo({
                                 <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.3)' }}>
                                     <td className="p-1.5 text-center font-bold" style={{ borderRight: '1px solid rgba(255,255,255,0.3)' }}><EditableText path={`topics.${i}.date`} value={t.date} onEdit={onEdit} /></td>
                                     <td className="p-1.5">
-                                        <div className="font-bold" style={{ color: '#fef9c3' }}><EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} /></div>
-                                        <div className="italic" style={{ opacity: 0.7 }}><EditableText path={`topics.${i}.afternoon`} value={t.afternoon} onEdit={onEdit} /></div>
+                                        <div className="font-bold break-words whitespace-normal" style={{ color: '#fef9c3' }}><EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></div>
+                                        <div className="italic break-words whitespace-normal" style={{ opacity: 0.7 }}><EditableText path={`topics.${i}.afternoon`} value={t.afternoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></div>
                                     </td>
                                 </tr>
                             ))}
@@ -135,8 +145,8 @@ export default function PageTwo({
                     {data.speakers?.slice(0, 8).map((s, i: number) => (
                         <div key={i} className="p-1.5 rounded border flex flex-col justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}>
                             <p className="font-black text-[9.5px] leading-none mb-0.5" style={{ color: '#fde047' }}><EditableText path={`speakers.${i}.name`} value={s.name} onEdit={onEdit} /></p>
-                            <p className="text-[8.5px] italic leading-tight truncate" style={{ color: 'rgba(255,255,255,0.7)' }}><EditableText path={`speakers.${i}.role`} value={s.role} onEdit={onEdit} /></p>
-                            <p className="text-[8px] leading-tight truncate" style={{ color: 'rgba(255,255,255,0.5)' }}><EditableText path={`speakers.${i}.org`} value={s.org} onEdit={onEdit} /></p>
+                            <p className="text-[8.5px] italic leading-tight break-words whitespace-normal" style={{ color: 'rgba(255,255,255,0.7)' }}><EditableText path={`speakers.${i}.role`} value={s.role} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></p>
+                            <p className="text-[8px] leading-tight break-words whitespace-normal" style={{ color: 'rgba(255,255,255,0.5)' }}><EditableText path={`speakers.${i}.org`} value={s.org} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></p>
                         </div>
                     ))}
                 </div>

@@ -6,6 +6,7 @@ import { OverlayItem } from "@/lib/brochure";
 
 const PAGE_WIDTH = 983;
 const PAGE_HEIGHT = 680;
+const SNAP_THRESHOLD = 8;
 
 type BrochureOverlayProps = {
   items: OverlayItem[];
@@ -40,7 +41,78 @@ export default function BrochureOverlay({
   canvasScale = 1,
 }: BrochureOverlayProps) {
   const [activeInteraction, setActiveInteraction] = useState<string | null>(null);
+  const [guideLines, setGuideLines] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
   const interactionRef = useRef<InteractionState | null>(null);
+
+  const collectSnapLines = (activeId: string) => {
+    const xLines = [0, PAGE_WIDTH / 2, PAGE_WIDTH];
+    const yLines = [0, PAGE_HEIGHT / 2, PAGE_HEIGHT];
+
+    for (const entry of items) {
+      if (entry.id === activeId) continue;
+      xLines.push(entry.x, entry.x + entry.width / 2, entry.x + entry.width);
+      yLines.push(entry.y, entry.y + entry.height / 2, entry.y + entry.height);
+    }
+
+    return { xLines, yLines };
+  };
+
+  const snapPosition = (
+    target: { x: number; y: number; width: number; height: number },
+    activeId: string,
+  ) => {
+    const { xLines, yLines } = collectSnapLines(activeId);
+
+    const anchorsX = [
+      { key: "left", value: target.x },
+      { key: "center", value: target.x + target.width / 2 },
+      { key: "right", value: target.x + target.width },
+    ];
+
+    const anchorsY = [
+      { key: "top", value: target.y },
+      { key: "middle", value: target.y + target.height / 2 },
+      { key: "bottom", value: target.y + target.height },
+    ];
+
+    let bestX: { delta: number; line: number; anchor: "left" | "center" | "right" } | null = null;
+    let bestY: { delta: number; line: number; anchor: "top" | "middle" | "bottom" } | null = null;
+
+    for (const line of xLines) {
+      for (const anchor of anchorsX) {
+        const delta = line - anchor.value;
+        if (Math.abs(delta) <= SNAP_THRESHOLD) {
+          if (!bestX || Math.abs(delta) < Math.abs(bestX.delta)) {
+            bestX = { delta, line, anchor: anchor.key as "left" | "center" | "right" };
+          }
+        }
+      }
+    }
+
+    for (const line of yLines) {
+      for (const anchor of anchorsY) {
+        const delta = line - anchor.value;
+        if (Math.abs(delta) <= SNAP_THRESHOLD) {
+          if (!bestY || Math.abs(delta) < Math.abs(bestY.delta)) {
+            bestY = { delta, line, anchor: anchor.key as "top" | "middle" | "bottom" };
+          }
+        }
+      }
+    }
+
+    const snappedX = bestX ? target.x + bestX.delta : target.x;
+    const snappedY = bestY ? target.y + bestY.delta : target.y;
+
+    setGuideLines({
+      x: bestX ? [bestX.line] : [],
+      y: bestY ? [bestY.line] : [],
+    });
+
+    return {
+      x: snappedX,
+      y: snappedY,
+    };
+  };
 
   const beginMove = (event: React.PointerEvent<HTMLDivElement>, item: OverlayItem) => {
     event.preventDefault();
@@ -86,6 +158,7 @@ export default function BrochureOverlay({
   const endInteraction = () => {
     interactionRef.current = null;
     setActiveInteraction(null);
+    setGuideLines({ x: [], y: [] });
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -98,9 +171,16 @@ export default function BrochureOverlay({
     const deltaY = (event.clientY - interaction.startY) / canvasScale;
 
     if (interaction.mode === "move") {
-      onUpdate(item.id, {
+      const next = {
         x: clamp(interaction.baseX + deltaX, 0, PAGE_WIDTH - item.width),
         y: clamp(interaction.baseY + deltaY, 0, PAGE_HEIGHT - item.height),
+        width: item.width,
+        height: item.height,
+      };
+      const snapped = snapPosition(next, item.id);
+      onUpdate(item.id, {
+        x: clamp(snapped.x, 0, PAGE_WIDTH - item.width),
+        y: clamp(snapped.y, 0, PAGE_HEIGHT - item.height),
       });
       return;
     }
@@ -138,9 +218,11 @@ export default function BrochureOverlay({
       );
     }
 
+    const snapped = snapPosition({ x: nextX, y: nextY, width: nextWidth, height: nextHeight }, item.id);
+
     onUpdate(item.id, {
-      x: clamp(nextX, 0, PAGE_WIDTH - minWidth),
-      y: clamp(nextY, 0, PAGE_HEIGHT - minHeight),
+      x: clamp(snapped.x, 0, PAGE_WIDTH - minWidth),
+      y: clamp(snapped.y, 0, PAGE_HEIGHT - minHeight),
       width: clamp(nextWidth, minWidth, PAGE_WIDTH - nextX),
       height: clamp(nextHeight, minHeight, PAGE_HEIGHT - nextY),
     });
@@ -155,6 +237,13 @@ export default function BrochureOverlay({
         }
       }}
     >
+      {guideLines.x.map((x) => (
+        <div key={`guide-x-${x}`} className="overlay-guide-line overlay-guide-vertical" style={{ left: x }} />
+      ))}
+      {guideLines.y.map((y) => (
+        <div key={`guide-y-${y}`} className="overlay-guide-line overlay-guide-horizontal" style={{ top: y }} />
+      ))}
+
       {items.map((item) => {
         const isSelected = selectedId === item.id;
 
