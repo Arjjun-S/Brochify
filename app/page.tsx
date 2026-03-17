@@ -1,54 +1,161 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import AIChat from '@/components/Editor/AIChat';
-import PageOne from '@/components/Brochure/PageOne';
-import PageTwo from '@/components/Brochure/PageTwo';
-import LoadingOverlay from '@/components/Layout/LoadingOverlay';
-import DevLogs from '@/components/Editor/DevLogs';
-import { cn } from '@/lib/utils';
-import { Download, Layout, Database, ChevronRight, Activity } from 'lucide-react';
-// Dynamically import browser-only libraries
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import PageOne from "@/components/Brochure/PageOne";
+import PageTwo from "@/components/Brochure/PageTwo";
+import GuidedFlowPanel from "@/components/Editor/GuidedFlowPanel";
+import LoadingOverlay from "@/components/Layout/LoadingOverlay";
+import DevLogs from "@/components/Editor/DevLogs";
+import { cn } from "@/lib/utils";
+import {
+  Activity,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Circle,
+  Download,
+  Layout,
+  Sparkles,
+  Square,
+  Trash2,
+  Type,
+  ChevronRight,
+} from "lucide-react";
+import {
+  BRAND_ASSET_STORAGE_KEY,
+  BrandAsset,
+  BrochureData,
+  createAssetIdentity,
+  createEmptyBrochureData,
+  createImageOverlay,
+  createShapeOverlay,
+  createTextOverlay,
+  FONT_OPTIONS,
+  normalizeBrochureData,
+  OverlayItem,
+  parseTagInput,
+  SegmentPosition,
+  setValueAtPath,
+  TextOverlayItem,
+} from "@/lib/brochure";
+import { generateBrochureData } from "@/lib/openrouter";
+import { LoadingTask } from "@/lib/loadingManager";
 
-type BrochureData = Record<string, unknown>;
-type MutableNode = Record<string, unknown> | unknown[];
-type SegmentPosition = { x: number; y: number };
+const PAGE_WIDTH = 983;
+const PAGE_HEIGHT = 680;
+const PAGE_GAP = 24;
 
-function isObjectNode(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+const builtinLogos: Array<{ id: string; name: string; src: string }> = [
+  { id: "srm", name: "SRM Institute of Tech", src: "/logos/srm.svg" },
+  { id: "ieee", name: "IEEE Student Branch", src: "/logos/ieee.svg" },
+  { id: "ctech", name: "Dept. of C. Tech", src: "/logos/ctech.svg" },
+  { id: "naac", name: "NAAC Accredited", src: "/logos/naac.svg" },
+];
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
-function isIndexKey(key: string): boolean {
-  return /^\d+$/.test(key);
+function buildEnhancePrompt(data: BrochureData): string {
+  return `Enhance the following brochure JSON while preserving factual fields and structure. Improve writing quality, clarity, and professionalism. Return only JSON matching the same schema.\n\n${JSON.stringify(data, null, 2)}`;
 }
 
 export default function Dashboard() {
-  const [brochureData, setBrochureData] = useState<BrochureData | null>(null);
-  const [selectedLogos, setSelectedLogos] = useState<string[]>(['srm', 'ieee', 'ctech']);
-  const [isLoading, setIsLoading] = useState(false);
+  const [brochureData, setBrochureData] = useState<BrochureData>(createEmptyBrochureData());
+  const [selectedLogos, setSelectedLogos] = useState<string[]>(["srm", "ieee", "ctech"]);
+  const [loadingTask, setLoadingTask] = useState<LoadingTask>("idle");
   const [loadingMessage, setLoadingMessage] = useState("");
   const [mounted, setMounted] = useState(false);
   const [showDevLogs, setShowDevLogs] = useState(false);
   const [segmentPositions, setSegmentPositions] = useState<Record<string, SegmentPosition>>({});
+  const [overlayItems, setOverlayItems] = useState<OverlayItem[]>([]);
+  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState<1 | 2>(1);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [projectReady, setProjectReady] = useState(false);
+  const [assets, setAssets] = useState<BrandAsset[]>([]);
+  const previewViewportRef = useRef<HTMLDivElement | null>(null);
+
+  const isLoading = loadingTask !== "idle";
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const raw = localStorage.getItem(BRAND_ASSET_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as BrandAsset[];
+      if (Array.isArray(parsed)) {
+        setAssets(parsed);
+      }
+    } catch {
+      setAssets([]);
+    }
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem(BRAND_ASSET_STORAGE_KEY, JSON.stringify(assets));
+  }, [assets, mounted]);
+
+  useEffect(() => {
+    const node = previewViewportRef.current;
+    if (!node) return;
+
+    const resizeObserver = new ResizeObserver(([entry]) => {
+      const nextScale = Math.min(1, Math.max(0.52, (entry.contentRect.width - 24) / PAGE_WIDTH));
+      setPreviewScale(nextScale);
+    });
+
+    resizeObserver.observe(node);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  const selectedOverlay = useMemo(
+    () => overlayItems.find((item) => item.id === selectedOverlayId) ?? null,
+    [overlayItems, selectedOverlayId],
+  );
+
+  const logoOptions = useMemo(() => {
+    const custom = assets.map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      src: asset.dataUrl,
+      custom: true,
+    }));
+    return [...builtinLogos, ...custom];
+  }, [assets]);
+
+  const logoCatalog = useMemo(
+    () => Object.fromEntries(logoOptions.map((logo) => [logo.id, logo.src])),
+    [logoOptions],
+  );
+
+  useEffect(() => {
+    if (selectedOverlay) {
+      setActivePage(selectedOverlay.page);
+    }
+  }, [selectedOverlay]);
+
   const handleDownload = async () => {
-    console.log("PDF download triggered via Puppeteer API...");
-    const element = document.getElementById('brochure-preview');
+    const element = document.getElementById("brochure-preview");
     if (!element) {
-      console.error("Preview element not found!");
       return;
     }
 
-    setIsLoading(true);
-    setLoadingMessage("Materializing High-Fidelity PDF...");
+    setLoadingTask("exporting");
+    setLoadingMessage("Preparing final PDF export...");
 
     try {
-      // Get all styles from the document
-      let styles = '';
+      let styles = "";
       const styleSheets = Array.from(document.styleSheets);
       for (const sheet of styleSheets) {
         try {
@@ -56,27 +163,27 @@ export default function Dashboard() {
           for (const rule of rules) {
             styles += rule.cssText;
           }
-        } catch (e) {
-          console.warn("Could not read stylesheet rules (likely CORS):", e);
+        } catch {
+          // ignore stylesheet access errors for cross-origin rules
         }
       }
 
-      // Get the HTML content, isolating just the pages
-      const pages = element.querySelectorAll('.brochure-page');
-      let pagesHtml = '';
-      pages.forEach(p => pagesHtml += p.outerHTML);
+      const pages = element.querySelectorAll(".brochure-page");
+      let pagesHtml = "";
+      pages.forEach((page) => {
+        pagesHtml += page.outerHTML;
+      });
 
       const html = `
         <html>
         <head>
           <style>
             ${styles}
-            /* Override preview styles specifically for printing */
             .brochure-page {
-                box-shadow: none !important;
-                transform: none !important;
-                margin: 0 !important;
-                border: none !important;
+              box-shadow: none !important;
+              transform: none !important;
+              margin: 0 !important;
+              border: none !important;
             }
           </style>
         </head>
@@ -88,87 +195,42 @@ export default function Dashboard() {
         </html>
       `;
 
-      const response = await fetch('/api/generate-pdf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ html, css: styles }), // Still send styles separately just in case the backend uses it for @page
+      const response = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, css: styles }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate PDF');
+        throw new Error(errorData.error || "Failed to generate PDF");
       }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `brochure-${Date.now()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `brochure-${Date.now()}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      console.log("PDF download completed.");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error("PDF download failed:", err);
+      document.body.removeChild(anchor);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
       alert(`Error generating PDF: ${message}`);
     } finally {
-      setIsLoading(false);
+      setLoadingTask("idle");
       setLoadingMessage("");
     }
   };
 
-  const handleEdit = (path: string, value: string) => {
-    setBrochureData((prev) => {
-      if (!prev) return prev;
-
-      const keys = path.split('.');
-      const clone = structuredClone(prev) as BrochureData;
-      let cursor: MutableNode = clone;
-
-      for (let i = 0; i < keys.length - 1; i++) {
-        const key = keys[i];
-        const nextIsIndex = isIndexKey(keys[i + 1]);
-
-        if (Array.isArray(cursor)) {
-          const index = Number(key);
-          if (!Number.isInteger(index)) return prev;
-
-          const existing = cursor[index];
-          if (!Array.isArray(existing) && !isObjectNode(existing)) {
-            cursor[index] = nextIsIndex ? [] : {};
-          }
-          cursor = cursor[index] as MutableNode;
-          continue;
-        }
-
-        const existing = cursor[key];
-        if (!Array.isArray(existing) && !isObjectNode(existing)) {
-          cursor[key] = nextIsIndex ? [] : {};
-        }
-        cursor = cursor[key] as MutableNode;
-      }
-
-      const leaf = keys[keys.length - 1];
-      if (Array.isArray(cursor)) {
-        const index = Number(leaf);
-        if (!Number.isInteger(index)) return prev;
-        cursor[index] = value;
-      } else {
-        cursor[leaf] = value;
-      }
-
-      return clone;
-    });
-  };
+  const handleFieldChange = useCallback((path: string, value: unknown) => {
+    setBrochureData((prev) => setValueAtPath(prev, path, value));
+  }, []);
 
   const toggleLogo = (id: string) => {
-    setSelectedLogos(prev => 
-      prev.includes(id) ? prev.filter(l => l !== id) : [...prev, id]
+    setSelectedLogos((prev) =>
+      prev.includes(id) ? prev.filter((logoId) => logoId !== id) : [...prev, id],
     );
   };
 
@@ -179,126 +241,422 @@ export default function Dashboard() {
     }));
   };
 
+  const updateOverlayItem = (id: string, patch: Partial<OverlayItem>) => {
+    setOverlayItems((prev) =>
+      prev.map((item) => (item.id === id ? ({ ...item, ...patch } as OverlayItem) : item)),
+    );
+  };
+
+  const addTextOverlay = () => {
+    const nextItem = createTextOverlay(activePage);
+    setOverlayItems((prev) => [...prev, nextItem]);
+    setSelectedOverlayId(nextItem.id);
+  };
+
+  const addShapeOverlay = (shape: "rectangle" | "circle") => {
+    const nextItem = createShapeOverlay(activePage, shape);
+    setOverlayItems((prev) => [...prev, nextItem]);
+    setSelectedOverlayId(nextItem.id);
+  };
+
+  const addImageOverlayFromAsset = (assetId: string) => {
+    const asset = assets.find((item) => item.id === assetId);
+    if (!asset) return;
+    const nextItem = createImageOverlay(activePage, asset);
+    setOverlayItems((prev) => [...prev, nextItem]);
+    setSelectedOverlayId(nextItem.id);
+  };
+
+  const removeSelectedOverlay = () => {
+    if (!selectedOverlayId) return;
+    setOverlayItems((prev) => prev.filter((item) => item.id !== selectedOverlayId));
+    setSelectedOverlayId(null);
+  };
+
+  const handleUploadAssets = async (files: FileList | null, tagsInput: string) => {
+    if (!files || files.length === 0) return;
+    setLoadingTask("uploading");
+    setLoadingMessage("Uploading and indexing assets...");
+
+    try {
+      const tags = parseTagInput(tagsInput);
+      const incoming = await Promise.all(
+        Array.from(files).map(async (file) => {
+          const dataUrl = await fileToDataUrl(file);
+          const identity = createAssetIdentity(file.name, tags, dataUrl);
+
+          const nextAsset: BrandAsset = {
+            id: identity.id,
+            name: file.name,
+            kind:
+              file.type.includes("svg") || file.name.toLowerCase().includes("logo")
+                ? "logo"
+                : "image",
+            mimeType: file.type,
+            dataUrl,
+            tags,
+            slug: identity.slug,
+            fingerprint: identity.fingerprint,
+            searchIndex: identity.searchIndex,
+            createdAt: new Date().toISOString(),
+          };
+          return nextAsset;
+        }),
+      );
+
+      setAssets((prev) => {
+        const merged = [...prev];
+        for (const asset of incoming) {
+          const existingIndex = merged.findIndex((item) => item.id === asset.id);
+          if (existingIndex >= 0) {
+            merged[existingIndex] = asset;
+          } else {
+            merged.unshift(asset);
+          }
+        }
+        return merged;
+      });
+    } finally {
+      setLoadingTask("idle");
+      setLoadingMessage("");
+    }
+  };
+
+  const handleDeleteAsset = (id: string) => {
+    setAssets((prev) => prev.filter((asset) => asset.id !== id));
+    setSelectedLogos((prev) => prev.filter((logoId) => logoId !== id));
+  };
+
+  const handleCreateBrochure = () => {
+    setLoadingTask("building");
+    setLoadingMessage("Building brochure from your guided inputs...");
+    setProjectReady(true);
+    window.setTimeout(() => {
+      setLoadingTask("idle");
+      setLoadingMessage("");
+    }, 850);
+  };
+
+  const handleEnhanceWithAI = async () => {
+    setLoadingTask("enhancing");
+    setLoadingMessage("Enhancing your content with AI quality improvements...");
+
+    try {
+      const prompt = buildEnhancePrompt(brochureData);
+      const result = await generateBrochureData(prompt);
+      setBrochureData(normalizeBrochureData(result.data as Record<string, unknown>));
+      setProjectReady(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Enhancement failed";
+      alert(message);
+    } finally {
+      setLoadingTask("idle");
+      setLoadingMessage("");
+    }
+  };
+
+  const previewHeight = (PAGE_HEIGHT * 2 + PAGE_GAP) * previewScale;
+  const previewWidth = PAGE_WIDTH * previewScale;
+
   if (!mounted) return null;
 
   return (
     <main className="h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
-      {/* Cinematic Header */}
-      <header className="h-20 bg-white border-b border-slate-200 px-10 flex items-center justify-between shrink-0 z-[100] shadow-sm">
+      <header className="h-20 bg-white border-b border-slate-200 px-8 lg:px-10 flex items-center justify-between shrink-0 z-[100] shadow-sm">
         <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3 group cursor-pointer">
-                <div className="w-12 h-12 bg-primary rounded-[18px] flex items-center justify-center shadow-[0_8px_20px_-6px_rgba(0,71,171,0.5)] transition-transform group-hover:rotate-6">
-                    <Layout className="text-white w-6 h-6" />
-                </div>
-                <div>
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tighter italic">BROCHIFY<span className="text-primary not-italic">.</span></h1>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">AI Layout Engine</p>
-                </div>
+          <div className="flex items-center gap-3 group cursor-pointer">
+            <div className="w-12 h-12 bg-primary rounded-[18px] flex items-center justify-center shadow-[0_8px_20px_-6px_rgba(0,71,171,0.5)] transition-transform group-hover:rotate-6">
+              <Layout className="text-white w-6 h-6" />
             </div>
-            <div className="h-8 w-px bg-slate-200 mx-4" />
-            <nav className="flex items-center gap-8">
-                {['Architect', 'Gallery', 'Presets'].map(item => (
-                    <button key={item} className="text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-primary transition-colors">{item}</button>
-                ))}
-            </nav>
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tighter italic">
+                BROCHIFY<span className="text-primary not-italic">.</span>
+              </h1>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                Guided Brochure Studio
+              </p>
+            </div>
+          </div>
         </div>
-        
-        <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setShowDevLogs(!showDevLogs)}
-              className={cn(
-                "p-3 rounded-xl transition-all border",
-                showDevLogs ? "bg-primary/10 border-primary text-primary" : "bg-slate-50 border-slate-200 text-slate-400 hover:border-slate-300"
-              )}
-              title="Inspect Telemetry"
-            >
-              <Activity className="w-5 h-5" />
-            </button>
 
-            {brochureData && (
-                 <button 
-                  onClick={handleDownload}
-                  className="flex items-center gap-3 bg-slate-900 hover:bg-black text-white px-8 py-3.5 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all shadow-xl hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  <Download className="w-4 h-4" />
-                  Materialize PDF
-                </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowDevLogs(!showDevLogs)}
+            className={cn(
+              "p-3 rounded-xl transition-all border",
+              showDevLogs
+                ? "bg-primary/10 border-primary text-primary"
+                : "bg-slate-50 border-slate-200 text-slate-400 hover:border-slate-300",
             )}
+            title="Inspect Telemetry"
+          >
+            <Activity className="w-5 h-5" />
+          </button>
+
+          {projectReady && (
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-3 bg-slate-900 hover:bg-black text-white px-7 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all shadow-xl hover:shadow-2xl"
+            >
+              <Download className="w-4 h-4" />
+              Export PDF
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Dev Logs Panel (Drawer) */}
-        {showDevLogs && (
-            <div className="absolute right-0 top-0 bottom-0 w-1/3 z-[200] animate-in slide-in-from-right duration-500 shadow-[-20px_0_50px_rgba(0,0,0,0.1)]">
-                <DevLogs />
-                <button 
-                    onClick={() => setShowDevLogs(false)}
-                    className="absolute left-0 top-1/2 -translate-x-full bg-slate-900 border border-white/10 p-2 rounded-l-lg text-white/50 hover:text-white"
-                >
-                    <ChevronRight className="w-4 h-4" />
-                </button>
-            </div>
-        )}
-
-        {/* Left Side: Modular Controls (Independent Scroll) */}
-        <div className="w-[30%] border-r border-slate-200 bg-slate-900 p-0 overflow-hidden flex flex-col h-full">
-            <AIChat 
-                onDataGenerated={(data) => setBrochureData(data)} 
-                onLoading={(loading, msg) => {
-                    setIsLoading(loading);
-                    if (msg) setLoadingMessage(msg);
-                }}
-                selectedLogos={selectedLogos}
-                onToggleLogo={toggleLogo}
+      {!projectReady ? (
+        <section className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#e0edff_0%,#f7fbff_48%,#ecf3fa_100%)] p-6 sm:p-10">
+          <div className="mx-auto w-full max-w-6xl">
+            <GuidedFlowPanel
+              data={brochureData}
+              onFieldChange={handleFieldChange}
+              onEnhance={handleEnhanceWithAI}
+              onCreate={handleCreateBrochure}
+              isBusy={isLoading}
+              logoOptions={logoOptions}
+              selectedLogos={selectedLogos}
+              onToggleLogo={toggleLogo}
+              assets={assets}
+              onUploadAssets={handleUploadAssets}
+              onDeleteAsset={handleDeleteAsset}
+              onInsertAssetAsOverlay={addImageOverlayFromAsset}
+              fullPage
             />
-        </div>
+          </div>
+        </section>
+      ) : (
+        <div className="flex-1 flex overflow-hidden relative">
+          {showDevLogs && (
+            <div className="absolute right-0 top-0 bottom-0 w-1/3 z-[200] animate-in slide-in-from-right duration-500 shadow-[-20px_0_50px_rgba(0,0,0,0.1)]">
+              <DevLogs />
+              <button
+                onClick={() => setShowDevLogs(false)}
+                className="absolute left-0 top-1/2 -translate-x-full bg-slate-900 border border-white/10 p-2 rounded-l-lg text-white/50 hover:text-white"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
-        {/* Right Side: Production Canvas (Independent Scroll) */}
-        <div className="flex-1 bg-[#F0F4F8] p-4 overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
-            {/* Background Texture - Grid Style */}
+          <div className="flex-1 bg-[#F0F4F8] p-4 overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
             <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[radial-gradient(#0047AB_1px,transparent_1px)] [background-size:20px_20px]"></div>
-            
-            {brochureData ? (
-                <div className="w-full flex flex-col items-center gap-10 py-6 relative z-10">
-                    <div id="brochure-preview" className="transform scale-[0.85] origin-top transition-all duration-700 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] hover:scale-[0.88] cursor-zoom-in">
-                      <PageOne
-                        data={brochureData}
-                        selectedLogos={selectedLogos}
-                        onEdit={handleEdit}
-                        segmentPositions={segmentPositions}
-                        onSegmentMove={handleSegmentMove}
-                      />
-                        <div className="h-6" />
-                      <PageTwo
-                        data={brochureData}
-                        selectedLogos={selectedLogos}
-                        onEdit={handleEdit}
-                        segmentPositions={segmentPositions}
-                        onSegmentMove={handleSegmentMove}
-                      />
-                    </div>
-                </div>
-            ) : (
-                <div className="mt-36 text-center animate-in fade-in zoom-in-95 duration-1000 relative z-10">
-                    <div className="w-28 h-28 bg-white rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] flex items-center justify-center mx-auto mb-10 transform rotate-6 hover:rotate-0 transition-transform cursor-pointer border border-white ring-[12px] ring-white/30">
-                        <Database className="text-primary w-12 h-12 animate-pulse" />
-                    </div>
-                    <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter italic">Waiting for Command</h2>
-                    <p className="text-slate-400 text-xs font-black uppercase tracking-[0.4em] max-w-sm mx-auto leading-relaxed border-t border-slate-200 pt-6 opacity-60">
-                        Neural Draftsman is currently dormant. <br/>Initiate event description to bootstrap production.
-                    </p>
-                    <div className="mt-12 flex items-center justify-center gap-3 text-primary animate-bounce">
-                        <ChevronRight className="w-4 h-4 rotate-90" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">Begin Protocol</span>
-                        <ChevronRight className="w-4 h-4 rotate-90" />
-                    </div>
-                </div>
-            )}
-        </div>
-      </div>
 
-      <LoadingOverlay isVisible={isLoading} message={loadingMessage} />
+            <div className="sticky top-0 z-30 w-full max-w-[1240px] px-2 pb-4 pt-1">
+              <div className="flex flex-wrap items-center gap-3 rounded-[26px] border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_20px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+                <div className="mr-2 flex items-center gap-2 rounded-full bg-slate-100 p-1">
+                  {[1, 2].map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      onClick={() => setActivePage(pageNumber as 1 | 2)}
+                      className={cn(
+                        "rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
+                        activePage === pageNumber
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-500 hover:text-slate-900",
+                      )}
+                    >
+                      Page {pageNumber}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={addTextOverlay}
+                  className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary transition-colors hover:bg-primary/15"
+                >
+                  <Type className="h-4 w-4" />
+                  Add Text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addShapeOverlay("rectangle")}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 transition-colors hover:bg-slate-100"
+                >
+                  <Square className="h-4 w-4" />
+                  Rectangle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addShapeOverlay("circle")}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 transition-colors hover:bg-slate-100"
+                >
+                  <Circle className="h-4 w-4" />
+                  Circle
+                </button>
+
+                {selectedOverlay?.type === "text" && (
+                  <>
+                    <select
+                      value={selectedOverlay.fontFamily}
+                      onChange={(event) =>
+                        updateOverlayItem(
+                          selectedOverlay.id,
+                          { fontFamily: event.target.value } as Partial<TextOverlayItem>,
+                        )
+                      }
+                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
+                    >
+                      {FONT_OPTIONS.map((font) => (
+                        <option key={font.value} value={font.value}>
+                          {font.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={12}
+                      max={120}
+                      value={selectedOverlay.fontSize}
+                      onChange={(event) =>
+                        updateOverlayItem(
+                          selectedOverlay.id,
+                          { fontSize: Number(event.target.value) || 16 } as Partial<TextOverlayItem>,
+                        )
+                      }
+                      className="w-20 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
+                    />
+                    <input
+                      type="color"
+                      value={selectedOverlay.color}
+                      onChange={(event) =>
+                        updateOverlayItem(
+                          selectedOverlay.id,
+                          { color: event.target.value } as Partial<TextOverlayItem>,
+                        )
+                      }
+                      className="h-10 w-12 rounded-full border border-slate-200 bg-white px-1"
+                    />
+                    <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+                      {[
+                        { value: "left", icon: AlignLeft },
+                        { value: "center", icon: AlignCenter },
+                        { value: "right", icon: AlignRight },
+                      ].map((option) => {
+                        const Icon = option.icon;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() =>
+                              updateOverlayItem(
+                                selectedOverlay.id,
+                                {
+                                  align: option.value as TextOverlayItem["align"],
+                                } as Partial<TextOverlayItem>,
+                              )
+                            }
+                            className={cn(
+                              "rounded-full p-2 transition-colors",
+                              selectedOverlay.align === option.value
+                                ? "bg-slate-900 text-white"
+                                : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {selectedOverlay?.type === "shape" && (
+                  <>
+                    <input
+                      type="color"
+                      value={selectedOverlay.fill.startsWith("#") ? selectedOverlay.fill : "#60a5fa"}
+                      onChange={(event) =>
+                        updateOverlayItem(selectedOverlay.id, { fill: event.target.value })
+                      }
+                      className="h-10 w-12 rounded-full border border-slate-200 bg-white px-1"
+                    />
+                    <input
+                      type="color"
+                      value={selectedOverlay.stroke}
+                      onChange={(event) =>
+                        updateOverlayItem(selectedOverlay.id, { stroke: event.target.value })
+                      }
+                      className="h-10 w-12 rounded-full border border-slate-200 bg-white px-1"
+                    />
+                  </>
+                )}
+
+                {selectedOverlay && (
+                  <button
+                    type="button"
+                    onClick={removeSelectedOverlay}
+                    className="ml-auto inline-flex items-center gap-2 rounded-full border border-red-300/60 bg-red-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-red-500 transition-colors hover:bg-red-100"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove
+                  </button>
+                )}
+
+                {!selectedOverlay && (
+                  <p className="ml-auto flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Edit in place, free drag, and resize from corners
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div
+              ref={previewViewportRef}
+              className="w-full flex flex-col items-center gap-10 py-4 relative z-10"
+            >
+              <div className="preview-shell">
+                <div
+                  className="relative"
+                  style={{ width: previewWidth, height: previewHeight }}
+                >
+                  <div
+                    id="brochure-preview"
+                    className="preview-stage"
+                    style={{ width: PAGE_WIDTH, transform: `scale(${previewScale})` }}
+                  >
+                    <PageOne
+                      data={brochureData}
+                      selectedLogos={selectedLogos}
+                      onEdit={(path, value) => handleFieldChange(path, value)}
+                      segmentPositions={segmentPositions}
+                      onSegmentMove={handleSegmentMove}
+                      overlayItems={overlayItems.filter((item) => item.page === 1)}
+                      selectedOverlayId={selectedOverlayId}
+                      onSelectOverlay={setSelectedOverlayId}
+                      onUpdateOverlay={updateOverlayItem}
+                      logoCatalog={logoCatalog}
+                      canvasScale={previewScale}
+                    />
+                    <div style={{ height: PAGE_GAP }} />
+                    <PageTwo
+                      data={brochureData}
+                      selectedLogos={selectedLogos}
+                      onEdit={(path, value) => handleFieldChange(path, value)}
+                      segmentPositions={segmentPositions}
+                      onSegmentMove={handleSegmentMove}
+                      overlayItems={overlayItems.filter((item) => item.page === 2)}
+                      selectedOverlayId={selectedOverlayId}
+                      onSelectOverlay={setSelectedOverlayId}
+                      onUpdateOverlay={updateOverlayItem}
+                      canvasScale={previewScale}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <LoadingOverlay
+        isVisible={isLoading}
+        message={loadingMessage}
+        task={loadingTask}
+      />
     </main>
   );
 }

@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Bot, User, BrainCircuit, Sparkles, MessageCircle, Zap, Plus, Check } from 'lucide-react';
+import { Send, Loader2, Bot, User, Sparkles, Zap, Plus, Check } from 'lucide-react';
 import { generateBrochureData } from '@/lib/openrouter';
-import { generateEventImage } from '@/lib/imageGen';
 import { cn } from '@/lib/utils';
 
 const availableLogos = [
@@ -27,7 +26,13 @@ type ChatMessage = {
   reasoning_details?: unknown;
 };
 
-const renderReasoning = (details: unknown) => {
+const toRenderableText = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    return JSON.stringify(value);
+};
+
+const renderReasoning = (details: unknown): React.ReactNode => {
     if (!details) return null;
     if (typeof details === 'string') return details;
     if (Array.isArray(details)) {
@@ -36,14 +41,14 @@ const renderReasoning = (details: unknown) => {
                 {typeof block === 'string'
                   ? block
                   : block && typeof block === 'object' && 'text' in block
-                    ? (block as { text?: unknown }).text || JSON.stringify(block)
+                    ? toRenderableText((block as { text?: unknown }).text) || JSON.stringify(block)
                     : JSON.stringify(block)}
             </div>
         ));
     }
     if (typeof details === 'object') {
         if ('text' in details) {
-          return (details as { text?: unknown }).text || JSON.stringify(details, null, 2);
+          return toRenderableText((details as { text?: unknown }).text) || JSON.stringify(details, null, 2);
         }
         return JSON.stringify(details, null, 2);
     }
@@ -81,7 +86,7 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
   async function handleSend() {
     if (!input.trim() || loading) return;
     
-    const userMessage = { role: 'user', content: input, timestamp: new Date() };
+    const userMessage: ChatMessage = { role: 'user', content: input, timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
@@ -90,13 +95,16 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
     try {
       const result = await generateBrochureData(input, messages);
       const { data, rawMessage } = result;
+      const brochure = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+      const eventTitle = typeof brochure.eventTitle === 'string' ? brochure.eventTitle : '';
+      const department = typeof brochure.department === 'string' ? brochure.department : '';
       
-      if (data.eventTitle && data.department) {
+      if (eventTitle && department) {
         // onLoading(true, "Synthesizing Visual Identity...");
         
         setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: `Architecture parameters for "${data.eventTitle}" verified.`,
+        content: `Architecture parameters for "${eventTitle}" verified.`,
             reasoning_details: rawMessage?.reasoning_details,
             timestamp: new Date()
         }]);
@@ -105,7 +113,7 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
         // const imageUrl = await generateEventImage(data.eventTitle);
         // data.eventImage = imageUrl;
         
-        onDataGenerated(data);
+        onDataGenerated(brochure);
         setMessages(prev => [...prev, { 
             role: 'assistant', 
             content: "Drafting complete. Your brochure has been materialized in the preview canvas. Review and finalize for PDF export.",
@@ -179,7 +187,7 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
               {m.content}
             </div>
 
-            {m.reasoning_details && (
+            {Boolean(m.reasoning_details) && (
               <div className="w-full mt-2">
                 <details className="group">
                     <summary className="text-[10px] cursor-pointer text-slate-500 hover:text-white transition-all font-black uppercase tracking-widest list-none flex items-center gap-3 bg-white/5 py-2 px-4 rounded-full border border-white/5 w-fit">

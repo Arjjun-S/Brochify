@@ -2,49 +2,24 @@
 
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import Image from 'next/image';
 import MovableSegment from './MovableSegment';
+import BrochureOverlay from './BrochureOverlay';
+import { BrochureData, OverlayItem, SegmentPosition } from '@/lib/brochure';
 
 interface PageOneProps {
     data: BrochureData;
   selectedLogos: string[];
+        logoCatalog?: Record<string, string>;
     onEdit?: (path: string, value: string) => void;
     segmentPositions?: Record<string, SegmentPosition>;
     onSegmentMove?: (id: string, position: SegmentPosition) => void;
+    overlayItems?: OverlayItem[];
+    selectedOverlayId?: string | null;
+    onSelectOverlay?: (id: string | null) => void;
+    onUpdateOverlay?: (id: string, patch: Partial<OverlayItem>) => void;
+        canvasScale?: number;
 }
-
-type SegmentPosition = {
-    x: number;
-    y: number;
-};
-
-type CommitteeMember = {
-    name?: string;
-    role?: string;
-};
-
-type BrochureData = {
-    eventTitle?: string;
-    dates?: string;
-    department?: string;
-    googleForm?: string;
-    eventImage?: string;
-    contact?: {
-        name?: string;
-        mobile?: string;
-    };
-    accountDetails?: {
-        bankName?: string;
-        accountNo?: string;
-        accountName?: string;
-        ifscCode?: string;
-    };
-    registration?: {
-        ieeePrice?: string;
-        nonIeeePrice?: string;
-        notes?: string[];
-    };
-    committee?: CommitteeMember[];
-};
 
 type EditableTextProps = {
     path: string;
@@ -93,7 +68,19 @@ const availableLogos = [
   { id: 'naac', src: '/logos/naac.svg' },
 ];
 
-export default function PageOne({ data, selectedLogos, onEdit, segmentPositions, onSegmentMove }: PageOneProps) {
+export default function PageOne({
+    data,
+    selectedLogos,
+    logoCatalog,
+    onEdit,
+    segmentPositions,
+    onSegmentMove,
+    overlayItems = [],
+    selectedOverlayId = null,
+    onSelectOverlay,
+    onUpdateOverlay,
+    canvasScale = 1,
+}: PageOneProps) {
     const committee = data.committee ?? [];
     const committeeWithIndex = committee.map((member, index) => ({ member, index }));
 
@@ -112,6 +99,11 @@ export default function PageOne({ data, selectedLogos, onEdit, segmentPositions,
             !member.role?.toLowerCase().includes('advisory') &&
             !member.role?.toLowerCase().includes('convener'),
     );
+
+    const resolveLogoSrc = (id: string): string | undefined => {
+        if (logoCatalog?.[id]) return logoCatalog[id];
+        return availableLogos.find((logo) => logo.id === id)?.src;
+    };
 
   return (
     <div id="brochure-page-1" className="brochure-page border border-gray-200" style={{ backgroundColor: '#ffffff' }}>
@@ -289,8 +281,10 @@ export default function PageOne({ data, selectedLogos, onEdit, segmentPositions,
         <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} index={9} className="w-full">
         <div className="flex justify-center flex-wrap gap-2 w-full mb-4">
             {selectedLogos.slice(0, selectedLogos.length > 1 ? -1 : undefined).map(id => {
-                const logo = availableLogos.find(l => l.id === id);
-                return logo ? <img key={id} src={logo.src} className="h-8 object-contain" alt={id} /> : null;
+                const src = resolveLogoSrc(id);
+                                return src ? (
+                                    <Image key={id} src={src} width={72} height={32} className="h-8 w-auto object-contain" alt={id} unoptimized />
+                                ) : null;
             })}
         </div>
         </MovableSegment>
@@ -306,7 +300,7 @@ export default function PageOne({ data, selectedLogos, onEdit, segmentPositions,
         <MovableSegment id="p1-image" position={segmentPositions?.['p1-image']} onMove={onSegmentMove} index={11} className="w-full flex-1">
         <div className="flex-1 w-full rounded-xl overflow-hidden border shadow-inner mb-4 relative min-h-[160px]" style={{ backgroundColor: '#f8fafc', borderColor: '#f1f5f9' }}>
             {data.eventImage ? (
-                <img src={data.eventImage} alt="Event AI" className="w-full h-full object-cover" />
+                <Image src={data.eventImage} alt="Event AI" className="w-full h-full object-cover" fill unoptimized />
             ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-[8px] uppercase tracking-widest" style={{ color: '#94a3b8' }}>Synthesizing Visual Identity...</div>
             )}
@@ -322,8 +316,8 @@ export default function PageOne({ data, selectedLogos, onEdit, segmentPositions,
                 <div className="mt-2 mb-4">
                     {(() => {
                         const lastId = selectedLogos[selectedLogos.length - 1];
-                        const logo = availableLogos.find(l => l.id === lastId);
-                        return logo ? <img src={logo.src} className="h-10 object-contain" alt="Bottom Logo" /> : null;
+                        const src = resolveLogoSrc(lastId);
+                        return src ? <Image src={src} width={96} height={40} className="h-10 w-auto object-contain" alt="Bottom Logo" unoptimized /> : null;
                     })()}
                 </div>
             )}
@@ -332,6 +326,16 @@ export default function PageOne({ data, selectedLogos, onEdit, segmentPositions,
         </div>
                 </MovableSegment>
       </div>
+
+            {onSelectOverlay && onUpdateOverlay && (
+                <BrochureOverlay
+                    items={overlayItems}
+                    selectedId={selectedOverlayId}
+                    onSelect={onSelectOverlay}
+                    onUpdate={onUpdateOverlay}
+                    canvasScale={canvasScale}
+                />
+            )}
     </div>
   );
 }

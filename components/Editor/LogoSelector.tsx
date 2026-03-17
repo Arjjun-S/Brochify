@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, ShieldCheck, Sparkles, Building2, LayoutGrid } from 'lucide-react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 const availableLogos = [
@@ -62,7 +63,7 @@ export default function LogoSelector({ selectedLogos, onToggle }: LogoSelectorPr
                     const logo = availableLogos.find(l => l.id === id);
                     return logo ? (
                         <div key={id} className="inline-block h-10 w-10 rounded-2xl ring-4 ring-white bg-white p-2 flex items-center justify-center border border-slate-100 shadow-md transform transition-transform group-hover:scale-110 group-hover:-rotate-3">
-                            <img src={logo.src} alt={logo.name} className="max-w-full max-h-full object-contain" />
+                        <Image src={logo.src} alt={logo.name} width={24} height={24} className="max-w-full max-h-full object-contain" />
                         </div>
                     ) : null;
                 })
@@ -110,7 +111,7 @@ export default function LogoSelector({ selectedLogos, onToggle }: LogoSelectorPr
                                 "w-14 h-14 rounded-2xl border p-2.5 flex items-center justify-center transition-all bg-white shadow-sm",
                                 isSelected ? "border-primary/30" : "border-slate-100 group-hover:border-slate-200"
                             )}>
-                              <img src={logo.src} alt={logo.name} className="max-w-full max-h-full object-contain" />
+                              <Image src={logo.src} alt={logo.name} width={32} height={32} className="max-w-full max-h-full object-contain" />
                             </div>
                             <div className="text-left">
                                 <span className="text-[13px] font-black block leading-tight mb-1">{logo.name}</span>

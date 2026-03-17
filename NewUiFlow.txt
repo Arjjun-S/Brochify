@@ -1,0 +1,17 @@
+our current ui and flow is fully messed uo, no need chat system instead:
+
+1) use very high quality node modules for design and all the icons.
+
+2) create a loading manager/service. in that create very beautiful and unique animations overlay for each task use the most modern and highquality stuff.
+
+3) we need ttal rework like modern ai apps. we will have a general page and get started button and then we will ask 
+all the detais we need for brocher one by one. and finally we will haev enhance with ai and create or just a create button(name the buttons properly.)
+
+enahnce -> we send it to ai and improve it.
+
+normal -> just build the brocher with our template.
+
+we need option to upload company icons or images and all the stuff. also we need to store it properly so in future we can 
+easily reuse it just like canva.
+
+the bggest issue is the naming. like for search to work we need a way to identify the icons. so think something for it.

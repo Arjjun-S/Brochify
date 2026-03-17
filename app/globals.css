@@ -58,6 +58,18 @@
   color: #000000 !important;
 }
 
+.preview-shell {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.preview-stage {
+  position: relative;
+  transform-origin: top center;
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .segment-shell {
   position: relative;
   will-change: transform;
@@ -67,12 +79,16 @@
 .segment-surface {
   transition:
     filter 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    outline-color 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   animation: segment-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  outline: 1px solid transparent;
+  outline-offset: 8px;
 }
 
 .segment-shell:hover .segment-surface {
   filter: saturate(1.02);
+  outline-color: rgba(0, 71, 171, 0.22);
 }
 
 .segment-shell-dragging {
@@ -82,17 +98,18 @@
 
 .segment-shell-dragging .segment-surface {
   filter: saturate(1.08);
+  outline-color: rgba(14, 165, 233, 0.45);
 }
 
 .segment-handle {
   position: absolute;
-  top: -10px;
-  right: -10px;
+  top: -12px;
+  right: -12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 9999px;
   border: 1px solid rgba(0, 71, 171, 0.35);
   background: rgba(255, 255, 255, 0.92);
@@ -103,8 +120,10 @@
   transform: scale(0.92);
   transition:
     opacity 180ms ease,
-    transform 180ms ease;
+    transform 180ms ease,
+    box-shadow 180ms ease;
   touch-action: none;
+  z-index: 30;
 }
 
 .segment-shell:hover .segment-handle,
@@ -116,6 +135,7 @@
 
 .segment-handle:active {
   cursor: grabbing;
+  box-shadow: 0 18px 28px -14px rgba(0, 71, 171, 0.55);
 }
 
 .segment-handle span {
@@ -125,6 +145,156 @@
   background: #0047ab;
   margin: 0 1px;
   opacity: 0.8;
+}
+
+.brochure-overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+}
+
+.overlay-item {
+  position: absolute;
+  border-radius: 18px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.overlay-item-selected {
+  z-index: 45;
+}
+
+.overlay-item-active {
+  cursor: grabbing;
+}
+
+.overlay-item::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 24px;
+  border: 1px dashed transparent;
+  pointer-events: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.overlay-item:hover::after,
+.overlay-item-selected::after {
+  border-color: rgba(14, 165, 233, 0.55);
+  box-shadow: 0 0 0 6px rgba(14, 165, 233, 0.08);
+}
+
+.overlay-item-toolbar {
+  position: absolute;
+  top: -12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
+  border-radius: 9999px;
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 12px 28px -14px rgba(15, 23, 42, 0.7);
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.overlay-item:hover .overlay-item-toolbar,
+.overlay-item-selected .overlay-item-toolbar {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.overlay-item-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.overlay-resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid #0284c7;
+  background: #fff;
+  box-shadow: 0 4px 14px -8px rgba(2, 132, 199, 0.85);
+  z-index: 60;
+  touch-action: none;
+}
+
+.overlay-resize-nw {
+  top: -7px;
+  left: -7px;
+  cursor: nwse-resize;
+}
+
+.overlay-resize-ne {
+  top: -7px;
+  right: -7px;
+  cursor: nesw-resize;
+}
+
+.overlay-resize-sw {
+  bottom: -7px;
+  left: -7px;
+  cursor: nesw-resize;
+}
+
+.overlay-resize-se {
+  bottom: -7px;
+  right: -7px;
+  cursor: nwse-resize;
+}
+
+.overlay-textbox {
+  width: 100%;
+  height: 100%;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.55);
+  outline: none;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.overlay-shape {
+  width: 100%;
+  height: 100%;
+  border-style: solid;
+  box-shadow: 0 24px 50px -36px rgba(15, 23, 42, 0.5);
+}
+
+.overlay-shape-rectangle {
+  border-radius: 26px;
+}
+
+.overlay-shape-circle {
+  border-radius: 9999px;
+}
+
+.overlay-image-shell {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 24px 50px -36px rgba(15, 23, 42, 0.5);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.overlay-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
 }
 
 @keyframes segment-enter {

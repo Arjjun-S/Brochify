@@ -2,6 +2,8 @@
 
 import React from 'react';
 import MovableSegment from './MovableSegment';
+import BrochureOverlay from './BrochureOverlay';
+import { BrochureData, OverlayItem, SegmentPosition } from '@/lib/brochure';
 
 interface PageTwoProps {
         data: BrochureData;
@@ -9,33 +11,12 @@ interface PageTwoProps {
         onEdit?: (path: string, value: string) => void;
     segmentPositions?: Record<string, SegmentPosition>;
     onSegmentMove?: (id: string, position: SegmentPosition) => void;
+        overlayItems?: OverlayItem[];
+        selectedOverlayId?: string | null;
+        onSelectOverlay?: (id: string | null) => void;
+        onUpdateOverlay?: (id: string, patch: Partial<OverlayItem>) => void;
+    canvasScale?: number;
 }
-
-type SegmentPosition = {
-    x: number;
-    y: number;
-};
-
-type Topic = {
-    date?: string;
-    forenoon?: string;
-    afternoon?: string;
-};
-
-type Speaker = {
-    name?: string;
-    role?: string;
-    org?: string;
-};
-
-type BrochureData = {
-    aboutCollege?: string;
-    aboutSchool?: string;
-    aboutDepartment?: string;
-    aboutFdp?: string;
-    topics?: Topic[];
-    speakers?: Speaker[];
-};
 
 type EditableTextProps = {
     path: string;
@@ -63,7 +44,18 @@ const EditableText = ({ path, value, onEdit, className }: EditableTextProps) => 
     );
 };
 
-export default function PageTwo({ data, selectedLogos, onEdit, segmentPositions, onSegmentMove }: PageTwoProps) {
+export default function PageTwo({
+    data,
+    selectedLogos,
+    onEdit,
+    segmentPositions,
+    onSegmentMove,
+    overlayItems = [],
+    selectedOverlayId = null,
+    onSelectOverlay,
+    onUpdateOverlay,
+    canvasScale = 1,
+}: PageTwoProps) {
         void selectedLogos;
     return (
         <div id="brochure-page-2" className="brochure-page border border-gray-200" style={{ backgroundColor: '#ffffff' }}>
@@ -157,6 +149,16 @@ export default function PageTwo({ data, selectedLogos, onEdit, segmentPositions,
                 </div>
                 </MovableSegment>
             </div>
+
+            {onSelectOverlay && onUpdateOverlay && (
+                <BrochureOverlay
+                    items={overlayItems}
+                    selectedId={selectedOverlayId}
+                    onSelect={onSelectOverlay}
+                    onUpdate={onUpdateOverlay}
+                    canvasScale={canvasScale}
+                />
+            )}
         </div>
     );
 }
