@@ -6,11 +6,10 @@ import { Terminal, Clock, ChevronDown, ChevronUp, Trash2, ShieldCheck, Zap } fro
 import { cn } from '@/lib/utils';
 
 export default function DevLogs() {
-  const [logs, setLogs] = useState<APILog[]>([]);
+  const [logs, setLogs] = useState<APILog[]>(() => logger.getLogs());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    setLogs(logger.getLogs());
     return logger.subscribe(setLogs);
   }, []);
 

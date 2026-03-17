@@ -64,7 +64,7 @@ type ChatMessage = {
 };
 
 type OpenRouterMessage = {
-  content: string;
+  content?: unknown;
   reasoning_details?: unknown;
 };
 
@@ -80,6 +80,38 @@ type OpenRouterResponse = {
 type RouteError = Error & {
   status?: number;
 };
+
+function normalizeMessageContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    const flattened = content
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+
+        if (
+          item &&
+          typeof item === "object" &&
+          "text" in item &&
+          typeof (item as { text?: unknown }).text === "string"
+        ) {
+          return (item as { text: string }).text;
+        }
+
+        return "";
+      })
+      .join("")
+      .trim();
+
+    return flattened;
+  }
+
+  return "";
+}
 
 async function requestBrochureData(
   prompt: string,
@@ -129,7 +161,17 @@ async function requestBrochureData(
     }
 
     const message = response.data.choices[0].message;
-    let content = message.content;
+    let content = normalizeMessageContent(message?.content);
+
+    if (!content) {
+      if (retries > 0) {
+        return requestBrochureData(prompt, history, retries - 1);
+      }
+
+      throw new Error(
+        "OpenRouter returned an empty completion message. Please try again.",
+      );
+    }
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -155,6 +197,8 @@ async function requestBrochureData(
   } catch (error: unknown) {
     const axiosError =
       axios.isAxiosError<OpenRouterResponse>(error) ? error : null;
+    const fallbackErrorMessage = error instanceof Error ? error.message : "";
+    const networkErrorMessage = axiosError?.message || fallbackErrorMessage;
 
     if (axiosError?.response?.status === 429 && retries > 0) {
       const waitTime = Math.pow(2, MAX_RETRIES - retries + 1) * 1000;
@@ -162,11 +206,7 @@ async function requestBrochureData(
       return requestBrochureData(prompt, history, retries - 1);
     }
 
-    if (
-      (axiosError?.message || error instanceof Error ? error.message : "") ===
-        "Network Error" &&
-      retries > 0
-    ) {
+    if (networkErrorMessage === "Network Error" && retries > 0) {
       await sleep(1000);
       return requestBrochureData(prompt, history, retries - 1);
     }

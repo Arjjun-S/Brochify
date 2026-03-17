@@ -14,30 +14,44 @@ const availableLogos = [
 ];
 
 interface AIChatProps {
-  onDataGenerated: (data: any) => void;
+  onDataGenerated: (data: Record<string, unknown>) => void;
   onLoading: (isLoading: boolean, message?: string) => void;
   selectedLogos: string[];
   onToggleLogo: (id: string) => void;
 }
 
-const renderReasoning = (details: any) => {
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  reasoning_details?: unknown;
+};
+
+const renderReasoning = (details: unknown) => {
     if (!details) return null;
     if (typeof details === 'string') return details;
     if (Array.isArray(details)) {
-        return details.map((block: any, idx: number) => (
+        return details.map((block, idx: number) => (
             <div key={idx} className="mb-2 last:mb-0">
-                {typeof block === 'string' ? block : (block.text || JSON.stringify(block))}
+                {typeof block === 'string'
+                  ? block
+                  : block && typeof block === 'object' && 'text' in block
+                    ? (block as { text?: unknown }).text || JSON.stringify(block)
+                    : JSON.stringify(block)}
             </div>
         ));
     }
     if (typeof details === 'object') {
-        return details.text || JSON.stringify(details, null, 2);
+        if ('text' in details) {
+          return (details as { text?: unknown }).text || JSON.stringify(details, null, 2);
+        }
+        return JSON.stringify(details, null, 2);
     }
     return String(details);
 };
 
 export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onToggleLogo }: AIChatProps) {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -105,15 +119,20 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
             timestamp: new Date()
          }]);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
        console.error("AIChat Process Error:", error);
        
        let displayMessage = "Signal termination encountered. Please verify your network connection or try a different event prompt.";
+       const message = error instanceof Error ? error.message : '';
+       const axiosStatus =
+         error && typeof error === 'object' && 'response' in error
+           ? (error as { response?: { status?: number } }).response?.status
+           : undefined;
        
-       if (error.response?.status === 429 || error.message?.includes('429')) {
+       if (axiosStatus === 429 || message.includes('429')) {
            displayMessage = "Neural Draftsman is currently resting (OpenRouter API Rate Limit Reached). Please wait a few moments before sending another request.";
-       } else if (error.message) {
-           displayMessage = `Signal termination encountered: ${error.message}`;
+       } else if (message) {
+           displayMessage = `Signal termination encountered: ${message}`;
        }
        
        setMessages(prev => [...prev, { 

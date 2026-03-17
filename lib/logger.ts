@@ -3,11 +3,11 @@
 export interface APILog {
   id: string;
   timestamp: string;
-  type: 'OPENROUTER' | 'FAL_AI';
+  type: "OPENROUTER" | "FAL_AI";
   event: string;
-  input: any;
-  output: any;
-  status: 'SUCCESS' | 'ERROR';
+  input: unknown;
+  output: unknown;
+  status: "SUCCESS" | "ERROR";
 }
 
 class APILogger {
@@ -15,19 +15,25 @@ class APILogger {
   private listeners: ((logs: APILog[]) => void)[] = [];
 
   constructor() {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('brochify_api_logs');
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("brochify_api_logs");
       if (saved) {
         try {
           this.logs = JSON.parse(saved);
-        } catch (e) {
+        } catch {
           this.logs = [];
         }
       }
     }
   }
 
-  log(type: APILog['type'], event: string, input: any, output: any, status: APILog['status'] = 'SUCCESS') {
+  log(
+    type: APILog["type"],
+    event: string,
+    input: unknown,
+    output: unknown,
+    status: APILog["status"] = "SUCCESS",
+  ) {
     const entry: APILog = {
       id: Math.random().toString(36).substring(7),
       timestamp: new Date().toISOString(),
@@ -35,15 +41,15 @@ class APILogger {
       event,
       input,
       output,
-      status
+      status,
     };
 
     this.logs = [entry, ...this.logs].slice(0, 50); // Keep last 50
-    
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('brochify_api_logs', JSON.stringify(this.logs));
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("brochify_api_logs", JSON.stringify(this.logs));
     }
-    
+
     this.notify();
   }
 
@@ -53,8 +59,8 @@ class APILogger {
 
   clear() {
     this.logs = [];
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('brochify_api_logs');
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("brochify_api_logs");
     }
     this.notify();
   }
@@ -62,12 +68,12 @@ class APILogger {
   subscribe(listener: (logs: APILog[]) => void) {
     this.listeners.push(listener);
     return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
+      this.listeners = this.listeners.filter((l) => l !== listener);
     };
   }
 
   private notify() {
-    this.listeners.forEach(l => l(this.logs));
+    this.listeners.forEach((l) => l(this.logs));
   }
 }
 

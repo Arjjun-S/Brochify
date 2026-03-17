@@ -1,6 +1,14 @@
 import { fal } from "@fal-ai/client";
 import { logger } from "./logger";
 
+type FalImageResponse = {
+  data?: {
+    images?: Array<{
+      url?: string;
+    }>;
+  };
+};
+
 // No need to manually read from env here if using the official client in a standard way,
 // but we'll ensure the key is configured.
 if (typeof window !== "undefined") {
@@ -9,13 +17,13 @@ if (typeof window !== "undefined") {
 }
 export async function generateEventImage(prompt: string) {
   try {
-    const result: any = await fal.subscribe("fal-ai/nano-banana-pro", {
+    const result = (await fal.subscribe("fal-ai/nano-banana-pro", {
       input: {
         prompt: `Professional academic conference poster illustration, ${prompt}, technology theme, vector style, blue and white color palette, high resolution, minimalist`,
-        aspect_ratio: '16:9',
-        resolution: '1K',
+        aspect_ratio: "16:9",
+        resolution: "1K",
         num_images: 1,
-        output_format: 'png'
+        output_format: "png",
       },
       logs: true,
       onQueueUpdate: (update) => {
@@ -23,12 +31,14 @@ export async function generateEventImage(prompt: string) {
           update.logs.map((log) => log.message).forEach(console.log);
         }
       },
-    });
-    logger.log('FAL_AI', 'GENERATE_IMAGE', { prompt }, { url: result.data.images[0].url });
-    return result.data.images[0].url;
-  } catch (error: any) {
-    logger.log('FAL_AI', 'ERROR', { prompt }, { error: error.message }, 'ERROR');
-    console.error('Error calling FAL AI with client:', error);
+    })) as FalImageResponse;
+    const imageUrl = result.data?.images?.[0]?.url ?? null;
+    logger.log("FAL_AI", "GENERATE_IMAGE", { prompt }, { url: imageUrl });
+    return imageUrl;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    logger.log("FAL_AI", "ERROR", { prompt }, { error: message }, "ERROR");
+    console.error("Error calling FAL AI with client:", error);
     return null;
   }
 }
