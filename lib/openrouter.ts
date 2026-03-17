@@ -17,6 +17,7 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
       'https://openrouter.ai/api/v1/chat/completions',
       {
         model: 'openai/gpt-oss-120b:free',
+        max_tokens: 4000,
         messages: [
           {
             role: 'system',
@@ -103,7 +104,21 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
         content = jsonMatch[0];
     }
     
-    const parsedData = JSON.parse(content);
+    let parsedData;
+    try {
+        parsedData = JSON.parse(content);
+    } catch (parseError) {
+        console.warn('Failed to parse OpenRouter JSON response:', content);
+        logger.log('OPENROUTER', 'JSON_PARSE_ERROR', { prompt }, { raw: content, error: parseError }, 'WARN');
+        
+        // If we have retries left, try again. Sometimes the LLM just hallucinates bad JSON format.
+        if (retries > 0) {
+            console.warn(`JSON Parse failed. Retrying OpenRouter request... (${retries} retries left)`);
+            return generateBrochureData(prompt, history, retries - 1);
+        } else {
+            throw new Error(`The AI generated invalid data structure. Please try again with a slightly different prompt. Raw output length: ${content.length}`);
+        }
+    }
     
     logger.log('OPENROUTER', 'GENERATE_BROCHURE', { prompt, historyCount: history.length }, { data: parsedData, raw: message });
     
@@ -117,6 +132,12 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
       console.warn(`Rate limit hit. Retrying in ${waitTime/1000} seconds... (${retries} retries left)`);
       await sleep(waitTime);
       return generateBrochureData(prompt, history, retries - 1);
+    }
+
+    if (error.message === 'Network Error' && retries > 0) {
+        console.warn(`Network Error occurred. Retrying... (${retries} retries left)`);
+        await sleep(1000); // Wait 1 second before retrying
+        return generateBrochureData(prompt, history, retries - 1);
     }
     
     logger.log('OPENROUTER', 'ERROR', { prompt }, { error: error.message, details: error.response?.data }, 'ERROR');
