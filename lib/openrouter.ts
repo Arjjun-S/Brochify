@@ -5,18 +5,18 @@ const OPENROUTER_API_KEY = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function generateBrochureData(prompt: string, history: any[] = [], retries = 2) {
+export async function generateBrochureData(prompt: string, history: any[] = [], retries = 5) {
+  const maxRetries = 5;
   try {
     const formattedHistory = history.map(m => ({
         role: m.role,
-        content: m.content,
-        ...(m.reasoning_details ? { reasoning_details: m.reasoning_details } : {})
+        content: m.content
     }));
 
     const response: any = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'google/gemini-2.0-flash-lite-preview-02-05:free',
+        model: 'openai/gpt-oss-120b:free',
         messages: [
           {
             role: 'system',
@@ -28,7 +28,7 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
               "dates": "Inclusive Dates (e.g. 23rd-27th March 2026)",
               "googleForm": "Actual registration URL or placeholder",
               "committee": [
-                { "name": "Name", "role": "Specific Role (e.g. Chief Patron, Patron, Convener, Advisory Committee Member)" }
+                { "name": "Name", "role": "Specific Role (e.g. Chief Patron, Patron, Convener, Co-Convener, Advisory Committee Member, Organizing Committee Member)" }
               ],
               "registration": {
                 "ieeePrice": "Number",
@@ -64,15 +64,15 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
             REQUIREMENTS:
             1. FILL ALL PLACES: Do not leave empty arrays or strings.
             2. PROFESSIONAL TONE: Use formal, academic language.
-            3. ROLE DIVERSITY: Include Chief Patrons, Patrons, Advisory Committee, and Organizing Committee.
-            4. DENSITY: For 'About' sections, write full paragraphs as specified.
-            5. CONSISTENCY: Ensure all dates match the event title.`
+            3. ROLE DIVERSITY: MUST include Chief Patrons, Patrons, ONE Convener, ONE Co-Convener, Advisory Committee, and Organizing Committee.
+            4. DENSITY: For 'About' sections, write full paragraphs (150-300 words each) using sophisticated academic vocabulary.
+            5. CONSISTENCY: Ensure all dates match the event title.
+            6. COMMITTEE PLACEMENT: Ensure Convener and Co-Convener are present in the committee list.
+            IMPORTANT: Output ONLY the JSON object, NO other text.`
           },
           ...formattedHistory,
           { role: 'user', content: prompt }
-        ],
-        reasoning: { enabled: true },
-        response_format: { type: 'json_object' }
+        ]
       },
       {
         headers: {
@@ -101,8 +101,9 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
     };
   } catch (error: any) {
     if (error.response?.status === 429 && retries > 0) {
-      console.warn(`Rate limit hit. Retrying in 2 seconds... (${retries} retries left)`);
-      await sleep(2000);
+      const waitTime = Math.pow(2, maxRetries - retries + 1) * 1000;
+      console.warn(`Rate limit hit. Retrying in ${waitTime/1000} seconds... (${retries} retries left)`);
+      await sleep(waitTime);
       return generateBrochureData(prompt, history, retries - 1);
     }
     

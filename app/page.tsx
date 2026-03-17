@@ -25,21 +25,64 @@ export default function Dashboard() {
   }, []);
 
   const handleDownload = async () => {
+    console.log("PDF download triggered...");
     const element = document.getElementById('brochure-preview');
-    if (!element) return;
+    if (!element) {
+      console.error("Preview element not found!");
+      return;
+    }
+    
+    console.log("Element found, initializing sanitization...");
+
+    // Recursive function to sanitize modern colors (lab, oklch) that crash html2canvas
+    const sanitizeColors = (el: HTMLElement) => {
+        const style = window.getComputedStyle(el);
+        const props = ['backgroundColor', 'color', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor'];
+        
+        props.forEach(prop => {
+            const val = (style as any)[prop];
+            if (val && (val.includes('lab(') || val.includes('oklch(') || val.includes('oklab('))) {
+                console.warn(`Sanitizing modern color in ${prop}:`, val);
+                // Force a safe fallback based on standard SRM/Brochify palette
+                if (prop.includes('background') || prop.includes('Color')) {
+                   if (el.classList.contains('column-blue')) el.style.setProperty(prop, '#0047AB', 'important');
+                   else if (val.includes('0 0 0') || val.includes('0% 0 0')) el.style.setProperty(prop, '#000000', 'important');
+                   else if (val.includes('1 0 0') || val.includes('100% 0 0')) el.style.setProperty(prop, '#ffffff', 'important');
+                   else el.style.setProperty(prop, '#f8fafc', 'important'); // Default subtle light
+                }
+            }
+        });
+
+        Array.from(el.children).forEach(child => sanitizeColors(child as HTMLElement));
+    };
+
+    sanitizeColors(element);
     
     const opt = {
       margin: 0,
       filename: `brochure-${Date.now()}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.95 },
-      html2canvas: { scale: 1.2, useCORS: true, logging: false },
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { 
+        scale: 2, 
+        useCORS: true, 
+        logging: true,
+        letterRendering: true,
+        allowTaint: false
+      },
       jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'landscape' as const },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
     
-    // @ts-ignore
-    const html2pdf = (await import('html2pdf.js')).default;
-    html2pdf().from(element).set(opt).save();
+    try {
+      // @ts-ignore
+      const html2pdf = (await import('html2pdf.js')).default;
+      console.log("Library loaded, start generation...");
+      await html2pdf().from(element).set(opt).save();
+      console.log("PDF generation/save call completed.");
+    } catch (err) {
+      console.error("PDF download failed internally:", err);
+      alert("Error generating PDF. Please check the console.");
+    }
   };
 
   const toggleLogo = (id: string) => {

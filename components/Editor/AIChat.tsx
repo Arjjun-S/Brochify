@@ -78,17 +78,18 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
       const { data, rawMessage } = result;
       
       if (data.eventTitle && data.department) {
-        onLoading(true, "Synthesizing Visual Identity...");
+        // onLoading(true, "Synthesizing Visual Identity...");
         
         setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: `Architecture parameters for "${data.eventTitle}" verified. Initializing generative visual engine...`,
+            content: `Architecture parameters for "${data.eventTitle}" verified.`,
             reasoning_details: rawMessage?.reasoning_details,
             timestamp: new Date()
         }]);
         
-        const imageUrl = await generateEventImage(data.eventTitle);
-        data.eventImage = imageUrl;
+        // Disabled FAL AI calls as per user request
+        // const imageUrl = await generateEventImage(data.eventTitle);
+        // data.eventImage = imageUrl;
         
         onDataGenerated(data);
         setMessages(prev => [...prev, { 
