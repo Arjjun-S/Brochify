@@ -107,11 +107,18 @@ export default function AIChat({ onDataGenerated, onLoading, selectedLogos, onTo
       }
     } catch (error: any) {
        console.error("AIChat Process Error:", error);
-       const errorMessage = error.response?.data?.error?.message || error.message || "Unknown API disruption";
+       
+       let displayMessage = "Signal termination encountered. Please verify your network connection or try a different event prompt.";
+       
+       if (error.response?.status === 429 || error.message?.includes('429')) {
+           displayMessage = "Neural Draftsman is currently resting (OpenRouter API Rate Limit Reached). Please wait a few moments before sending another request.";
+       } else if (error.message) {
+           displayMessage = `Signal termination encountered: ${error.message}`;
+       }
        
        setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: `Signal termination encountered: ${errorMessage}. Please verify your network connection or try a different event prompt.`,
+            content: displayMessage,
             timestamp: new Date()
        }]);
     } finally {

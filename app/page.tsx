@@ -25,63 +25,88 @@ export default function Dashboard() {
   }, []);
 
   const handleDownload = async () => {
-    console.log("PDF download triggered...");
+    console.log("PDF download triggered via Puppeteer API...");
     const element = document.getElementById('brochure-preview');
     if (!element) {
       console.error("Preview element not found!");
       return;
     }
-    
-    console.log("Element found, initializing sanitization...");
 
-    // Recursive function to sanitize modern colors (lab, oklch) that crash html2canvas
-    const sanitizeColors = (el: HTMLElement) => {
-        const style = window.getComputedStyle(el);
-        const props = ['backgroundColor', 'color', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor'];
-        
-        props.forEach(prop => {
-            const val = (style as any)[prop];
-            if (val && (val.includes('lab(') || val.includes('oklch(') || val.includes('oklab('))) {
-                console.warn(`Sanitizing modern color in ${prop}:`, val);
-                // Force a safe fallback based on standard SRM/Brochify palette
-                if (prop.includes('background') || prop.includes('Color')) {
-                   if (el.classList.contains('column-blue')) el.style.setProperty(prop, '#0047AB', 'important');
-                   else if (val.includes('0 0 0') || val.includes('0% 0 0')) el.style.setProperty(prop, '#000000', 'important');
-                   else if (val.includes('1 0 0') || val.includes('100% 0 0')) el.style.setProperty(prop, '#ffffff', 'important');
-                   else el.style.setProperty(prop, '#f8fafc', 'important'); // Default subtle light
-                }
-            }
-        });
+    setIsLoading(true);
+    setLoadingMessage("Materializing High-Fidelity PDF...");
 
-        Array.from(el.children).forEach(child => sanitizeColors(child as HTMLElement));
-    };
-
-    sanitizeColors(element);
-    
-    const opt = {
-      margin: 0,
-      filename: `brochure-${Date.now()}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
-        logging: true,
-        letterRendering: true,
-        allowTaint: false
-      },
-      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'landscape' as const },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-    
     try {
-      // @ts-ignore
-      const html2pdf = (await import('html2pdf.js')).default;
-      console.log("Library loaded, start generation...");
-      await html2pdf().from(element).set(opt).save();
-      console.log("PDF generation/save call completed.");
-    } catch (err) {
-      console.error("PDF download failed internally:", err);
-      alert("Error generating PDF. Please check the console.");
+      // Get all styles from the document
+      let styles = '';
+      const styleSheets = Array.from(document.styleSheets);
+      for (const sheet of styleSheets) {
+        try {
+          const rules = Array.from(sheet.cssRules);
+          for (const rule of rules) {
+            styles += rule.cssText;
+          }
+        } catch (e) {
+          console.warn("Could not read stylesheet rules (likely CORS):", e);
+        }
+      }
+
+      // Get the HTML content, isolating just the pages
+      const pages = element.querySelectorAll('.brochure-page');
+      let pagesHtml = '';
+      pages.forEach(p => pagesHtml += p.outerHTML);
+
+      const html = `
+        <html>
+        <head>
+          <style>
+            ${styles}
+            /* Override preview styles specifically for printing */
+            .brochure-page {
+                box-shadow: none !important;
+                transform: none !important;
+                margin: 0 !important;
+                border: none !important;
+            }
+          </style>
+        </head>
+        <body style="background: white; margin: 0; padding: 0;">
+          <div style="display: flex; flex-direction: column;">
+            ${pagesHtml}
+          </div>
+        </body>
+        </html>
+      `;
+
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ html, css: styles }), // Still send styles separately just in case the backend uses it for @page
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate PDF');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `brochure-${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log("PDF download completed.");
+    } catch (err: any) {
+      console.error("PDF download failed:", err);
+      alert(`Error generating PDF: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage("");
     }
   };
 

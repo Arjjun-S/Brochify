@@ -28,7 +28,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Brochure Layout - Using only hex colors to avoid html2pdf "lab" error */
+/* Brochure Layout - Using only hex colors to ensure PDF compatibility */
 .brochure-page {
   width: 260mm;
   height: 180mm;

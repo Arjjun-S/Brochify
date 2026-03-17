@@ -49,10 +49,10 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
                 "branch": "Specific Branch",
                 "ifscCode": "IFSC8888"
               },
-              "aboutCollege": "200-300 words detailed history of the university",
-              "aboutSchool": "150-200 words about the specific computing school",
-              "aboutDepartment": "150-200 words about the organizing department focus",
-              "aboutFdp": "150-200 words about this specific Faculty Development Program objective",
+              "aboutCollege": "140-150 words detailed history of the university",
+              "aboutSchool": "90-100 words about the specific computing school",
+              "aboutDepartment": "110-120 words about the organizing department focus",
+              "aboutFdp": "90-100 words about this specific Faculty Development Program objective",
               "topics": [
                 { "date": "Date", "forenoon": "Forenoon Topic", "afternoon": "Afternoon Topic" }
               ],
@@ -65,7 +65,7 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
             1. FILL ALL PLACES: Do not leave empty arrays or strings.
             2. PROFESSIONAL TONE: Use formal, academic language.
             3. ROLE DIVERSITY: MUST include Chief Patrons, Patrons, ONE Convener, ONE Co-Convener, Advisory Committee, and Organizing Committee.
-            4. DENSITY: For 'About' sections, write full paragraphs (150-300 words each) using sophisticated academic vocabulary.
+            4. DENSITY: For 'About' sections, follow strict word limits (100-150 words each) to ensure content fits the layout. Use sophisticated academic vocabulary.
             5. CONSISTENCY: Ensure all dates match the event title.
             6. COMMITTEE PLACEMENT: Ensure Convener and Co-Convener are present in the committee list.
             IMPORTANT: Output ONLY the JSON object, NO other text.`
@@ -81,6 +81,18 @@ export async function generateBrochureData(prompt: string, history: any[] = [], 
         },
       }
     );
+
+    if (!response.data || !response.data.choices || response.data.choices.length === 0) {
+        logger.log('OPENROUTER', 'INVALID_RESPONSE', { prompt }, { response: response.data }, 'ERROR');
+        console.error('Invalid OpenRouter response:', response.data);
+        
+        // If it's a known error structure from OpenRouter, throw a more descriptive error
+        if (response.data?.error) {
+            throw new Error(`OpenRouter API Error: ${response.data.error.message || JSON.stringify(response.data.error)}`);
+        }
+        
+        throw new Error('OpenRouter returned an empty or invalid response (no choices).');
+    }
 
     const message = response.data.choices[0].message;
     let content = message.content;
