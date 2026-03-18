@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import PageOne from "@/components/Brochure/PageOne";
-import PageTwo from "@/components/Brochure/PageTwo";
-import GuidedFlowPanel from "@/components/Editor/GuidedFlowPanel";
-import CanvasSidebar from "@/components/Editor/CanvasSidebar";
-import LoadingOverlay from "@/components/Layout/LoadingOverlay";
-import DevLogs from "@/components/Editor/DevLogs";
-import { cn } from "@/lib/utils";
+import PageOne from "@/components/studio/canvas/PageOne";
+import PageTwo from "@/components/studio/canvas/PageTwo";
+import GuidedFlowPanel from "@/components/studio/editor/GuidedFlowPanel";
+import CanvasSidebar from "@/components/studio/editor/CanvasSidebar";
+import LoadingOverlay from "@/components/shared/feedback/LoadingOverlay";
+import DevLogs from "@/components/studio/editor/DevLogs";
+import { cn } from "@/lib/ui/cn";
 import {
   Activity,
   AlignCenter,
@@ -38,9 +38,9 @@ import {
   SegmentPosition,
   setValueAtPath,
   TextOverlayItem,
-} from "@/lib/brochure";
-import { generateBrochureData } from "@/lib/openrouter";
-import { LoadingTask } from "@/lib/loadingManager";
+} from "@/lib/domains/brochure";
+import { generateBrochureData } from "@/lib/services/ai/openrouterClient";
+import { LoadingTask } from "@/lib/system/loading/loadingTaskManager";
 
 const PAGE_WIDTH = 983;
 const PAGE_HEIGHT = 680;
@@ -196,7 +196,7 @@ export default function Dashboard() {
         </html>
       `;
 
-      const response = await fetch("/api/generate-pdf", {
+      const response = await fetch("/api/v1/brochure/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ html, css: styles }),

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "temp:bootstrap": "sh ./temp_init/scripts/bootstrap-placeholders.sh",
+    "temp:verify": "sh ./temp_init/scripts/verify-structure.sh"
   },
   "dependencies": {
     "@fal-ai/client": "^1.9.4",
