@@ -1,8 +1,34 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import {
+  Bebas_Neue,
+  Cormorant_Garamond,
+  DM_Sans,
+  Fraunces,
+  IBM_Plex_Sans,
+  Inter,
+  Libre_Baskerville,
+  Manrope,
+  Playfair_Display,
+  Plus_Jakarta_Sans,
+  Poppins,
+  Sora,
+  Space_Grotesk,
+} from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
+const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-plus-jakarta" });
+const sora = Sora({ subsets: ["latin"], variable: "--font-sora" });
+const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-poppins" });
+const ibmPlexSans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ibm-plex-sans" });
+const bebasNeue = Bebas_Neue({ subsets: ["latin"], weight: "400", variable: "--font-bebas-neue" });
+const playfairDisplay = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair-display" });
+const cormorantGaramond = Cormorant_Garamond({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-cormorant-garamond" });
+const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces" });
+const libreBaskerville = Libre_Baskerville({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-libre-baskerville" });
 
 export const metadata: Metadata = {
   title: "Brochify - AI University Brochure Builder",
@@ -16,7 +42,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body
+        className={`${inter.variable} ${manrope.variable} ${dmSans.variable} ${spaceGrotesk.variable} ${plusJakartaSans.variable} ${sora.variable} ${poppins.variable} ${ibmPlexSans.variable} ${bebasNeue.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${fraunces.variable} ${libreBaskerville.variable} font-sans antialiased`}
+      >
         {children}
       </body>
     </html>
