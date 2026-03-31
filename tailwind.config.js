@@ -7,8 +7,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#0047AB", // Deep Blue as requested in images
-        secondary: "#E0F2FE", // Light Blue
+        primary: "#0b4da2",
+        secondary: "#5fa8ff",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "sans-serif"],

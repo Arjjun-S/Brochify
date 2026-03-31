@@ -256,9 +256,8 @@ export default function BrochureOverlay({
             style={{
               width: item.width,
               height: item.height,
-              left: item.x,
-              top: item.y,
-              rotate: `${item.rotation}deg`,
+              transform: `translate3d(${item.x}px, ${item.y}px, 0) rotate(${item.rotation}deg)`,
+              transformOrigin: "top left",
             }}
             onPointerDown={(event) => beginMove(event, item)}
             onPointerMove={handlePointerMove}

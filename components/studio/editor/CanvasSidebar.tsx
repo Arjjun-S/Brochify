@@ -6,6 +6,8 @@ import { ImagePlus, Search, Trash2, UploadCloud } from "lucide-react";
 import { BrandAsset } from "@/lib/domains/brochure";
 import { cn } from "@/lib/ui/cn";
 
+export type BrochureTemplate = "whiteBlue" | "beigeDust" | "softBlue";
+
 type LogoOption = {
   id: string;
   name: string;
@@ -22,6 +24,8 @@ type CanvasSidebarProps = {
   onDeleteAsset: (id: string) => void;
   onInsertAssetAsOverlay: (id: string) => void;
   isBusy: boolean;
+  template: BrochureTemplate;
+  onChangeTemplate: (template: BrochureTemplate) => void;
 };
 
 export default function CanvasSidebar({
@@ -33,6 +37,8 @@ export default function CanvasSidebar({
   onDeleteAsset,
   onInsertAssetAsOverlay,
   isBusy,
+  template,
+  onChangeTemplate,
 }: CanvasSidebarProps) {
   const [query, setQuery] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -48,6 +54,36 @@ export default function CanvasSidebar({
       <div className="px-4 pt-4 pb-3 border-b border-slate-200">
         <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Assets Studio</p>
         <h3 className="mt-1 text-lg font-black tracking-tight text-slate-900">Logos, Photos, Elements</h3>
+      </div>
+
+      <div className="p-4 border-b border-slate-200 space-y-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Templates</p>
+        <div className="grid grid-cols-1 gap-2">
+          {[
+            { id: "whiteBlue" as BrochureTemplate, label: "White / Blue", preview: "linear-gradient(135deg,#ffffff 0%,#f4f7ff 60%,#e8f4ff 100%)" },
+            { id: "beigeDust" as BrochureTemplate, label: "Beige Dust", preview: "radial-gradient(rgba(120,94,60,0.12) 1px,transparent 1px), linear-gradient(180deg,#fdf8ef 0%,#f7f1e6 100%)" },
+            { id: "softBlue" as BrochureTemplate, label: "White + Mist", preview: "linear-gradient(180deg,#ffffff 0%,#f7fbff 100%)" },
+          ].map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onChangeTemplate(option.id)}
+              className={cn(
+                "flex items-center gap-3 rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors",
+                template === option.id
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-primary/25",
+              )}
+            >
+              <span
+                className="h-10 w-10 rounded-lg border border-slate-200 shadow-sm"
+                style={{ backgroundImage: option.preview, backgroundSize: option.id === "beigeDust" ? "18px 18px, 100% 100%" : "100% 100%" }}
+                aria-hidden
+              ></span>
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="p-4 border-b border-slate-200 space-y-3">

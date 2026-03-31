@@ -1,11 +1,21 @@
 "use client";
 
-import React from 'react';
+import React, { CSSProperties } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import Image from 'next/image';
 import MovableSegment from './MovableSegment';
 import BrochureOverlay from './BrochureOverlay';
 import { BrochureData, OverlayItem, SegmentPosition } from '@/lib/domains/brochure';
+
+type Palette = {
+    primary: string;
+    secondary: string;
+    primaryText: string;
+    surface: string;
+    surfaceBorder: string;
+    accent: string;
+    mutedText: string;
+};
 
 interface PageOneProps {
     data: BrochureData;
@@ -19,6 +29,8 @@ interface PageOneProps {
     onSelectOverlay?: (id: string | null) => void;
     onUpdateOverlay?: (id: string, patch: Partial<OverlayItem>) => void;
         canvasScale?: number;
+    pageStyle: CSSProperties;
+    palette?: Palette;
 }
 
 type EditableTextProps = {
@@ -91,10 +103,20 @@ export default function PageOne({
     onSelectOverlay,
     onUpdateOverlay,
     canvasScale = 1,
+    pageStyle,
+    palette,
 }: PageOneProps) {
     const committee = data.committee ?? [];
     const committeeWithIndex = committee.map((member, index) => ({ member, index }));
     const headings = data.headings;
+
+    const palettePrimary = palette?.primary ?? '#0b4da2';
+    const paletteSecondary = palette?.secondary ?? '#5fa8ff';
+    const palettePrimaryText = palette?.primaryText ?? '#ffffff';
+    const paletteSurface = palette?.surface ?? '#ffffff';
+    const paletteSurfaceBorder = palette?.surfaceBorder ?? '#e2e8f0';
+    const paletteAccent = palette?.accent ?? '#facc15';
+    const paletteMuted = palette?.mutedText ?? '#64748b';
 
     const chiefPatrons = committeeWithIndex.filter(({ member }) => member.role?.toLowerCase().includes('chief patron'));
     const patrons = committeeWithIndex.filter(
@@ -117,15 +139,17 @@ export default function PageOne({
         return availableLogos.find((logo) => logo.id === id)?.src;
     };
 
-  return (
-    <div id="brochure-page-1" className="brochure-page border border-gray-200" style={{ backgroundColor: '#ffffff' }}>
-      {/* Column 1: Committees (White) */}
-      <div className="column !p-4 flex flex-col" style={{ backgroundColor: '#ffffff', borderRight: '1px solid #e2e8f0' }}>
-        <div className="flex-1 p-5 rounded-[32px] border border-[#0047AB20] bg-[#f8fafc] space-y-6 shadow-sm" style={{ backgroundColor: '#f8fafc', borderColor: 'rgba(0, 71, 171, 0.2)' }}>
+    const pageBackgroundStyle = { backgroundColor: paletteSurface, ...pageStyle };
+
+    return (
+        <div id="brochure-page-1" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
+            {/* Column 1: Committees (White) */}
+                        <div className="column !p-4 flex flex-col" style={{ backgroundColor: paletteSurface, borderRight: `1px solid ${paletteSurfaceBorder}` }}>
+                                <div className="flex-1 p-5 rounded-[32px] border space-y-6 shadow-sm" style={{ backgroundColor: paletteSurface, borderColor: `${paletteSurfaceBorder}` }}>
             {chiefPatrons.length > 0 && (
                 <MovableSegment id="p1-chief-patrons" position={segmentPositions?.['p1-chief-patrons']} onMove={onSegmentMove} index={0}>
                 <div>
-                                        <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>
+                                        <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.chiefPatrons" value={headings.chiefPatrons} onEdit={onEdit} />
                                         </h4>
                     <ul className="text-[11.5px] leading-tight" style={{ color: '#1e293b' }}>
@@ -144,7 +168,7 @@ export default function PageOne({
             {patrons.length > 0 && (
                 <MovableSegment id="p1-patrons" position={segmentPositions?.['p1-patrons']} onMove={onSegmentMove} index={1}>
                 <div>
-                                        <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>
+                                        <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.patrons" value={headings.patrons} onEdit={onEdit} />
                                         </h4>
                     <ul className="text-[11.5px] leading-tight" style={{ color: '#1e293b' }}>
@@ -165,7 +189,7 @@ export default function PageOne({
                 <div className="flex gap-4">
                     {convener && (
                         <div className="flex-1">
-                                                        <h4 className="text-[#0047AB] text-[11px] font-black uppercase tracking-wider border-b border-[#0047AB]/20 mb-1">
+                                                        <h4 className="text-[11px] font-black uppercase tracking-wider border-b mb-1" style={{ color: palettePrimary, borderColor: `${palettePrimary}33` }}>
                                                             <EditableText path="headings.convener" value={headings.convener} onEdit={onEdit} />
                                                         </h4>
                                                         <p className="text-[11px] leading-tight font-bold" style={{ color: '#1e293b' }}>
@@ -178,7 +202,7 @@ export default function PageOne({
                     )}
                     {coConvener && (
                         <div className="flex-1">
-                                                        <h4 className="text-[#0047AB] text-[11px] font-black uppercase tracking-wider border-b border-[#0047AB]/20 mb-1">
+                                                        <h4 className="text-[11px] font-black uppercase tracking-wider border-b mb-1" style={{ color: palettePrimary, borderColor: `${palettePrimary}33` }}>
                                                             <EditableText path="headings.coConvener" value={headings.coConvener} onEdit={onEdit} />
                                                         </h4>
                                                         <p className="text-[11px] leading-tight font-bold" style={{ color: '#1e293b' }}>
@@ -195,7 +219,7 @@ export default function PageOne({
 
             <MovableSegment id="p1-advisory" position={segmentPositions?.['p1-advisory']} onMove={onSegmentMove} index={3}>
             <div>
-                                <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>
+                                <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.advisoryCommittee" value={headings.advisoryCommittee} onEdit={onEdit} />
                                 </h4>
                 <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
@@ -212,7 +236,7 @@ export default function PageOne({
 
             <MovableSegment id="p1-organizing" position={segmentPositions?.['p1-organizing']} onMove={onSegmentMove} index={4}>
             <div>
-                                <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>
+                                <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.organizingCommittee" value={headings.organizingCommittee} onEdit={onEdit} />
                                 </h4>
                 <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
@@ -230,15 +254,15 @@ export default function PageOne({
       </div>
 
       {/* Column 2: Registration (Blue) */}
-      <div className="column column-blue flex flex-col items-center !p-4" style={{ backgroundColor: '#0047AB', color: '#ffffff' }}>
-                <h2 className="text-lg font-black bg-white px-4 py-1 rounded-full mb-4 uppercase tracking-tighter" style={{ color: '#0047AB' }}>
+    <div className="column column-blue flex flex-col items-center !p-4" style={{ backgroundColor: palettePrimary, color: palettePrimaryText }}>
+                <h2 className="text-lg font-black bg-white px-4 py-1 rounded-full mb-4 uppercase tracking-tighter" style={{ color: palettePrimary }}>
                     <EditableText path="headings.registrationDetail" value={headings.registrationDetail} onEdit={onEdit} />
                 </h2>
         
         <MovableSegment id="p1-registration-fee" position={segmentPositions?.['p1-registration-fee']} onMove={onSegmentMove} index={5} className="w-full">
         <div className="w-full space-y-2 mb-4">
             <div className="flex justify-between text-[12px] font-bold pb-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                <span style={{ color: '#fde047' }}><EditableText path="headings.registrationFee" value={headings.registrationFee} onEdit={onEdit} className="inline" /></span>
+                <span style={{ color: paletteAccent }}><EditableText path="headings.registrationFee" value={headings.registrationFee} onEdit={onEdit} className="inline" /></span>
             </div>
             <div className="flex justify-between text-[11px] text-white">
                 <span>IEEE Member</span>
@@ -254,21 +278,21 @@ export default function PageOne({
 
         <MovableSegment id="p1-registration-notes" position={segmentPositions?.['p1-registration-notes']} onMove={onSegmentMove} index={6} className="w-full">
         <div className="w-full text-left p-2 rounded-lg mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                        <p className="text-[11px] font-black mb-1 uppercase tracking-widest" style={{ color: '#fde047' }}>
+                        <p className="text-[11px] font-black mb-1 uppercase tracking-widest" style={{ color: paletteAccent }}>
                             <EditableText path="headings.registrationNote" value={headings.registrationNote} onEdit={onEdit} className="inline" />
                         </p>
             <ul className="text-[10.5px] space-y-1" style={{ color: 'rgba(255,255,255,0.9)' }}>
                 {data.registration?.notes?.map((n, i: number) => (
                     <li key={i} className="flex gap-1">
-                        <span style={{ color: '#fde047' }}>•</span>
+                        <span style={{ color: paletteAccent }}>•</span>
                         <EditableText path={`registration.notes.${i}`} value={n} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" />
                     </li>
                 )) || (
                     <>
-                        <li><span style={{ color: '#fde047' }}>•</span> Registration Confirmation: 21st March 2026</li>
-                        <li><span style={{ color: '#fde047' }}>•</span> Session Timings: 9:30 AM - 4:00 PM</li>
-                        <li><span style={{ color: '#fde047' }}>•</span> Registration is compulsory for all</li>
-                        <li><span style={{ color: '#fde047' }}>•</span> Certificates will be provided by IEEE</li>
+                        <li><span style={{ color: paletteAccent }}>•</span> Registration Confirmation: 21st March 2026</li>
+                        <li><span style={{ color: paletteAccent }}>•</span> Session Timings: 9:30 AM - 4:00 PM</li>
+                        <li><span style={{ color: paletteAccent }}>•</span> Registration is compulsory for all</li>
+                        <li><span style={{ color: paletteAccent }}>•</span> Certificates will be provided by IEEE</li>
                     </>
                 )}
             </ul>
@@ -286,7 +310,7 @@ export default function PageOne({
 
                 <MovableSegment id="p1-account" position={segmentPositions?.['p1-account']} onMove={onSegmentMove} index={8} className="mt-auto w-full">
         <div className="mt-auto w-full">
-                        <div className="bg-white text-[#0047AB] text-[12px] font-black py-0.5 px-4 rounded-full text-center mb-2 uppercase tracking-widest shadow-md">
+                        <div className="bg-white text-[12px] font-black py-0.5 px-4 rounded-full text-center mb-2 uppercase tracking-widest shadow-md" style={{ color: palettePrimary }}>
                             <EditableText path="headings.accountDetail" value={headings.accountDetail} onEdit={onEdit} className="inline" />
                         </div>
             <div className="text-[10px] space-y-0.5 font-medium leading-tight px-1" style={{ color: 'rgba(255,255,255,0.9)' }}>
@@ -295,7 +319,7 @@ export default function PageOne({
                 <p className="flex justify-between gap-2"><span>Acc Name</span> <span className="text-right max-w-[140px] break-words">: <EditableText path="accountDetails.accountName" value={data.accountDetails?.accountName || 'C TECH ASSOCIATION'} onEdit={onEdit} className="inline" /></span></p>
                 <p className="flex justify-between"><span>IFSC Code</span> <span>: <EditableText path="accountDetails.ifscCode" value={data.accountDetails?.ifscCode || 'IDIB000S181'} onEdit={onEdit} className="inline" /></span></p>
             </div>
-            <div className="mt-3 py-1 px-3 bg-white text-[#0047AB] rounded-sm text-center text-[10px] font-black uppercase tracking-tighter">
+            <div className="mt-3 py-1 px-3 bg-white rounded-sm text-center text-[10px] font-black uppercase tracking-tighter" style={{ color: palettePrimary }}>
                 Contact: <EditableText path="contact.name" value={data.contact?.name || 'Convener'} onEdit={onEdit} className="inline" />
                 {' • '}
                 <EditableText path="contact.mobile" value={data.contact?.mobile || '9999999999'} onEdit={onEdit} className="inline" />
@@ -304,8 +328,8 @@ export default function PageOne({
                 </MovableSegment>
       </div>
 
-      {/* Column 3: Event Details (White) */}
-      <div className="column column-white flex flex-col items-center !p-4" style={{ backgroundColor: '#ffffff' }}>
+            {/* Column 3: Event Details (White) */}
+            <div className="column column-white flex flex-col items-center !p-4" style={{ backgroundColor: paletteSurface }}>
         <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} index={9} className="w-full">
         <div className="flex justify-center flex-wrap gap-2 w-full mb-4">
             {selectedLogos.slice(0, selectedLogos.length > 1 ? -1 : undefined).map(id => {
@@ -318,13 +342,13 @@ export default function PageOne({
         </MovableSegment>
 
         <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} index={10} className="w-full flex flex-col items-center">
-                <p className="text-[10px] font-black text-[#0047AB] uppercase tracking-[0.2em] mb-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: palettePrimary }}>
                     <EditableText path="headings.sponsoredBy" value={headings.sponsoredBy} onEdit={onEdit} className="inline" />
                 </p>
-        <h1 className="text-2xl font-black text-center leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: '#0047AB' }}>
+        <h1 className="text-2xl font-black text-center leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: palettePrimary }}>
             <EditableText path="eventTitle" value={data.eventTitle} onEdit={onEdit} className="whitespace-pre-wrap break-words" />
         </h1>
-        <p className="text-[12px] font-bold text-[#0047AB] mb-4"><EditableText path="dates" value={data.dates} onEdit={onEdit} /></p>
+        <p className="text-[12px] font-bold mb-4" style={{ color: palettePrimary }}><EditableText path="dates" value={data.dates} onEdit={onEdit} /></p>
         </MovableSegment>
 
         <MovableSegment id="p1-image" position={segmentPositions?.['p1-image']} onMove={onSegmentMove} index={11} className="w-full flex-1">
@@ -332,17 +356,21 @@ export default function PageOne({
             {data.eventImage ? (
                 <Image src={data.eventImage} alt="Event AI" className="w-full h-full object-cover" fill unoptimized />
             ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-[8px] uppercase tracking-widest" style={{ color: '#94a3b8' }}>Synthesizing Visual Identity...</div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-28 h-28 rounded-xl border border-slate-200 bg-slate-50 shadow-inner flex items-center justify-center">
+                        <Image src="/icon-logo.png" alt="Placeholder" width={72} height={72} className="opacity-70" />
+                    </div>
+                </div>
             )}
         </div>
         </MovableSegment>
 
         <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} index={12} className="w-full">
                 <div className="text-center mt-auto pt-3 flex flex-col items-center w-full" style={{ borderTop: '1px solid #f1f5f9' }}>
-                        <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>
+                        <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: paletteMuted }}>
                             <EditableText path="headings.organizedBy" value={headings.organizedBy} onEdit={onEdit} className="inline" />
                         </p>
-            <p className="text-[12px] font-black text-[#0047AB] uppercase leading-tight max-w-[180px] mb-4"><EditableText path="department" value={data.department} onEdit={onEdit} /></p>
+            <p className="text-[12px] font-black uppercase leading-tight max-w-[180px] mb-4" style={{ color: palettePrimary }}><EditableText path="department" value={data.department} onEdit={onEdit} /></p>
             
             {selectedLogos.length > 1 && (
                 <div className="mt-2 mb-4">
@@ -354,7 +382,7 @@ export default function PageOne({
                 </div>
             )}
             
-            <p className="text-[10px] font-bold mt-0.5" style={{ color: '#64748b' }}>SRM Institute of Science and Technology</p>
+            <p className="text-[10px] font-bold mt-0.5" style={{ color: paletteMuted }}>SRM Institute of Science and Technology</p>
         </div>
                 </MovableSegment>
       </div>
@@ -368,6 +396,10 @@ export default function PageOne({
                     canvasScale={canvasScale}
                 />
             )}
+
+                        <div className="pointer-events-none absolute bottom-4 right-4 text-[9px] font-black uppercase tracking-[0.28em]" style={{ color: `${paletteMuted}66` }}>
+                                made with Brochify
+                        </div>
     </div>
   );
 }

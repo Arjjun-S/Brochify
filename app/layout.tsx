@@ -33,6 +33,10 @@ const libreBaskerville = Libre_Baskerville({ subsets: ["latin"], weight: ["400",
 export const metadata: Metadata = {
   title: "Brochify - AI University Brochure Builder",
   description: "Generate professional university brochures in seconds using AI.",
+  icons: {
+    icon: "/icon-logo.png",
+    shortcut: "/icon-logo.png",
+  },
 };
 
 export default function RootLayout({

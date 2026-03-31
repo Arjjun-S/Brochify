@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import PageOne from "@/components/studio/canvas/PageOne";
 import PageTwo from "@/components/studio/canvas/PageTwo";
 import GuidedFlowPanel from "@/components/studio/editor/GuidedFlowPanel";
@@ -15,11 +16,12 @@ import {
   AlignRight,
   Circle,
   Download,
-  Layout,
+  Redo2,
   Sparkles,
   Square,
   Trash2,
   Type,
+  Undo2,
   ChevronRight,
 } from "lucide-react";
 import {
@@ -41,6 +43,7 @@ import {
 } from "@/lib/domains/brochure";
 import { generateBrochureData } from "@/lib/services/ai/openrouterClient";
 import { LoadingTask } from "@/lib/system/loading/loadingTaskManager";
+import type { BrochureTemplate } from "@/components/studio/editor/CanvasSidebar";
 
 const PAGE_WIDTH = 983;
 const PAGE_HEIGHT = 680;
@@ -54,6 +57,74 @@ const builtinLogos: Array<{ id: string; name: string; src: string }> = [
   { id: "iicm", name: "Institute of Innovation Council", src: "/logos/iicm.png" },
   { id: "soct", name: "School of Computing", src: "/logos/soct.jpeg" },
 ];
+
+type Palette = {
+  primary: string;
+  secondary: string;
+  primaryText: string;
+  surface: string;
+  surfaceBorder: string;
+  accent: string;
+  mutedText: string;
+};
+
+const TEMPLATE_THEMES: Record<BrochureTemplate, { pageStyle: CSSProperties; palette: Palette }> = {
+  whiteBlue: {
+    pageStyle: {
+      backgroundImage:
+        "radial-gradient(circle at 18% 18%, rgba(128, 220, 242, 0.16) 0, transparent 36%), radial-gradient(circle at 82% 12%, rgba(11, 77, 162, 0.18) 0, transparent 42%), linear-gradient(180deg, #ffffff 0%, #eef4ff 100%)",
+    },
+    palette: {
+      primary: "#0b4da2",
+      secondary: "#5fa8ff",
+      primaryText: "#ffffff",
+      surface: "#f9fbff",
+      surfaceBorder: "#d9e3f5",
+      accent: "#facc15",
+      mutedText: "#64748b",
+    },
+  },
+  beigeDust: {
+    pageStyle: {
+      backgroundImage:
+        "radial-gradient(rgba(120, 94, 60, 0.14) 1px, transparent 1.2px), linear-gradient(180deg, #fdf6ea 0%, #f5e9d7 100%)",
+      backgroundSize: "18px 18px, 100% 100%",
+      backgroundColor: "#f5e9d7",
+    },
+    palette: {
+      primary: "#f7eedf",
+      secondary: "#e6c89c",
+      primaryText: "#2d1f12",
+      surface: "#f7eedf",
+      surfaceBorder: "#e6d6c2",
+      accent: "#8a5a1f",
+      mutedText: "#5c4a38",
+    },
+  },
+  softBlue: {
+    pageStyle: {
+      backgroundImage: "linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%)",
+      backgroundColor: "#f4f9ff",
+    },
+    palette: {
+      primary: "#3f8bff",
+      secondary: "#a3d7ff",
+      primaryText: "#ffffff",
+      surface: "#ffffff",
+      surfaceBorder: "#dbeafe",
+      accent: "#facc15",
+      mutedText: "#6b7280",
+    },
+  },
+};
+
+type EditorSnapshot = {
+  brochureData: BrochureData;
+  selectedLogos: string[];
+  segmentPositions: Record<string, SegmentPosition>;
+  overlayItems: OverlayItem[];
+  template: BrochureTemplate;
+};
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -83,9 +154,14 @@ export default function Dashboard() {
   const [zoomFactor, setZoomFactor] = useState(1); // user-controlled multiplier
   const [projectReady, setProjectReady] = useState(false);
   const [assets, setAssets] = useState<BrandAsset[]>([]);
+  const [template, setTemplate] = useState<BrochureTemplate>("whiteBlue");
+  const [history, setHistory] = useState<EditorSnapshot[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
   const previewViewportRef = useRef<HTMLDivElement | null>(null);
   const pageOneRef = useRef<HTMLDivElement | null>(null);
   const pageTwoRef = useRef<HTMLDivElement | null>(null);
+  const historyIndexRef = useRef(-1);
+  const latestRef = useRef<EditorSnapshot | null>(null);
 
   const isLoading = loadingTask !== "idle";
 
@@ -125,6 +201,71 @@ export default function Dashboard() {
     return () => resizeObserver.disconnect();
   }, []);
 
+  useEffect(() => {
+    latestRef.current = { brochureData, selectedLogos, segmentPositions, overlayItems, template };
+  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template]);
+
+  useEffect(() => {
+    const initial: EditorSnapshot = {
+      brochureData,
+      selectedLogos,
+      segmentPositions,
+      overlayItems,
+      template,
+    };
+    setHistory([initial]);
+    setHistoryIndex(0);
+    historyIndexRef.current = 0;
+    latestRef.current = initial;
+  }, []);
+
+  const pushHistorySnapshot = useCallback((snapshot: EditorSnapshot) => {
+    setHistory((prev) => {
+      const truncated = prev.slice(0, historyIndexRef.current + 1);
+      const next = [...truncated, snapshot];
+      historyIndexRef.current = next.length - 1;
+      setHistoryIndex(historyIndexRef.current);
+      return next;
+    });
+    latestRef.current = snapshot;
+  }, []);
+
+  const pushWith = useCallback(
+    (partial: Partial<EditorSnapshot>) => {
+      const base =
+        latestRef.current ?? ({ brochureData, selectedLogos, segmentPositions, overlayItems, template } as EditorSnapshot);
+      pushHistorySnapshot({ ...base, ...partial });
+    },
+    [],
+  );
+
+  const applySnapshot = useCallback((snapshot: EditorSnapshot) => {
+    latestRef.current = snapshot;
+    setBrochureData(snapshot.brochureData);
+    setSelectedLogos(snapshot.selectedLogos);
+    setSegmentPositions(snapshot.segmentPositions);
+    setOverlayItems(snapshot.overlayItems);
+    setTemplate(snapshot.template);
+  }, []);
+
+  const undo = () => {
+    if (historyIndexRef.current <= 0) return;
+    const nextIndex = historyIndexRef.current - 1;
+    const snapshot = history[nextIndex];
+    historyIndexRef.current = nextIndex;
+    setHistoryIndex(nextIndex);
+    applySnapshot(snapshot);
+  };
+
+  const redo = () => {
+    if (historyIndexRef.current >= history.length - 1) return;
+    const nextIndex = historyIndexRef.current + 1;
+    const snapshot = history[nextIndex];
+    historyIndexRef.current = nextIndex;
+    setHistoryIndex(nextIndex);
+    applySnapshot(snapshot);
+  };
+
   const selectedOverlay = useMemo(
     () => overlayItems.find((item) => item.id === selectedOverlayId) ?? null,
     [overlayItems, selectedOverlayId],
@@ -161,18 +302,22 @@ export default function Dashboard() {
     setLoadingMessage("Preparing final PDF export...");
 
     try {
+      // Collect all styles, including Tailwind layers, by cloning <style> and <link rel="stylesheet"> content
       let styles = "";
-      const styleSheets = Array.from(document.styleSheets);
-      for (const sheet of styleSheets) {
-        try {
-          const rules = Array.from(sheet.cssRules);
-          for (const rule of rules) {
-            styles += rule.cssText;
+      document.querySelectorAll("style, link[rel='stylesheet']").forEach((node) => {
+        if (node.tagName.toLowerCase() === "style") {
+          styles += (node as HTMLStyleElement).innerHTML;
+        } else {
+          const sheet = (node as HTMLLinkElement).sheet as CSSStyleSheet | null;
+          if (!sheet) return;
+          try {
+            const rules = Array.from(sheet.cssRules);
+            for (const rule of rules) styles += rule.cssText;
+          } catch {
+            // skip cross-origin styles
           }
-        } catch {
-          // ignore stylesheet access errors for cross-origin rules
         }
-      }
+      });
 
       const exportCleanupCss = `
         .brochure-overlay-layer { pointer-events: none !important; }
@@ -180,16 +325,33 @@ export default function Dashboard() {
         .overlay-item-toolbar,
         .overlay-resize-handle,
         .segment-handle { display: none !important; box-shadow: none !important; border: none !important; }
-        .overlay-textbox { border-color: transparent !important; box-shadow: none !important; outline: none !important; }
+        .overlay-textbox { outline: none !important; }
         .editable-inline, .editable-block { outline: none !important; box-shadow: none !important; background: transparent !important; }
       `;
 
       styles += exportCleanupCss;
 
+      const origin = window.location.origin;
       const pages = element.querySelectorAll(".brochure-page");
       let pagesHtml = "";
       pages.forEach((page) => {
-        pagesHtml += page.outerHTML;
+        const clone = page.cloneNode(true) as HTMLElement;
+        clone.style.transform = "none";
+        clone.style.transformOrigin = "top left";
+        clone.style.boxShadow = "none";
+        clone.style.margin = "0";
+        clone.style.border = "none";
+        clone.querySelectorAll("img").forEach((node) => {
+          const img = node as HTMLImageElement;
+          const src = img.getAttribute("src");
+          if (!src || src.startsWith("data:")) return;
+          img.setAttribute("src", new URL(src, origin).href);
+        });
+        clone.querySelectorAll(".overlay-item").forEach((node) => {
+          (node as HTMLElement).style.transform = (node as HTMLElement).style.transform || "";
+          (node as HTMLElement).style.opacity = "1";
+        });
+        pagesHtml += clone.outerHTML;
       });
 
       const html = `
@@ -202,6 +364,9 @@ export default function Dashboard() {
               transform: none !important;
               margin: 0 !important;
               border: none !important;
+            }
+            body {
+              background: white;
             }
           </style>
         </head>
@@ -243,45 +408,77 @@ export default function Dashboard() {
   };
 
   const handleFieldChange = useCallback((path: string, value: unknown) => {
-    setBrochureData((prev) => setValueAtPath(prev, path, value));
-  }, []);
+    setBrochureData((prev) => {
+      const next = setValueAtPath(prev, path, value);
+      pushWith({ brochureData: next });
+      return next;
+    });
+  }, [pushWith]);
 
   const toggleLogo = (id: string) => {
-    setSelectedLogos((prev) =>
-      prev.includes(id) ? prev.filter((logoId) => logoId !== id) : [...prev, id],
-    );
+    setSelectedLogos((prev) => {
+      const next = prev.includes(id) ? prev.filter((logoId) => logoId !== id) : [...prev, id];
+      pushWith({ selectedLogos: next });
+      return next;
+    });
   };
 
   const handleSegmentMove = (id: string, position: SegmentPosition) => {
-    setSegmentPositions((prev) => ({
-      ...prev,
-      [id]: position,
-    }));
+    setSegmentPositions((prev) => {
+      const next = {
+        ...prev,
+        [id]: position,
+      };
+      pushWith({ segmentPositions: next });
+      return next;
+    });
   };
 
   const updateOverlayItem = (id: string, patch: Partial<OverlayItem>) => {
-    setOverlayItems((prev) =>
-      prev.map((item) => (item.id === id ? ({ ...item, ...patch } as OverlayItem) : item)),
-    );
+    setOverlayItems((prev) => {
+      const next = prev.map((item) => (item.id === id ? ({ ...item, ...patch } as OverlayItem) : item));
+      pushWith({ overlayItems: next });
+      return next;
+    });
   };
 
   const addTextOverlay = () => {
     const nextItem = createTextOverlay(activePage);
-    setOverlayItems((prev) => [...prev, nextItem]);
+    setOverlayItems((prev) => {
+      const next = [...prev, nextItem];
+      pushWith({ overlayItems: next });
+      return next;
+    });
     setSelectedOverlayId(nextItem.id);
   };
 
   const addShapeOverlay = (shape: "rectangle" | "circle") => {
     const nextItem = createShapeOverlay(activePage, shape);
-    setOverlayItems((prev) => [...prev, nextItem]);
+    setOverlayItems((prev) => {
+      const next = [...prev, nextItem];
+      pushWith({ overlayItems: next });
+      return next;
+    });
     setSelectedOverlayId(nextItem.id);
+  };
+
+  const handleChangeTemplate = (next: BrochureTemplate) => {
+    setTemplate((prev) => {
+      if (prev === next) return prev;
+      pushWith({ template: next });
+      return next;
+    });
   };
 
   const addImageOverlayFromAsset = (assetId: string) => {
     const asset = assets.find((item) => item.id === assetId);
     if (!asset) return;
     const nextItem = createImageOverlay(activePage, asset);
-    setOverlayItems((prev) => [...prev, nextItem]);
+    setOverlayItems((prev) => {
+      const next = [...prev, nextItem];
+      pushWith({ overlayItems: next });
+      return next;
+    });
     setSelectedOverlayId(nextItem.id);
   };
 
@@ -295,13 +492,21 @@ export default function Dashboard() {
     const x = Math.max(0, Math.min(PAGE_WIDTH - 180, position.x));
     const y = Math.max(0, Math.min(PAGE_HEIGHT - 120, position.y));
     const nextItem = createImageOverlay(page, asset, { x, y });
-    setOverlayItems((prev) => [...prev, nextItem]);
+    setOverlayItems((prev) => {
+      const next = [...prev, nextItem];
+      pushWith({ overlayItems: next });
+      return next;
+    });
     setSelectedOverlayId(nextItem.id);
   };
 
   const removeSelectedOverlay = () => {
     if (!selectedOverlayId) return;
-    setOverlayItems((prev) => prev.filter((item) => item.id !== selectedOverlayId));
+    setOverlayItems((prev) => {
+      const next = prev.filter((item) => item.id !== selectedOverlayId);
+      pushWith({ overlayItems: next });
+      return next;
+    });
     setSelectedOverlayId(null);
   };
 
@@ -376,7 +581,9 @@ export default function Dashboard() {
     try {
       const prompt = buildEnhancePrompt(brochureData);
       const result = await generateBrochureData(prompt);
-      setBrochureData(normalizeBrochureData(result.data as Record<string, unknown>));
+      const enhanced = normalizeBrochureData(result.data as Record<string, unknown>);
+      setBrochureData(enhanced);
+      pushWith({ brochureData: enhanced });
       setProjectReady(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Enhancement failed";
@@ -390,6 +597,8 @@ export default function Dashboard() {
   const effectiveScale = Math.min(1.35, Math.max(0.4, previewScale * zoomFactor));
   const previewHeight = (PAGE_HEIGHT * 2 + PAGE_GAP) * effectiveScale;
   const previewWidth = PAGE_WIDTH * effectiveScale;
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex >= 0 && historyIndex < history.length - 1;
 
   if (!mounted) return null;
 
@@ -406,20 +615,9 @@ export default function Dashboard() {
   return (
     <main className="h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
       <header className="h-20 bg-white border-b border-slate-200 px-8 lg:px-10 flex items-center justify-between shrink-0 z-[100] shadow-sm">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3 group cursor-pointer">
-            <div className="w-12 h-12 bg-primary rounded-[18px] flex items-center justify-center shadow-[0_8px_20px_-6px_rgba(0,71,171,0.5)] transition-transform group-hover:rotate-6">
-              <Layout className="text-white w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tighter italic">
-                BROCHIFY<span className="text-primary not-italic">.</span>
-              </h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                Guided Brochure Studio
-              </p>
-            </div>
-          </div>
+        <div className="flex items-center gap-3 group cursor-pointer">
+          <img src="/icon-logo.png" alt="Studio Icon" className="h-10 w-10 object-contain drop-shadow-sm" />
+          <img src="/text-logo.png" alt="Studio Wordmark" className="h-10 w-auto object-contain drop-shadow-sm" />
         </div>
 
         <div className="flex items-center gap-4">
@@ -484,10 +682,15 @@ export default function Dashboard() {
             onDeleteAsset={handleDeleteAsset}
             onInsertAssetAsOverlay={addImageOverlayFromAsset}
             isBusy={isLoading}
+            template={template}
+            onChangeTemplate={handleChangeTemplate}
           />
 
           <div className="flex-1 bg-[#F0F4F8] p-4 overflow-x-auto overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
-            <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[radial-gradient(#0047AB_1px,transparent_1px)] [background-size:20px_20px]"></div>
+            <div
+              className="absolute inset-0 opacity-[0.2] pointer-events-none [background-size:20px_20px]"
+              style={{ backgroundImage: `radial-gradient(${TEMPLATE_THEMES[template].palette.primary}_1px,transparent_1px)` }}
+            ></div>
 
             <div className="sticky top-0 z-30 w-full max-w-[1240px] px-2 pb-4 pt-1">
               <div className="flex flex-wrap items-center gap-3 rounded-[26px] border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_20px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur-xl">
@@ -542,6 +745,35 @@ export default function Dashboard() {
                     className="w-24"
                     aria-label="Zoom"
                   />
+                </div>
+
+                <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={!canUndo}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full px-2 py-1 font-semibold transition-colors",
+                      canUndo ? "text-slate-700 hover:bg-slate-100" : "text-slate-300 cursor-not-allowed",
+                    )}
+                    title="Undo"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={redo}
+                    disabled={!canRedo}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full px-2 py-1 font-semibold transition-colors",
+                      canRedo ? "text-slate-700 hover:bg-slate-100" : "text-slate-300 cursor-not-allowed",
+                    )}
+                    title="Redo"
+                  >
+                    <Redo2 className="h-4 w-4" />
+                    Redo
+                  </button>
                 </div>
 
                 <button
@@ -722,7 +954,7 @@ export default function Dashboard() {
                   <div
                     id="brochure-preview"
                     className="preview-stage"
-                    style={{ width: PAGE_WIDTH, transform: `scale(${effectiveScale})` }}
+                    style={{ width: PAGE_WIDTH, transform: `scale(${effectiveScale})`, transformOrigin: "top left" }}
                   >
                     <div ref={pageOneRef}>
                       <PageOne
@@ -737,6 +969,8 @@ export default function Dashboard() {
                         onUpdateOverlay={updateOverlayItem}
                         logoCatalog={logoCatalog}
                         canvasScale={effectiveScale}
+                        pageStyle={TEMPLATE_THEMES[template].pageStyle}
+                        palette={TEMPLATE_THEMES[template].palette}
                       />
                     </div>
                     <div style={{ height: PAGE_GAP }} />
@@ -752,6 +986,8 @@ export default function Dashboard() {
                         onSelectOverlay={setSelectedOverlayId}
                         onUpdateOverlay={updateOverlayItem}
                         canvasScale={effectiveScale}
+                        pageStyle={TEMPLATE_THEMES[template].pageStyle}
+                        palette={TEMPLATE_THEMES[template].palette}
                       />
                     </div>
                   </div>
