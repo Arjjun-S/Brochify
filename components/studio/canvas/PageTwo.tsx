@@ -13,6 +13,7 @@ type Palette = {
     surfaceBorder: string;
     accent: string;
     mutedText: string;
+    strongSurface?: string;
 };
 
 interface PageTwoProps {
@@ -86,12 +87,13 @@ export default function PageTwo({
     const palettePrimaryText = palette?.primaryText ?? '#ffffff';
     const paletteSurface = palette?.surface ?? '#ffffff';
     const paletteSurfaceBorder = palette?.surfaceBorder ?? '#e2e8f0';
+    const paletteStrongSurface = palette?.strongSurface ?? palettePrimary;
     const paletteAccent = palette?.accent ?? '#facc15';
     const paletteMuted = palette?.mutedText ?? '#64748b';
     const pageBackgroundStyle = { backgroundColor: paletteSurface, ...pageStyle };
     return (
         <div id="brochure-page-2" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
-            <div className="column flex-[0.8] !p-5 flex flex-col gap-5" style={{ backgroundColor: palettePrimary, color: palettePrimaryText, fontSize: '11.5px' }}>
+            <div className="column flex-[0.8] !p-5 flex flex-col gap-5" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText, fontSize: '11.5px' }}>
                 <MovableSegment id="p2-about-srm" position={segmentPositions?.['p2-about-srm']} onMove={onSegmentMove} index={0}>
                 <div className="text-center">
                     <h3 className="text-base font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
@@ -144,7 +146,7 @@ export default function PageTwo({
             </div>
 
             {/* Column 3: Topics & Speakers (Blue) */}
-            <div className="column column-blue flex flex-col !p-4 gap-2" style={{ backgroundColor: palettePrimary, color: palettePrimaryText }}>
+            <div className="column column-blue flex flex-col !p-4 gap-2" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText }}>
                 <MovableSegment id="p2-topics" position={segmentPositions?.['p2-topics']} onMove={onSegmentMove} index={5}>
                                 <h3 className="text-[11px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: '1px solid rgba(255,255,255,0.3)', color: paletteAccent }}>
                                     <EditableText path="headings.topics" value={headings.topics} onEdit={onEdit} className="inline" />

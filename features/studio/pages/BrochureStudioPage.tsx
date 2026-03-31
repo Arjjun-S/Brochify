@@ -64,6 +64,7 @@ type Palette = {
   primaryText: string;
   surface: string;
   surfaceBorder: string;
+  strongSurface?: string;
   accent: string;
   mutedText: string;
 };
@@ -80,6 +81,7 @@ const TEMPLATE_THEMES: Record<BrochureTemplate, { pageStyle: CSSProperties; pale
       primaryText: "#ffffff",
       surface: "#f9fbff",
       surfaceBorder: "#d9e3f5",
+      strongSurface: "#0f59b8",
       accent: "#facc15",
       mutedText: "#64748b",
     },
@@ -92,10 +94,11 @@ const TEMPLATE_THEMES: Record<BrochureTemplate, { pageStyle: CSSProperties; pale
       backgroundColor: "#f5e9d7",
     },
     palette: {
-      primary: "#f7eedf",
+      primary: "#c29d6d",
       secondary: "#e6c89c",
       primaryText: "#2d1f12",
-      surface: "#f7eedf",
+      surface: "#f9f2e6",
+      strongSurface: "#e8dcc5",
       surfaceBorder: "#e6d6c2",
       accent: "#8a5a1f",
       mutedText: "#5c4a38",
@@ -107,13 +110,14 @@ const TEMPLATE_THEMES: Record<BrochureTemplate, { pageStyle: CSSProperties; pale
       backgroundColor: "#f4f9ff",
     },
     palette: {
-      primary: "#3f8bff",
-      secondary: "#a3d7ff",
-      primaryText: "#ffffff",
+      primary: "#1e3a8a",
+      secondary: "#93c5fd",
+      primaryText: "#0f172a",
       surface: "#ffffff",
+      strongSurface: "#eef5ff",
       surfaceBorder: "#dbeafe",
-      accent: "#facc15",
-      mutedText: "#6b7280",
+      accent: "#0f172a",
+      mutedText: "#1f2937",
     },
   },
 };
@@ -151,7 +155,7 @@ export default function Dashboard() {
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState<1 | 2>(1);
   const [previewScale, setPreviewScale] = useState(1); // auto scale from viewport
-  const [zoomFactor, setZoomFactor] = useState(1); // user-controlled multiplier
+  const [zoomFactor, setZoomFactor] = useState(0.9); // user-controlled multiplier (start at 90%)
   const [projectReady, setProjectReady] = useState(false);
   const [assets, setAssets] = useState<BrandAsset[]>([]);
   const [template, setTemplate] = useState<BrochureTemplate>("whiteBlue");
@@ -193,7 +197,7 @@ export default function Dashboard() {
     if (!node) return;
 
     const resizeObserver = new ResizeObserver(([entry]) => {
-      const nextScale = Math.min(1, Math.max(0.52, (entry.contentRect.width - 24) / PAGE_WIDTH));
+      const nextScale = Math.min(1.1, Math.max(0.7, (entry.contentRect.width - 24) / PAGE_WIDTH));
       setPreviewScale(nextScale);
     });
 
@@ -271,15 +275,7 @@ export default function Dashboard() {
     [overlayItems, selectedOverlayId],
   );
 
-  const logoOptions = useMemo(() => {
-    const custom = assets.map((asset) => ({
-      id: asset.id,
-      name: asset.name,
-      src: asset.dataUrl,
-      custom: true,
-    }));
-    return [...builtinLogos, ...custom];
-  }, [assets]);
+  const logoOptions = useMemo(() => builtinLogos, []);
 
   const logoCatalog = useMemo(
     () => Object.fromEntries(logoOptions.map((logo) => [logo.id, logo.src])),
@@ -513,11 +509,11 @@ export default function Dashboard() {
   const handleUploadAssets = async (files: FileList | null, tagsInput: string) => {
     if (!files || files.length === 0) return;
     setLoadingTask("uploading");
-    setLoadingMessage("Uploading and indexing assets...");
+    setLoadingMessage("Placing image on canvas...");
 
     try {
       const tags = parseTagInput(tagsInput);
-      const incoming = await Promise.all(
+      const uploads = await Promise.all(
         Array.from(files).map(async (file) => {
           const dataUrl = await fileToDataUrl(file);
           const identity = createAssetIdentity(file.name, tags, dataUrl);
@@ -525,10 +521,7 @@ export default function Dashboard() {
           const nextAsset: BrandAsset = {
             id: identity.id,
             name: file.name,
-            kind:
-              file.type.includes("svg") || file.name.toLowerCase().includes("logo")
-                ? "logo"
-                : "image",
+            kind: file.type.includes("svg") || file.name.toLowerCase().includes("logo") ? "logo" : "image",
             mimeType: file.type,
             dataUrl,
             tags,
@@ -543,7 +536,7 @@ export default function Dashboard() {
 
       setAssets((prev) => {
         const merged = [...prev];
-        for (const asset of incoming) {
+        for (const asset of uploads) {
           const existingIndex = merged.findIndex((item) => item.id === asset.id);
           if (existingIndex >= 0) {
             merged[existingIndex] = asset;
@@ -553,6 +546,36 @@ export default function Dashboard() {
         }
         return merged;
       });
+
+      let updatedOverlays: OverlayItem[] = [];
+      setOverlayItems((prev) => {
+        const baseSize = 220;
+        const startX = Math.max(24, (PAGE_WIDTH - baseSize) / 2);
+        const startY = Math.max(24, (PAGE_HEIGHT - baseSize) / 2);
+        const next = [...prev];
+
+        uploads.forEach((asset, index) => {
+          const offset = index * 18;
+          const imageOverlay = createImageOverlay(activePage, asset, {
+            x: startX + offset,
+            y: startY + offset,
+          });
+
+          next.push({
+            ...imageOverlay,
+            width: baseSize,
+            height: baseSize,
+            borderRadius: 0,
+          });
+        });
+
+        updatedOverlays = next;
+        return next;
+      });
+
+      if (updatedOverlays.length) {
+        pushWith({ overlayItems: updatedOverlays });
+      }
     } finally {
       setLoadingTask("idle");
       setLoadingMessage("");
@@ -637,7 +660,7 @@ export default function Dashboard() {
           {projectReady && (
             <button
               onClick={handleDownload}
-              className="flex items-center gap-3 bg-slate-900 hover:bg-black text-white px-7 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all shadow-xl hover:shadow-2xl"
+              className="flex items-center gap-3 px-7 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all shadow-[0_14px_30px_-14px_rgba(111,82,255,0.6)] bg-gradient-to-r from-[#8b5cf6] via-[#a855f7] to-[#c084fc] text-white hover:brightness-105"
             >
               <Download className="w-4 h-4" />
               Export PDF

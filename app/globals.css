@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #0b4da2;
-  --color-secondary: #5fa8ff;
+  --color-primary: #8b5cf6;
+  --color-secondary: #c084fc;
   --font-sans: "Inter", system-ui, sans-serif;
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
@@ -49,13 +49,13 @@
 }
 
 .column-blue {
-  background-color: var(--color-primary) !important;
-  color: #ffffff !important;
+  background-color: var(--color-primary);
+  color: #ffffff;
 }
 
 .column-white {
-  background-color: #ffffff !important;
-  color: #000000 !important;
+  background-color: #ffffff;
+  color: #000000;
 }
 
 .preview-shell {

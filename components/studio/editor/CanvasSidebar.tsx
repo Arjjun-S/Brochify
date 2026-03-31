@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import Image from "next/image";
-import { ImagePlus, Search, Trash2, UploadCloud } from "lucide-react";
+import React, { useMemo, useRef, useState } from "react";
+import { Search, UploadCloud } from "lucide-react";
 import { BrandAsset } from "@/lib/domains/brochure";
 import { cn } from "@/lib/ui/cn";
 
@@ -29,114 +28,97 @@ type CanvasSidebarProps = {
 };
 
 export default function CanvasSidebar({
-  assets,
+  assets: _assets,
   logoOptions,
   selectedLogos,
   onToggleLogo,
   onUploadAssets,
-  onDeleteAsset,
-  onInsertAssetAsOverlay,
+  onDeleteAsset: _onDeleteAsset,
+  onInsertAssetAsOverlay: _onInsertAssetAsOverlay,
   isBusy,
   template,
   onChangeTemplate,
 }: CanvasSidebarProps) {
-  const [query, setQuery] = useState("");
-  const [tagsInput, setTagsInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [logoQuery, setLogoQuery] = useState("");
 
-  const filteredAssets = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return assets;
-    return assets.filter((asset) => asset.searchIndex.includes(normalized));
-  }, [assets, query]);
+  const filteredLogos = useMemo(() => {
+    const normalized = logoQuery.trim().toLowerCase();
+    if (!normalized) return logoOptions;
+    return logoOptions.filter((logo) => logo.name.toLowerCase().includes(normalized));
+  }, [logoOptions, logoQuery]);
+
+  const templateCards = [
+    {
+      id: "whiteBlue" as BrochureTemplate,
+      label: "White / Blue",
+      stops: ["#f9fbff", "#0f59b8", "#f9fbff"],
+    },
+    {
+      id: "beigeDust" as BrochureTemplate,
+      label: "Beige Dust",
+      stops: ["#f9f2e6", "#c29d6d", "#f9f2e6"],
+    },
+    {
+      id: "softBlue" as BrochureTemplate,
+      label: "White + Mist",
+      stops: ["#ffffff", "#eef5ff", "#ffffff"],
+    },
+  ];
 
   return (
     <aside className="w-[320px] shrink-0 border-r border-slate-200 bg-white/95 backdrop-blur-xl h-full flex flex-col">
-      <div className="px-4 pt-4 pb-3 border-b border-slate-200">
-        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Assets Studio</p>
-        <h3 className="mt-1 text-lg font-black tracking-tight text-slate-900">Logos, Photos, Elements</h3>
+      <div className="px-4 pt-5 pb-2">
+        <h3 className="text-xl font-black tracking-tight text-slate-900">Assets Studio</h3>
       </div>
 
       <div className="p-4 border-b border-slate-200 space-y-3">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Templates</p>
-        <div className="grid grid-cols-1 gap-2">
-          {[
-            { id: "whiteBlue" as BrochureTemplate, label: "White / Blue", preview: "linear-gradient(135deg,#ffffff 0%,#f4f7ff 60%,#e8f4ff 100%)" },
-            { id: "beigeDust" as BrochureTemplate, label: "Beige Dust", preview: "radial-gradient(rgba(120,94,60,0.12) 1px,transparent 1px), linear-gradient(180deg,#fdf8ef 0%,#f7f1e6 100%)" },
-            { id: "softBlue" as BrochureTemplate, label: "White + Mist", preview: "linear-gradient(180deg,#ffffff 0%,#f7fbff 100%)" },
-          ].map((option) => (
+        <div className="flex items-start gap-4 overflow-x-auto pb-1">
+          {templateCards.map((option) => (
             <button
               key={option.id}
               type="button"
               onClick={() => onChangeTemplate(option.id)}
               className={cn(
-                "flex items-center gap-3 rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors",
-                template === option.id
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-primary/25",
+                "flex flex-col items-center gap-2 px-1 py-1 text-xs font-bold transition-colors min-w-[110px] bg-transparent",
+                template === option.id ? "text-primary" : "text-slate-600 hover:text-primary",
               )}
             >
-              <span
-                className="h-10 w-10 rounded-lg border border-slate-200 shadow-sm"
-                style={{ backgroundImage: option.preview, backgroundSize: option.id === "beigeDust" ? "18px 18px, 100% 100%" : "100% 100%" }}
-                aria-hidden
-              ></span>
-              {option.label}
+              <span className="h-20 w-24 overflow-hidden flex border border-slate-200/60 shadow-sm" aria-hidden>
+                {option.stops.map((stop, idx) => (
+                  <span key={idx} className="flex-1" style={{ background: stop }} />
+                ))}
+              </span>
+              <span className="leading-tight text-[12px]">{option.label}</span>
             </button>
           ))}
         </div>
       </div>
 
       <div className="p-4 border-b border-slate-200 space-y-3">
-        <label className="block rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold mb-2">
-            <UploadCloud className="h-4 w-4" />
-            Upload files for drag-drop
-          </div>
-          <input
-            type="file"
-            multiple
-            accept="image/*"
-            disabled={isBusy}
-            className="block w-full cursor-pointer text-xs text-slate-600"
-            onChange={async (event) => {
-              const input = event.currentTarget;
-              const files = input.files;
-              await onUploadAssets(files, tagsInput);
-              input.value = "";
-            }}
-          />
-        </label>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Active Logos</p>
 
-        <input
-          value={tagsInput}
-          onChange={(event) => setTagsInput(event.target.value)}
-          placeholder="Tags for upload batch"
-          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary"
-        />
-
-        <div className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2">
-          <Search className="h-4 w-4 text-slate-400" />
+        <div className="relative">
           <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by name, slug, tags"
-            className="w-full bg-transparent text-sm text-slate-700 outline-none"
+            value={logoQuery}
+            onChange={(event) => setLogoQuery(event.target.value)}
+            placeholder="Search logos (SRM, IEEE...)"
+            className="w-full rounded-full border border-white/30 bg-white/25 backdrop-blur-xl px-4 py-2 pr-11 text-sm text-slate-800 shadow-[0_10px_35px_-18px_rgba(15,23,42,0.45)] outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
           />
+          <Search className="h-4 w-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
         </div>
-      </div>
 
-      <div className="p-4 border-b border-slate-200">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Active Logos</p>
-        <div className="grid grid-cols-1 gap-2 max-h-[180px] overflow-y-auto">
-          {logoOptions.map((logo) => (
+        <div className="grid grid-cols-2 gap-2 max-h-[180px] overflow-y-auto">
+          {filteredLogos.map((logo) => (
             <button
               key={logo.id}
               type="button"
               onClick={() => onToggleLogo(logo.id)}
               className={cn(
-                "rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors",
+                "rounded-full border px-3 py-2 text-center text-xs font-bold transition-all",
                 selectedLogos.includes(logo.id)
-                  ? "border-primary/30 bg-primary/10 text-primary"
+                  ? "border-[#a855f7]/50 bg-gradient-to-r from-[#ff8bd5] via-[#b069ff] to-[#6f52ff] text-white shadow-[0_12px_24px_-10px_rgba(111,82,255,0.55)]"
                   : "border-slate-200 bg-white text-slate-600 hover:border-primary/25",
               )}
             >
@@ -144,61 +126,38 @@ export default function CanvasSidebar({
               {logo.custom && <span className="ml-2 text-[10px] text-sky-500">custom</span>}
             </button>
           ))}
+          {filteredLogos.length === 0 && (
+            <div className="col-span-2 text-center text-[11px] text-slate-500 py-2 border border-dashed border-slate-200 rounded-lg">
+              No logos match that search.
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-        {filteredAssets.map((asset) => (
-          <div
-            key={asset.id}
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData("application/x-brochify-asset-id", asset.id);
-              event.dataTransfer.effectAllowed = "copy";
-            }}
-            className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing"
-            title="Drag into canvas to place"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-800 truncate">{asset.name}</p>
-                <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-500 truncate">{asset.slug}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onDeleteAsset(asset.id)}
-                className="rounded-full border border-red-300/40 bg-red-50 p-1.5 text-red-500"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            <div className="mt-3 flex items-center gap-2">
-              <Image
-                src={asset.dataUrl}
-                alt={asset.name}
-                width={40}
-                height={40}
-                className="h-10 w-10 rounded-lg border border-slate-200 object-contain bg-white"
-                unoptimized
-              />
-              <button
-                type="button"
-                onClick={() => onInsertAssetAsOverlay(asset.id)}
-                className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-primary"
-              >
-                <ImagePlus className="h-3.5 w-3.5" />
-                Add
-              </button>
-            </div>
+      <div className="p-4">
+        <div
+          className="rounded-2xl border-2 border-dashed border-slate-200 bg-white/70 backdrop-blur-lg p-6 text-center text-sm text-slate-600 cursor-pointer shadow-sm hover:border-primary/40 transition"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-r from-[#8b5cf6] to-[#c084fc] text-white flex items-center justify-center text-lg font-black shadow-lg">
+            <UploadCloud className="w-6 h-6" />
           </div>
-        ))}
-
-        {filteredAssets.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">
-            No assets found. Upload files to start building your library.
-          </div>
-        )}
+          <div className="font-semibold">Upload image or logo</div>
+          <div className="text-[12px] text-slate-500 mt-1">PNG, JPG, SVG, PDF up to 25MB</div>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,.pdf"
+          disabled={isBusy}
+          className="hidden"
+          onChange={async (event) => {
+            const files = event.currentTarget.files;
+            await onUploadAssets(files, "");
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
+        />
       </div>
     </aside>
   );
