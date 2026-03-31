@@ -63,8 +63,10 @@ export default function CanvasSidebar({
             disabled={isBusy}
             className="block w-full cursor-pointer text-xs text-slate-600"
             onChange={async (event) => {
-              await onUploadAssets(event.target.files, tagsInput);
-              event.currentTarget.value = "";
+              const input = event.currentTarget;
+              const files = input.files;
+              await onUploadAssets(files, tagsInput);
+              input.value = "";
             }}
           />
         </label>

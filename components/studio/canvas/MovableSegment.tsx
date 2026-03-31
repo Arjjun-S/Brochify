@@ -68,6 +68,8 @@ export default function MovableSegment({
     const topSpace = Math.max(0, hostRect.top - parentRect.top) / scale;
     const bottomSpace = Math.max(0, parentRect.bottom - hostRect.bottom) / scale;
 
+    const softLimit = 2000; // allow movement well outside the column bounds
+
     e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
 
@@ -77,10 +79,10 @@ export default function MovableSegment({
       baseX: currentPosition.x,
       baseY: currentPosition.y,
       scale,
-      minX: -leftSpace - 4,
-      maxX: rightSpace + 4,
-      minY: -topSpace - 4,
-      maxY: bottomSpace + 4,
+      minX: -leftSpace - softLimit,
+      maxX: rightSpace + softLimit,
+      minY: -topSpace - softLimit,
+      maxY: bottomSpace + softLimit,
     };
   };
 

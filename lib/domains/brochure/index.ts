@@ -15,12 +15,35 @@ export type Speaker = {
   org: string;
 };
 
+export type BrochureHeadings = {
+  chiefPatrons: string;
+  patrons: string;
+  convener: string;
+  coConvener: string;
+  advisoryCommittee: string;
+  organizingCommittee: string;
+  registrationDetail: string;
+  registrationFee: string;
+  registrationNote: string;
+  accountDetail: string;
+  sponsoredBy: string;
+  organizedBy: string;
+  aboutCollege: string;
+  aboutSchool: string;
+  aboutDepartment: string;
+  aboutFdp: string;
+  programHighlights: string;
+  topics: string;
+  speakers: string;
+};
+
 export type BrochureData = {
   eventTitle: string;
   department: string;
   dates: string;
   googleForm: string;
   eventImage?: string;
+  headings: BrochureHeadings;
   committee: CommitteeMember[];
   registration: {
     ieeePrice: string;
@@ -126,6 +149,28 @@ export const FONT_OPTIONS = [
 const makeId = (prefix: string) =>
   `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
+const DEFAULT_HEADINGS: BrochureHeadings = {
+  chiefPatrons: "CHIEF PATRONS",
+  patrons: "PATRONS",
+  convener: "CONVENER",
+  coConvener: "CO-CONVENER",
+  advisoryCommittee: "ACADEMIC ADVISORY COMMITTEE",
+  organizingCommittee: "ORGANIZING COMMITTEE",
+  registrationDetail: "REGISTRATION DETAIL",
+  registrationFee: "Registration Fee:",
+  registrationNote: "Note:",
+  accountDetail: "ACCOUNT DETAIL",
+  sponsoredBy: "IEEE Madras Section Sponsored",
+  organizedBy: "Organized by",
+  aboutCollege: "About SRM",
+  aboutSchool: "About the School",
+  aboutDepartment: "About Department",
+  aboutFdp: "About the FDP",
+  programHighlights: "Program Highlights:",
+  topics: "Topics to be covered",
+  speakers: "Eminent Speakers",
+};
+
 export function createEmptyBrochureData(): BrochureData {
   return {
     eventTitle: "Faculty Development Program on AI Systems Design",
@@ -133,6 +178,7 @@ export function createEmptyBrochureData(): BrochureData {
     dates: "23rd-27th March 2026",
     googleForm: "https://forms.google.com/registration-link",
     eventImage: "",
+    headings: DEFAULT_HEADINGS,
     committee: [
       { name: "Dr. N. Raman", role: "Chief Patron" },
       { name: "Dr. S. Meena", role: "Patron" },
@@ -217,6 +263,10 @@ export function normalizeBrochureData(
   return {
     ...defaults,
     ...source,
+    headings: {
+      ...DEFAULT_HEADINGS,
+      ...(source.headings ?? {}),
+    },
     registration: {
       ...defaults.registration,
       ...(source.registration ?? {}),

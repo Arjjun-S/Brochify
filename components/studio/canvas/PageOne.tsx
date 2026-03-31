@@ -71,10 +71,12 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
 };
 
 const availableLogos = [
-  { id: 'srm', src: '/logos/srm.svg' },
-  { id: 'ieee', src: '/logos/ieee.svg' },
-  { id: 'ctech', src: '/logos/ctech.svg' },
-  { id: 'naac', src: '/logos/naac.svg' },
+    { id: 'ieeetems', src: '/logos/ieeetems.png' },
+    { id: 'ctech', src: '/logos/ctech.jpeg' },
+    { id: 'ieee', src: '/logos/ieee.png' },
+    { id: 'srm', src: '/logos/srm.svg' },
+    { id: 'iicm', src: '/logos/iicm.png' },
+    { id: 'soct', src: '/logos/soct.jpeg' },
 ];
 
 export default function PageOne({
@@ -92,6 +94,7 @@ export default function PageOne({
 }: PageOneProps) {
     const committee = data.committee ?? [];
     const committeeWithIndex = committee.map((member, index) => ({ member, index }));
+    const headings = data.headings;
 
     const chiefPatrons = committeeWithIndex.filter(({ member }) => member.role?.toLowerCase().includes('chief patron'));
     const patrons = committeeWithIndex.filter(
@@ -122,7 +125,9 @@ export default function PageOne({
             {chiefPatrons.length > 0 && (
                 <MovableSegment id="p1-chief-patrons" position={segmentPositions?.['p1-chief-patrons']} onMove={onSegmentMove} index={0}>
                 <div>
-                    <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>CHIEF PATRONS</h4>
+                                        <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>
+                                            <EditableText path="headings.chiefPatrons" value={headings.chiefPatrons} onEdit={onEdit} />
+                                        </h4>
                     <ul className="text-[11.5px] leading-tight" style={{ color: '#1e293b' }}>
                         {chiefPatrons.map(({ member, index }) => (
                             <li key={index}>
@@ -139,7 +144,9 @@ export default function PageOne({
             {patrons.length > 0 && (
                 <MovableSegment id="p1-patrons" position={segmentPositions?.['p1-patrons']} onMove={onSegmentMove} index={1}>
                 <div>
-                    <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>PATRONS</h4>
+                                        <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: '#0047AB' }}>
+                                            <EditableText path="headings.patrons" value={headings.patrons} onEdit={onEdit} />
+                                        </h4>
                     <ul className="text-[11.5px] leading-tight" style={{ color: '#1e293b' }}>
                         {patrons.map(({ member, index }) => (
                             <li key={index}>
@@ -158,7 +165,9 @@ export default function PageOne({
                 <div className="flex gap-4">
                     {convener && (
                         <div className="flex-1">
-                            <h4 className="text-[#0047AB] text-[11px] font-black uppercase tracking-wider border-b border-[#0047AB]/20 mb-1">CONVENER</h4>
+                                                        <h4 className="text-[#0047AB] text-[11px] font-black uppercase tracking-wider border-b border-[#0047AB]/20 mb-1">
+                                                            <EditableText path="headings.convener" value={headings.convener} onEdit={onEdit} />
+                                                        </h4>
                                                         <p className="text-[11px] leading-tight font-bold" style={{ color: '#1e293b' }}>
                                                             <EditableText path={`committee.${convener.index}.name`} value={convener.member.name} onEdit={onEdit} />
                                                         </p>
@@ -169,7 +178,9 @@ export default function PageOne({
                     )}
                     {coConvener && (
                         <div className="flex-1">
-                            <h4 className="text-[#0047AB] text-[11px] font-black uppercase tracking-wider border-b border-[#0047AB]/20 mb-1">CO-CONVENER</h4>
+                                                        <h4 className="text-[#0047AB] text-[11px] font-black uppercase tracking-wider border-b border-[#0047AB]/20 mb-1">
+                                                            <EditableText path="headings.coConvener" value={headings.coConvener} onEdit={onEdit} />
+                                                        </h4>
                                                         <p className="text-[11px] leading-tight font-bold" style={{ color: '#1e293b' }}>
                                                             <EditableText path={`committee.${coConvener.index}.name`} value={coConvener.member.name} onEdit={onEdit} />
                                                         </p>
@@ -184,7 +195,9 @@ export default function PageOne({
 
             <MovableSegment id="p1-advisory" position={segmentPositions?.['p1-advisory']} onMove={onSegmentMove} index={3}>
             <div>
-                <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ACADEMIC ADVISORY COMMITTEE</h4>
+                                <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>
+                                    <EditableText path="headings.advisoryCommittee" value={headings.advisoryCommittee} onEdit={onEdit} />
+                                </h4>
                 <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
                     {advisory.slice(0, 10).map(({ member, index }) => (
                                                 <li key={index} className="break-words whitespace-normal">
@@ -199,7 +212,9 @@ export default function PageOne({
 
             <MovableSegment id="p1-organizing" position={segmentPositions?.['p1-organizing']} onMove={onSegmentMove} index={4}>
             <div>
-                <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>ORGANIZING COMMITTEE</h4>
+                                <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: '#0047AB', borderBottom: '2px solid #0047AB' }}>
+                                    <EditableText path="headings.organizingCommittee" value={headings.organizingCommittee} onEdit={onEdit} />
+                                </h4>
                 <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
                     {organizing.slice(0, 15).map(({ member, index }) => (
                                                 <li key={index} className="break-words whitespace-normal">
@@ -216,14 +231,14 @@ export default function PageOne({
 
       {/* Column 2: Registration (Blue) */}
       <div className="column column-blue flex flex-col items-center !p-4" style={{ backgroundColor: '#0047AB', color: '#ffffff' }}>
-        <h2 className="text-lg font-black bg-white px-4 py-1 rounded-full mb-4 uppercase tracking-tighter" style={{ color: '#0047AB' }}>
-          REGISTRATION DETAIL
-        </h2>
+                <h2 className="text-lg font-black bg-white px-4 py-1 rounded-full mb-4 uppercase tracking-tighter" style={{ color: '#0047AB' }}>
+                    <EditableText path="headings.registrationDetail" value={headings.registrationDetail} onEdit={onEdit} />
+                </h2>
         
         <MovableSegment id="p1-registration-fee" position={segmentPositions?.['p1-registration-fee']} onMove={onSegmentMove} index={5} className="w-full">
         <div className="w-full space-y-2 mb-4">
             <div className="flex justify-between text-[12px] font-bold pb-1" style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-                <span style={{ color: '#fde047' }}>Registration Fee:</span>
+                <span style={{ color: '#fde047' }}><EditableText path="headings.registrationFee" value={headings.registrationFee} onEdit={onEdit} className="inline" /></span>
             </div>
             <div className="flex justify-between text-[11px] text-white">
                 <span>IEEE Member</span>
@@ -239,7 +254,9 @@ export default function PageOne({
 
         <MovableSegment id="p1-registration-notes" position={segmentPositions?.['p1-registration-notes']} onMove={onSegmentMove} index={6} className="w-full">
         <div className="w-full text-left p-2 rounded-lg mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <p className="text-[11px] font-black mb-1 uppercase tracking-widest" style={{ color: '#fde047' }}>Note:</p>
+                        <p className="text-[11px] font-black mb-1 uppercase tracking-widest" style={{ color: '#fde047' }}>
+                            <EditableText path="headings.registrationNote" value={headings.registrationNote} onEdit={onEdit} className="inline" />
+                        </p>
             <ul className="text-[10.5px] space-y-1" style={{ color: 'rgba(255,255,255,0.9)' }}>
                 {data.registration?.notes?.map((n, i: number) => (
                     <li key={i} className="flex gap-1">
@@ -269,7 +286,9 @@ export default function PageOne({
 
                 <MovableSegment id="p1-account" position={segmentPositions?.['p1-account']} onMove={onSegmentMove} index={8} className="mt-auto w-full">
         <div className="mt-auto w-full">
-            <div className="bg-white text-[#0047AB] text-[12px] font-black py-0.5 px-4 rounded-full text-center mb-2 uppercase tracking-widest shadow-md">ACCOUNT DETAIL</div>
+                        <div className="bg-white text-[#0047AB] text-[12px] font-black py-0.5 px-4 rounded-full text-center mb-2 uppercase tracking-widest shadow-md">
+                            <EditableText path="headings.accountDetail" value={headings.accountDetail} onEdit={onEdit} className="inline" />
+                        </div>
             <div className="text-[10px] space-y-0.5 font-medium leading-tight px-1" style={{ color: 'rgba(255,255,255,0.9)' }}>
                 <p className="flex justify-between"><span>Bank Name</span> <span>: <EditableText path="accountDetails.bankName" value={data.accountDetails?.bankName || 'Indian Bank'} onEdit={onEdit} className="inline" /></span></p>
                 <p className="flex justify-between"><span>Acc No</span> <span>: <EditableText path="accountDetails.accountNo" value={data.accountDetails?.accountNo || '7111751848'} onEdit={onEdit} className="inline" /></span></p>
@@ -299,7 +318,9 @@ export default function PageOne({
         </MovableSegment>
 
         <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} index={10} className="w-full flex flex-col items-center">
-        <p className="text-[10px] font-black text-[#0047AB] uppercase tracking-[0.2em] mb-1">IEEE Madras Section Sponsored</p>
+                <p className="text-[10px] font-black text-[#0047AB] uppercase tracking-[0.2em] mb-1">
+                    <EditableText path="headings.sponsoredBy" value={headings.sponsoredBy} onEdit={onEdit} className="inline" />
+                </p>
         <h1 className="text-2xl font-black text-center leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: '#0047AB' }}>
             <EditableText path="eventTitle" value={data.eventTitle} onEdit={onEdit} className="whitespace-pre-wrap break-words" />
         </h1>
@@ -317,8 +338,10 @@ export default function PageOne({
         </MovableSegment>
 
         <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} index={12} className="w-full">
-        <div className="text-center mt-auto pt-3 flex flex-col items-center w-full" style={{ borderTop: '1px solid #f1f5f9' }}>
-            <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>Organized by</p>
+                <div className="text-center mt-auto pt-3 flex flex-col items-center w-full" style={{ borderTop: '1px solid #f1f5f9' }}>
+                        <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>
+                            <EditableText path="headings.organizedBy" value={headings.organizedBy} onEdit={onEdit} className="inline" />
+                        </p>
             <p className="text-[12px] font-black text-[#0047AB] uppercase leading-tight max-w-[180px] mb-4"><EditableText path="department" value={data.department} onEdit={onEdit} /></p>
             
             {selectedLogos.length > 1 && (

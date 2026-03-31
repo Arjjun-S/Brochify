@@ -47,10 +47,12 @@ const PAGE_HEIGHT = 680;
 const PAGE_GAP = 24;
 
 const builtinLogos: Array<{ id: string; name: string; src: string }> = [
-  { id: "srm", name: "SRM Institute of Tech", src: "/logos/srm.svg" },
-  { id: "ieee", name: "IEEE Student Branch", src: "/logos/ieee.svg" },
-  { id: "ctech", name: "Dept. of C. Tech", src: "/logos/ctech.svg" },
-  { id: "naac", name: "NAAC Accredited", src: "/logos/naac.svg" },
+  { id: "ieeetems", name: "IEEE (TEMS)", src: "/logos/ieeetems.png" },
+  { id: "ctech", name: "CTECH", src: "/logos/ctech.jpeg" },
+  { id: "ieee", name: "IEEE", src: "/logos/ieee.png" },
+  { id: "srm", name: "SRM", src: "/logos/srm.svg" },
+  { id: "iicm", name: "Institute of Innovation Council", src: "/logos/iicm.png" },
+  { id: "soct", name: "School of Computing", src: "/logos/soct.jpeg" },
 ];
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -77,10 +79,13 @@ export default function Dashboard() {
   const [overlayItems, setOverlayItems] = useState<OverlayItem[]>([]);
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
   const [activePage, setActivePage] = useState<1 | 2>(1);
-  const [previewScale, setPreviewScale] = useState(1);
+  const [previewScale, setPreviewScale] = useState(1); // auto scale from viewport
+  const [zoomFactor, setZoomFactor] = useState(1); // user-controlled multiplier
   const [projectReady, setProjectReady] = useState(false);
   const [assets, setAssets] = useState<BrandAsset[]>([]);
   const previewViewportRef = useRef<HTMLDivElement | null>(null);
+  const pageOneRef = useRef<HTMLDivElement | null>(null);
+  const pageTwoRef = useRef<HTMLDivElement | null>(null);
 
   const isLoading = loadingTask !== "idle";
 
@@ -168,6 +173,18 @@ export default function Dashboard() {
           // ignore stylesheet access errors for cross-origin rules
         }
       }
+
+      const exportCleanupCss = `
+        .brochure-overlay-layer { pointer-events: none !important; }
+        .overlay-item::after,
+        .overlay-item-toolbar,
+        .overlay-resize-handle,
+        .segment-handle { display: none !important; box-shadow: none !important; border: none !important; }
+        .overlay-textbox { border-color: transparent !important; box-shadow: none !important; outline: none !important; }
+        .editable-inline, .editable-block { outline: none !important; box-shadow: none !important; background: transparent !important; }
+      `;
+
+      styles += exportCleanupCss;
 
       const pages = element.querySelectorAll(".brochure-page");
       let pagesHtml = "";
@@ -370,10 +387,21 @@ export default function Dashboard() {
     }
   };
 
-  const previewHeight = (PAGE_HEIGHT * 2 + PAGE_GAP) * previewScale;
-  const previewWidth = PAGE_WIDTH * previewScale;
+  const effectiveScale = Math.min(1.35, Math.max(0.4, previewScale * zoomFactor));
+  const previewHeight = (PAGE_HEIGHT * 2 + PAGE_GAP) * effectiveScale;
+  const previewWidth = PAGE_WIDTH * effectiveScale;
 
   if (!mounted) return null;
+
+  const scrollToPage = (page: 1 | 2) => {
+    setActivePage(page);
+    const target = page === 1 ? pageOneRef.current : pageTwoRef.current;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const adjustZoom = (delta: number) => {
+    setZoomFactor((prev) => Math.min(2, Math.max(0.5, Number((prev + delta).toFixed(2)))));
+  };
 
   return (
     <main className="h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
@@ -458,7 +486,7 @@ export default function Dashboard() {
             isBusy={isLoading}
           />
 
-          <div className="flex-1 bg-[#F0F4F8] p-4 overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
+          <div className="flex-1 bg-[#F0F4F8] p-4 overflow-x-auto overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
             <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[radial-gradient(#0047AB_1px,transparent_1px)] [background-size:20px_20px]"></div>
 
             <div className="sticky top-0 z-30 w-full max-w-[1240px] px-2 pb-4 pt-1">
@@ -468,7 +496,7 @@ export default function Dashboard() {
                     <button
                       key={pageNumber}
                       type="button"
-                      onClick={() => setActivePage(pageNumber as 1 | 2)}
+                      onClick={() => scrollToPage(pageNumber as 1 | 2)}
                       className={cn(
                         "rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
                         activePage === pageNumber
@@ -479,6 +507,41 @@ export default function Dashboard() {
                       Page {pageNumber}
                     </button>
                   ))}
+                </div>
+
+                <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  <button
+                    type="button"
+                    onClick={() => adjustZoom(-0.05)}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold hover:border-slate-300"
+                    title="Zoom out"
+                  >
+                    -
+                  </button>
+                  <span className="min-w-[62px] text-center font-semibold">{Math.round(effectiveScale * 100)}%</span>
+                  <button
+                    type="button"
+                    onClick={() => adjustZoom(0.05)}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold hover:border-slate-300"
+                    title="Zoom in"
+                  >
+                    +
+                  </button>
+                  <input
+                    type="range"
+                    min={50}
+                    max={140}
+                    step={1}
+                    value={Math.round(effectiveScale * 100)}
+                    onChange={(event) => {
+                      const percent = Number(event.target.value) || 100;
+                      const base = previewScale || 1;
+                      const nextZoom = percent / (base * 100);
+                      setZoomFactor(Math.min(2, Math.max(0.5, nextZoom)));
+                    }}
+                    className="w-24"
+                    aria-label="Zoom"
+                  />
                 </div>
 
                 <button
@@ -642,8 +705,8 @@ export default function Dashboard() {
                 }
 
                 const rect = wrapper.getBoundingClientRect();
-                const localX = (event.clientX - rect.left) / previewScale;
-                const localY = (event.clientY - rect.top) / previewScale;
+                const localX = (event.clientX - rect.left) / effectiveScale;
+                const localY = (event.clientY - rect.top) / effectiveScale;
                 const page = localY > PAGE_HEIGHT + PAGE_GAP / 2 ? 2 : 1;
                 const yInPage = page === 2 ? localY - (PAGE_HEIGHT + PAGE_GAP) : localY;
 
@@ -659,34 +722,38 @@ export default function Dashboard() {
                   <div
                     id="brochure-preview"
                     className="preview-stage"
-                    style={{ width: PAGE_WIDTH, transform: `scale(${previewScale})` }}
+                    style={{ width: PAGE_WIDTH, transform: `scale(${effectiveScale})` }}
                   >
-                    <PageOne
-                      data={brochureData}
-                      selectedLogos={selectedLogos}
-                      onEdit={(path, value) => handleFieldChange(path, value)}
-                      segmentPositions={segmentPositions}
-                      onSegmentMove={handleSegmentMove}
-                      overlayItems={overlayItems.filter((item) => item.page === 1)}
-                      selectedOverlayId={selectedOverlayId}
-                      onSelectOverlay={setSelectedOverlayId}
-                      onUpdateOverlay={updateOverlayItem}
-                      logoCatalog={logoCatalog}
-                      canvasScale={previewScale}
-                    />
+                    <div ref={pageOneRef}>
+                      <PageOne
+                        data={brochureData}
+                        selectedLogos={selectedLogos}
+                        onEdit={(path, value) => handleFieldChange(path, value)}
+                        segmentPositions={segmentPositions}
+                        onSegmentMove={handleSegmentMove}
+                        overlayItems={overlayItems.filter((item) => item.page === 1)}
+                        selectedOverlayId={selectedOverlayId}
+                        onSelectOverlay={setSelectedOverlayId}
+                        onUpdateOverlay={updateOverlayItem}
+                        logoCatalog={logoCatalog}
+                        canvasScale={effectiveScale}
+                      />
+                    </div>
                     <div style={{ height: PAGE_GAP }} />
-                    <PageTwo
-                      data={brochureData}
-                      selectedLogos={selectedLogos}
-                      onEdit={(path, value) => handleFieldChange(path, value)}
-                      segmentPositions={segmentPositions}
-                      onSegmentMove={handleSegmentMove}
-                      overlayItems={overlayItems.filter((item) => item.page === 2)}
-                      selectedOverlayId={selectedOverlayId}
-                      onSelectOverlay={setSelectedOverlayId}
-                      onUpdateOverlay={updateOverlayItem}
-                      canvasScale={previewScale}
-                    />
+                    <div ref={pageTwoRef}>
+                      <PageTwo
+                        data={brochureData}
+                        selectedLogos={selectedLogos}
+                        onEdit={(path, value) => handleFieldChange(path, value)}
+                        segmentPositions={segmentPositions}
+                        onSegmentMove={handleSegmentMove}
+                        overlayItems={overlayItems.filter((item) => item.page === 2)}
+                        selectedOverlayId={selectedOverlayId}
+                        onSelectOverlay={setSelectedOverlayId}
+                        onUpdateOverlay={updateOverlayItem}
+                        canvasScale={effectiveScale}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

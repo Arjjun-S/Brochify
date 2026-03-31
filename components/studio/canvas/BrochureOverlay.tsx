@@ -298,6 +298,7 @@ export default function BrochureOverlay({
                 className="overlay-textbox"
                 contentEditable
                 suppressContentEditableWarning
+                tabIndex={0}
                 style={{
                   fontFamily: item.fontFamily,
                   fontSize: item.fontSize,
@@ -306,8 +307,10 @@ export default function BrochureOverlay({
                   textAlign: item.align,
                   background: item.backgroundColor,
                 }}
-                onDoubleClick={(e) => {
+                onClick={(e) => {
                   e.stopPropagation();
+                  onSelect(item.id);
+                  (e.currentTarget as HTMLElement).focus();
                 }}
                 onPointerDown={(event) => {
                   event.stopPropagation();

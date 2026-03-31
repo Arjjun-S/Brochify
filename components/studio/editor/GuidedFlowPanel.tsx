@@ -51,13 +51,20 @@ const SESSION_WINDOWS: SelectOption[] = [
 ];
 
 function formatDateLabel(value: string): string {
-  if (!value) return "Select date";
+  const [year, month, day] = value?.split("-") ?? [];
+  if (!year || !month || !day) return "";
   const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString(undefined, {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
+}
+
+function parseDateParts(value: string) {
+  const [year = "", month = "", day = ""] = value ? value.split("-") : ["", "", ""];
+  return { year, month, day };
 }
 
 function CustomSelect({
@@ -141,29 +148,30 @@ function DatePicker({ value, onChange }: { value: string; onChange: (next: strin
     const year = currentYear - 2 + i;
     return { value: String(year), label: String(year) };
   });
-  const parts = value ? value.split("-") : ["", "", ""];
-  const year = parts[0] ?? "";
-  const month = parts[1] ?? "";
-  const day = parts[2] ?? "";
+  const [{ year, month, day }, setParts] = useState(() => parseDateParts(value));
+
+  useEffect(() => {
+    setParts(parseDateParts(value));
+  }, [value]);
 
   const dayOptions: SelectOption[] = Array.from({ length: 31 }, (_, i) => {
     const d = String(i + 1).padStart(2, "0");
     return { value: d, label: d };
   });
 
-  const update = (nextYear: string, nextMonth: string, nextDay: string) => {
-    if (nextYear && nextMonth && nextDay) {
-      onChange(`${nextYear}-${nextMonth}-${nextDay}`);
-      return;
+  const update = (next: Partial<{ year: string; month: string; day: string }>) => {
+    const merged = { year, month, day, ...next };
+    setParts(merged);
+    if (merged.year && merged.month && merged.day) {
+      onChange(`${merged.year}-${merged.month}-${merged.day}`);
     }
-    onChange("");
   };
 
   return (
     <div className="grid grid-cols-3 gap-2">
-      <CustomSelect value={day} options={dayOptions} onChange={(nextDay) => update(year, month, nextDay)} />
-      <CustomSelect value={month} options={months} onChange={(nextMonth) => update(year, nextMonth, day)} />
-      <CustomSelect value={year} options={years} onChange={(nextYear) => update(nextYear, month, day)} />
+      <CustomSelect value={day} options={dayOptions} onChange={(nextDay) => update({ day: nextDay })} />
+      <CustomSelect value={month} options={months} onChange={(nextMonth) => update({ month: nextMonth })} />
+      <CustomSelect value={year} options={years} onChange={(nextYear) => update({ year: nextYear })} />
     </div>
   );
 }
@@ -208,6 +216,7 @@ export default function GuidedFlowPanel({
 }: GuidedFlowPanelProps) {
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
+  const [headings, setHeadings] = useState(data.headings);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [startTime, setStartTime] = useState("09:30");
@@ -225,11 +234,15 @@ export default function GuidedFlowPanel({
 
   useEffect(() => {
     const from = formatDateLabel(startDate);
-    const to = endDate ? formatDateLabel(endDate) : "";
-    const dateText = endDate ? `${from} - ${to}` : from;
+    const to = formatDateLabel(endDate);
+    const dateText = to ? `${from} - ${to}` : from;
     const composed = `${dateText}${dateText ? " | " : ""}${sessionWindow}`;
     onFieldChange("dates", composed.trim());
   }, [endDate, onFieldChange, sessionWindow, startDate]);
+
+  useEffect(() => {
+    setHeadings(data.headings);
+  }, [data.headings]);
 
   const steps = [
     {
@@ -270,6 +283,27 @@ export default function GuidedFlowPanel({
           <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs font-semibold text-sky-700">
             Final date string preview: {data.dates}
           </div>
+        </div>
+      ),
+    },
+    {
+      title: "Headings",
+      subtitle: "Rename the main brochure section titles.",
+      content: (
+        <div className="grid gap-4 md:grid-cols-2">
+          {Object.entries(headings).map(([key, value]) => (
+            <Field key={key} label={key.replace(/([A-Z])/g, " $1").trim()}>
+              <input
+                className={inputClassName}
+                value={value}
+                onChange={(e) => {
+                  const next = { ...headings, [key]: e.target.value } as typeof headings;
+                  setHeadings(next);
+                  onFieldChange(`headings.${key}`, e.target.value);
+                }}
+              />
+            </Field>
+          ))}
         </div>
       ),
     },
