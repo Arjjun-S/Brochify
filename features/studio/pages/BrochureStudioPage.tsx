@@ -126,35 +126,35 @@ const TEMPLATE_THEMES: Record<BrochureTemplate, { pageStyle: CSSProperties; pale
   tealGloss: {
     pageStyle: {
       backgroundImage:
-        "radial-gradient(circle at 20% 16%, rgba(15, 143, 132, 0.18) 0, transparent 34%), radial-gradient(circle at 84% 14%, rgba(13, 148, 136, 0.16) 0, transparent 40%), linear-gradient(180deg, #ffffff 0%, #effcf9 100%)",
+        "radial-gradient(circle at 20% 16%, rgba(74, 164, 154, 0.16) 0, transparent 34%), radial-gradient(circle at 84% 14%, rgba(167, 224, 216, 0.2) 0, transparent 42%), linear-gradient(180deg, #ffffff 0%, #f2fcfb 100%)",
       backgroundColor: "#ffffff",
     },
     palette: {
-      primary: "#0f766e",
-      secondary: "#7dd3c7",
+      primary: "#2b8a82",
+      secondary: "#a8ddd7",
       primaryText: "#ffffff",
       surface: "#ffffff",
-      strongSurface: "#0f8f84",
-      surfaceBorder: "#d6ece9",
-      accent: "#115e59",
-      mutedText: "#4a6763",
+      strongSurface: "#329890",
+      surfaceBorder: "#d7efeb",
+      accent: "#1f6f69",
+      mutedText: "#4d706c",
     },
   },
   yellowDust: {
     pageStyle: {
       backgroundImage:
-        "radial-gradient(circle at 24% 18%, rgba(217, 180, 95, 0.16) 0, transparent 36%), radial-gradient(circle at 82% 14%, rgba(184, 140, 42, 0.14) 0, transparent 38%), linear-gradient(180deg, #ffffff 0%, #fff9e8 100%)",
+        "radial-gradient(circle at 24% 18%, rgba(244, 214, 102, 0.2) 0, transparent 36%), radial-gradient(circle at 82% 14%, rgba(252, 235, 150, 0.26) 0, transparent 40%), linear-gradient(180deg, #ffffff 0%, #fffcec 100%)",
       backgroundColor: "#ffffff",
     },
     palette: {
-      primary: "#b58a35",
-      secondary: "#ead08f",
+      primary: "#d4b423",
+      secondary: "#f8e78f",
       primaryText: "#1f2937",
       surface: "#ffffff",
-      strongSurface: "#f8eecf",
-      surfaceBorder: "#ecdfbb",
-      accent: "#6f531f",
-      mutedText: "#5f5645",
+      strongSurface: "#fdf2b8",
+      surfaceBorder: "#f1e2a1",
+      accent: "#8a6a0f",
+      mutedText: "#5f5640",
     },
   },
 };

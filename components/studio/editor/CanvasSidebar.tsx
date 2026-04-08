@@ -67,12 +67,12 @@ export default function CanvasSidebar({
     {
       id: "tealGloss" as BrochureTemplate,
       label: "Teal Gloss",
-      stops: ["#ffffff", "#0f8f84", "#ffffff"],
+      stops: ["#ffffff", "#329890", "#ffffff"],
     },
     {
       id: "yellowDust" as BrochureTemplate,
       label: "Yellow Dust",
-      stops: ["#ffffff", "#f8eecf", "#ffffff"],
+      stops: ["#ffffff", "#fdf2b8", "#ffffff"],
     },
   ];
 

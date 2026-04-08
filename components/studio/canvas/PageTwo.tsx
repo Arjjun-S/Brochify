@@ -61,6 +61,14 @@ type EditableTextContextValue = {
     activeEditingLineKey?: string | null;
     onBeginEditLine?: (lineKey: string, segmentId: string | null) => void;
     onEndEditLine?: () => void;
+    textEntityPositions?: Record<string, SegmentPosition>;
+    onMoveTextEntity?: (id: string, position: SegmentPosition) => void;
+    onTextEntityInteractionStart?: (id: string, mode: 'move' | 'resize') => void;
+    onTextEntityInteractionEnd?: (id: string, mode: 'move' | 'resize') => void;
+    selectedTextEntityId?: string | null;
+    onSelectTextEntity?: (id: string) => void;
+    textEntityPrefix?: string;
+    textEntityCanvasScale?: number;
 };
 
 const EditableTextContext = React.createContext<EditableTextContextValue>({});
@@ -82,6 +90,14 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
         activeEditingLineKey,
         onBeginEditLine,
         onEndEditLine,
+        textEntityPositions,
+        onMoveTextEntity,
+        onTextEntityInteractionStart,
+        onTextEntityInteractionEnd,
+        selectedTextEntityId,
+        onSelectTextEntity,
+        textEntityPrefix = 'p2-text::',
+        textEntityCanvasScale = 1,
     } = React.useContext(EditableTextContext);
 
     const beginEdit = (lineKey: string, eventTarget: HTMLElement) => {
@@ -140,7 +156,7 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
                 {lines.map((line, lineIndex) => {
                     const lineKey = `${path}::${lineIndex}`;
                     const isEditing = activeEditingLineKey === lineKey;
-                    return (
+                    const lineNode = (
                         <div
                             key={lineKey}
                             className={`editable-block ${isEditing ? 'editable-line-editing' : ''}`.trim()}
@@ -179,6 +195,31 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
                             {line}
                         </div>
                     );
+
+                    const textEntityId = `${textEntityPrefix}${lineKey}`;
+                    if (!onMoveTextEntity || !onSelectTextEntity) {
+                        return lineNode;
+                    }
+
+                    return (
+                        <MovableSegment
+                            key={textEntityId}
+                            id={textEntityId}
+                            position={textEntityPositions?.[textEntityId]}
+                            onMove={onMoveTextEntity}
+                            onInteractionStart={onTextEntityInteractionStart}
+                            onInteractionEnd={onTextEntityInteractionEnd}
+                            selectedId={selectedTextEntityId}
+                            onSelect={onSelectTextEntity}
+                            canvasScale={textEntityCanvasScale}
+                            index={lineIndex}
+                            className="w-full"
+                            minWidth={96}
+                            minHeight={32}
+                        >
+                            {lineNode}
+                        </MovableSegment>
+                    );
                 })}
             </div>
         );
@@ -186,7 +227,7 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
 
     const lineKey = path;
 
-    return (
+    const inlineNode = (
         <span
             className={`editable-inline ${className ?? ''}`.trim()}
             style={resolveStyle(lineKey)}
@@ -220,6 +261,29 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
         >
             {safeValue}
         </span>
+    );
+
+    const textEntityId = `${textEntityPrefix}${lineKey}`;
+    if (!onMoveTextEntity || !onSelectTextEntity) {
+        return inlineNode;
+    }
+
+    return (
+        <MovableSegment
+            id={textEntityId}
+            position={textEntityPositions?.[textEntityId]}
+            onMove={onMoveTextEntity}
+            onInteractionStart={onTextEntityInteractionStart}
+            onInteractionEnd={onTextEntityInteractionEnd}
+            selectedId={selectedTextEntityId}
+            onSelect={onSelectTextEntity}
+            canvasScale={textEntityCanvasScale}
+            className="inline-block align-baseline"
+            minWidth={48}
+            minHeight={24}
+        >
+            {inlineNode}
+        </MovableSegment>
     );
 };
 
@@ -275,6 +339,14 @@ export default function PageTwo({
                 activeEditingLineKey,
                 onBeginEditLine,
                 onEndEditLine,
+                textEntityPositions: segmentPositions,
+                onMoveTextEntity: onSegmentMove,
+                onTextEntityInteractionStart: onSegmentInteractionStart,
+                onTextEntityInteractionEnd: onSegmentInteractionEnd,
+                selectedTextEntityId: selectedSegmentId,
+                onSelectTextEntity: onSelectSegment,
+                textEntityPrefix: 'p2-text::',
+                textEntityCanvasScale: canvasScale,
             }}
         >
         <div id="brochure-page-2" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
