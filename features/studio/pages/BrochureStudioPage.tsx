@@ -14,6 +14,7 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  Bold,
   Circle,
   Download,
   Redo2,
@@ -48,6 +49,8 @@ import type { BrochureTemplate } from "@/components/studio/editor/CanvasSidebar"
 const PAGE_WIDTH = 983;
 const PAGE_HEIGHT = 680;
 const PAGE_GAP = 24;
+
+const NON_TEXT_SEGMENT_IDS = new Set(["p1-image", "p1-logos", "p1-qr"]);
 
 const builtinLogos: Array<{ id: string; name: string; src: string }> = [
   { id: "ieeetems", name: "IEEE (TEMS)", src: "/logos/ieeetems.png" },
@@ -131,6 +134,19 @@ type EditorSnapshot = {
   hiddenSegments: string[];
 };
 
+type SelectedCanvasElement =
+  | { kind: "overlay"; id: string; page: 1 | 2 }
+  | { kind: "segment"; id: string; page: 1 | 2 }
+  | null;
+
+type CanvasTextStylePatch = {
+  fontFamily?: string;
+  fontSize?: number;
+  color?: string;
+  align?: TextOverlayItem["align"];
+  fontWeight?: number;
+};
+
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -153,7 +169,7 @@ export default function Dashboard() {
   const [showDevLogs, setShowDevLogs] = useState(false);
   const [segmentPositions, setSegmentPositions] = useState<Record<string, SegmentPosition>>({});
   const [overlayItems, setOverlayItems] = useState<OverlayItem[]>([]);
-  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
+  const [selectedElement, setSelectedElement] = useState<SelectedCanvasElement>(null);
   const [activePage, setActivePage] = useState<1 | 2>(1);
   const [previewScale, setPreviewScale] = useState(1); // auto scale from viewport
   const [zoomFactor, setZoomFactor] = useState(0.9); // user-controlled multiplier (start at 90%)
@@ -263,6 +279,7 @@ export default function Dashboard() {
     historyIndexRef.current = nextIndex;
     setHistoryIndex(nextIndex);
     applySnapshot(snapshot);
+    setSelectedElement(null);
   };
 
   const redo = () => {
@@ -272,12 +289,45 @@ export default function Dashboard() {
     historyIndexRef.current = nextIndex;
     setHistoryIndex(nextIndex);
     applySnapshot(snapshot);
+    setSelectedElement(null);
   };
+
+  const selectedOverlayId = selectedElement?.kind === "overlay" ? selectedElement.id : null;
+  const selectedSegmentId = selectedElement?.kind === "segment" ? selectedElement.id : null;
 
   const selectedOverlay = useMemo(
     () => overlayItems.find((item) => item.id === selectedOverlayId) ?? null,
     [overlayItems, selectedOverlayId],
   );
+
+  const selectedTextTarget = useMemo(() => {
+    if (selectedOverlay?.type === "text") {
+      return {
+        kind: "overlay" as const,
+        id: selectedOverlay.id,
+        fontFamily: selectedOverlay.fontFamily,
+        fontSize: selectedOverlay.fontSize,
+        color: selectedOverlay.color,
+        align: selectedOverlay.align,
+        fontWeight: selectedOverlay.fontWeight,
+      };
+    }
+
+    if (selectedSegmentId && !NON_TEXT_SEGMENT_IDS.has(selectedSegmentId)) {
+      const segment = segmentPositions[selectedSegmentId];
+      return {
+        kind: "segment" as const,
+        id: selectedSegmentId,
+        fontFamily: segment?.fontFamily ?? FONT_OPTIONS[0].value,
+        fontSize: segment?.fontSize ?? 16,
+        color: segment?.color ?? "#0f172a",
+        align: segment?.align ?? "left",
+        fontWeight: segment?.fontWeight ?? 600,
+      };
+    }
+
+    return null;
+  }, [selectedOverlay, selectedSegmentId, segmentPositions]);
 
   const logoOptions = useMemo(() => builtinLogos, []);
 
@@ -287,10 +337,10 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    if (selectedOverlay) {
-      setActivePage(selectedOverlay.page);
+    if (selectedElement) {
+      setActivePage(selectedElement.page);
     }
-  }, [selectedOverlay]);
+  }, [selectedElement]);
 
   const handleDownload = async () => {
     const element = document.getElementById("brochure-preview");
@@ -324,7 +374,9 @@ export default function Dashboard() {
         .overlay-item::after,
         .overlay-item-toolbar,
         .overlay-resize-handle,
-        .segment-handle { display: none !important; box-shadow: none !important; border: none !important; }
+        .segment-handle,
+        .segment-resize-handle { display: none !important; box-shadow: none !important; border: none !important; }
+        .segment-surface { outline: none !important; box-shadow: none !important; }
         .overlay-textbox { outline: none !important; }
         .editable-inline, .editable-block { outline: none !important; box-shadow: none !important; background: transparent !important; }
       `;
@@ -434,6 +486,21 @@ export default function Dashboard() {
     });
   };
 
+  const updateSegmentPosition = useCallback((id: string, patch: Partial<SegmentPosition>) => {
+    setSegmentPositions((prev) => {
+      const base = prev[id] ?? { x: 0, y: 0 };
+      const next = {
+        ...prev,
+        [id]: {
+          ...base,
+          ...patch,
+        },
+      };
+      pushWith({ segmentPositions: next });
+      return next;
+    });
+  }, [pushWith]);
+
   const updateOverlayItem = (id: string, patch: Partial<OverlayItem>) => {
     setOverlayItems((prev) => {
       const next = prev.map((item) => (item.id === id ? ({ ...item, ...patch } as OverlayItem) : item));
@@ -449,7 +516,7 @@ export default function Dashboard() {
       pushWith({ overlayItems: next });
       return next;
     });
-    setSelectedOverlayId(nextItem.id);
+    setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
   };
 
   const addShapeOverlay = (shape: "rectangle" | "circle") => {
@@ -459,7 +526,7 @@ export default function Dashboard() {
       pushWith({ overlayItems: next });
       return next;
     });
-    setSelectedOverlayId(nextItem.id);
+    setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
   };
 
   const handleChangeTemplate = (next: BrochureTemplate) => {
@@ -479,7 +546,7 @@ export default function Dashboard() {
       pushWith({ overlayItems: next });
       return next;
     });
-    setSelectedOverlayId(nextItem.id);
+    setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
   };
 
   const addImageOverlayAtPoint = (
@@ -497,7 +564,7 @@ export default function Dashboard() {
       pushWith({ overlayItems: next });
       return next;
     });
-    setSelectedOverlayId(nextItem.id);
+    setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
   };
 
   const deleteSegment = (id: string) => {
@@ -509,14 +576,32 @@ export default function Dashboard() {
     });
   };
 
-  const removeSelectedOverlay = () => {
-    if (!selectedOverlayId) return;
-    setOverlayItems((prev) => {
-      const next = prev.filter((item) => item.id !== selectedOverlayId);
-      pushWith({ overlayItems: next });
-      return next;
-    });
-    setSelectedOverlayId(null);
+  const updateSelectedTextStyle = (patch: CanvasTextStylePatch) => {
+    if (!selectedTextTarget) return;
+
+    if (selectedTextTarget.kind === "overlay") {
+      updateOverlayItem(selectedTextTarget.id, patch as Partial<TextOverlayItem>);
+      return;
+    }
+
+    updateSegmentPosition(selectedTextTarget.id, patch);
+  };
+
+  const removeSelectedElement = () => {
+    if (!selectedElement) return;
+
+    if (selectedElement.kind === "overlay") {
+      setOverlayItems((prev) => {
+        const next = prev.filter((item) => item.id !== selectedElement.id);
+        pushWith({ overlayItems: next });
+        return next;
+      });
+      setSelectedElement(null);
+      return;
+    }
+
+    deleteSegment(selectedElement.id);
+    setSelectedElement(null);
   };
 
   const handleUploadAssets = async (files: FileList | null, tagsInput: string) => {
@@ -837,16 +922,11 @@ export default function Dashboard() {
                   Circle
                 </button>
 
-                {selectedOverlay?.type === "text" && (
+                {selectedTextTarget && (
                   <>
                     <select
-                      value={selectedOverlay.fontFamily}
-                      onChange={(event) =>
-                        updateOverlayItem(
-                          selectedOverlay.id,
-                          { fontFamily: event.target.value } as Partial<TextOverlayItem>,
-                        )
-                      }
+                      value={selectedTextTarget.fontFamily}
+                      onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
                       className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
                     >
                       {FONT_OPTIONS.map((font) => (
@@ -859,26 +939,33 @@ export default function Dashboard() {
                       type="number"
                       min={12}
                       max={120}
-                      value={selectedOverlay.fontSize}
-                      onChange={(event) =>
-                        updateOverlayItem(
-                          selectedOverlay.id,
-                          { fontSize: Number(event.target.value) || 16 } as Partial<TextOverlayItem>,
-                        )
-                      }
+                      value={selectedTextTarget.fontSize}
+                      onChange={(event) => updateSelectedTextStyle({ fontSize: Number(event.target.value) || 16 })}
                       className="w-20 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
                     />
                     <input
                       type="color"
-                      value={selectedOverlay.color}
-                      onChange={(event) =>
-                        updateOverlayItem(
-                          selectedOverlay.id,
-                          { color: event.target.value } as Partial<TextOverlayItem>,
-                        )
-                      }
+                      value={selectedTextTarget.color}
+                      onChange={(event) => updateSelectedTextStyle({ color: event.target.value })}
                       className="h-10 w-12 rounded-full border border-slate-200 bg-white px-1"
                     />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSelectedTextStyle({
+                          fontWeight: selectedTextTarget.fontWeight >= 700 ? 500 : 700,
+                        })
+                      }
+                      className={cn(
+                        "rounded-full border border-slate-200 bg-white p-2 transition-colors",
+                        selectedTextTarget.fontWeight >= 700
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                      )}
+                      title="Toggle bold"
+                    >
+                      <Bold className="h-4 w-4" />
+                    </button>
                     <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
                       {[
                         { value: "left", icon: AlignLeft },
@@ -890,17 +977,10 @@ export default function Dashboard() {
                           <button
                             key={option.value}
                             type="button"
-                            onClick={() =>
-                              updateOverlayItem(
-                                selectedOverlay.id,
-                                {
-                                  align: option.value as TextOverlayItem["align"],
-                                } as Partial<TextOverlayItem>,
-                              )
-                            }
+                            onClick={() => updateSelectedTextStyle({ align: option.value as TextOverlayItem["align"] })}
                             className={cn(
                               "rounded-full p-2 transition-colors",
-                              selectedOverlay.align === option.value
+                              selectedTextTarget.align === option.value
                                 ? "bg-slate-900 text-white"
                                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
                             )}
@@ -934,18 +1014,18 @@ export default function Dashboard() {
                   </>
                 )}
 
-                {selectedOverlay && (
+                {selectedElement && (
                   <button
                     type="button"
-                    onClick={removeSelectedOverlay}
+                    onClick={removeSelectedElement}
                     className="ml-auto inline-flex items-center gap-2 rounded-full border border-red-300/60 bg-red-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-red-500 transition-colors hover:bg-red-100"
                   >
                     <Trash2 className="h-4 w-4" />
-                    Remove
+                    Delete Selected
                   </button>
                 )}
 
-                {!selectedOverlay && (
+                {!selectedElement && (
                   <p className="ml-auto flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
                     <Sparkles className="h-4 w-4 text-primary" />
                     Edit in place, free drag, and resize from corners
@@ -957,6 +1037,13 @@ export default function Dashboard() {
             <div
               ref={previewViewportRef}
               className="w-full flex flex-col items-center gap-10 py-4 relative z-10"
+              onPointerDownCapture={(event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest(".overlay-item") || target.closest(".segment-shell")) {
+                  return;
+                }
+                setSelectedElement(null);
+              }}
               onDragOver={(event) => {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
@@ -999,10 +1086,13 @@ export default function Dashboard() {
                         onEdit={(path, value) => handleFieldChange(path, value)}
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
-                        onDeleteSegment={deleteSegment}
+                        selectedSegmentId={selectedSegmentId}
+                        onSelectSegment={(id) => setSelectedElement({ kind: "segment", id, page: 1 })}
                         overlayItems={overlayItems.filter((item) => item.page === 1)}
                         selectedOverlayId={selectedOverlayId}
-                        onSelectOverlay={setSelectedOverlayId}
+                        onSelectOverlay={(id) =>
+                          setSelectedElement(id ? { kind: "overlay", id, page: 1 } : null)
+                        }
                         onUpdateOverlay={updateOverlayItem}
                         logoCatalog={logoCatalog}
                         canvasScale={effectiveScale}
@@ -1019,10 +1109,13 @@ export default function Dashboard() {
                         onEdit={(path, value) => handleFieldChange(path, value)}
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
-                        onDeleteSegment={deleteSegment}
+                        selectedSegmentId={selectedSegmentId}
+                        onSelectSegment={(id) => setSelectedElement({ kind: "segment", id, page: 2 })}
                         overlayItems={overlayItems.filter((item) => item.page === 2)}
                         selectedOverlayId={selectedOverlayId}
-                        onSelectOverlay={setSelectedOverlayId}
+                        onSelectOverlay={(id) =>
+                          setSelectedElement(id ? { kind: "overlay", id, page: 2 } : null)
+                        }
                         onUpdateOverlay={updateOverlayItem}
                         canvasScale={effectiveScale}
                         pageStyle={TEMPLATE_THEMES[template].pageStyle}

@@ -20,8 +20,10 @@ interface PageTwoProps {
     data: BrochureData;
     selectedLogos: string[];
     onEdit?: (path: string, value: string) => void;
+    segmentPositions?: Record<string, SegmentPosition>;
     onSegmentMove?: (id: string, position: SegmentPosition) => void;
-    onDeleteSegment?: (id: string) => void;
+    selectedSegmentId?: string | null;
+    onSelectSegment?: (id: string) => void;
     overlayItems?: OverlayItem[];
     selectedOverlayId?: string | null;
     onSelectOverlay?: (id: string | null) => void;
@@ -74,6 +76,8 @@ export default function PageTwo({
     onEdit,
     segmentPositions,
     onSegmentMove,
+    selectedSegmentId = null,
+    onSelectSegment,
     overlayItems = [],
     selectedOverlayId = null,
     onSelectOverlay,
@@ -81,26 +85,23 @@ export default function PageTwo({
     canvasScale = 1,
     pageStyle,
     palette,
-    onDeleteSegment,
     hiddenSegments = [],
 }: PageTwoProps) {
         void selectedLogos;
     const headings = data.headings;
     const palettePrimary = palette?.primary ?? '#0b4da2';
-    const paletteSecondary = palette?.secondary ?? '#5fa8ff';
     const palettePrimaryText = palette?.primaryText ?? '#ffffff';
     const paletteSurface = palette?.surface ?? '#ffffff';
     const paletteSurfaceBorder = palette?.surfaceBorder ?? '#e2e8f0';
     const paletteStrongSurface = palette?.strongSurface ?? palettePrimary;
     const paletteAccent = palette?.accent ?? '#facc15';
-    const paletteMuted = palette?.mutedText ?? '#64748b';
         const pageBackgroundStyle = { backgroundColor: paletteSurface, ...pageStyle };
         const isHidden = (id: string) => hiddenSegments.includes(id);
     return (
         <div id="brochure-page-2" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
             <div className="column flex-[0.8] !p-5 flex flex-col gap-5" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText, fontSize: '11.5px' }}>
                                 {!isHidden('p2-about-srm') && (
-                                <MovableSegment id="p2-about-srm" position={segmentPositions?.['p2-about-srm']} onMove={onSegmentMove} index={0} onDelete={onDeleteSegment}>
+                                <MovableSegment id="p2-about-srm" position={segmentPositions?.['p2-about-srm']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={0}>
                 <div className="text-center">
                     <h3 className="text-base font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
                       <EditableText path="headings.aboutCollege" value={headings.aboutCollege} onEdit={onEdit} className="inline" />
@@ -110,7 +111,7 @@ export default function PageTwo({
                 </MovableSegment>
                                 )}
                                 {!isHidden('p2-about-school') && (
-                                <MovableSegment id="p2-about-school" position={segmentPositions?.['p2-about-school']} onMove={onSegmentMove} index={1} onDelete={onDeleteSegment}>
+                                <MovableSegment id="p2-about-school" position={segmentPositions?.['p2-about-school']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={1}>
                 <div className="text-center">
                     <h3 className="text-[14px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
                       <EditableText path="headings.aboutSchool" value={headings.aboutSchool} onEdit={onEdit} className="inline" />
@@ -124,7 +125,7 @@ export default function PageTwo({
             {/* Column 2: About Dept & FDP (White) */}
             <div className="column border-x flex flex-col gap-5 !p-5" style={{ backgroundColor: paletteSurface, borderColor: paletteSurfaceBorder, color: '#334155', fontSize: '10px' }}>
                 {!isHidden('p2-about-dept') && (
-                <MovableSegment id="p2-about-dept" position={segmentPositions?.['p2-about-dept']} onMove={onSegmentMove} index={2} onDelete={onDeleteSegment}>
+                <MovableSegment id="p2-about-dept" position={segmentPositions?.['p2-about-dept']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={2}>
                 <div className="text-center">
                                         <h3 className="text-[13px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ color: palettePrimary, backgroundColor: `${palettePrimary}14`, borderBottom: `1px solid ${palettePrimary}26` }}>
                                             <EditableText path="headings.aboutDepartment" value={headings.aboutDepartment} onEdit={onEdit} className="inline" />
@@ -134,7 +135,7 @@ export default function PageTwo({
                 </MovableSegment>
                 )}
                 {!isHidden('p2-about-fdp') && (
-                <MovableSegment id="p2-about-fdp" position={segmentPositions?.['p2-about-fdp']} onMove={onSegmentMove} index={3} onDelete={onDeleteSegment}>
+                <MovableSegment id="p2-about-fdp" position={segmentPositions?.['p2-about-fdp']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={3}>
                 <div className="text-center">
                                         <h3 className="text-[13px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ color: palettePrimary, backgroundColor: `${palettePrimary}14`, borderBottom: `1px solid ${palettePrimary}26` }}>
                                             <EditableText path="headings.aboutFdp" value={headings.aboutFdp} onEdit={onEdit} className="inline" />
@@ -145,7 +146,7 @@ export default function PageTwo({
                 )}
 
                 {!isHidden('p2-highlights') && (
-                <MovableSegment id="p2-highlights" position={segmentPositions?.['p2-highlights']} onMove={onSegmentMove} index={4} onDelete={onDeleteSegment}>
+                <MovableSegment id="p2-highlights" position={segmentPositions?.['p2-highlights']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={4}>
                 <div className="mt-2 p-3 border rounded-2xl" style={{ backgroundColor: paletteSurface, borderColor: paletteSurfaceBorder }}>
                                         <p className="text-[10px] font-black uppercase mb-1 underline" style={{ color: palettePrimary }}>
                                             <EditableText path="headings.programHighlights" value={headings.programHighlights} onEdit={onEdit} className="inline" />
@@ -163,7 +164,7 @@ export default function PageTwo({
             {/* Column 3: Topics & Speakers (Blue) */}
             <div className="column column-blue flex flex-col !p-4 gap-2" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText }}>
                 {!isHidden('p2-topics') && (
-                <MovableSegment id="p2-topics" position={segmentPositions?.['p2-topics']} onMove={onSegmentMove} index={5} onDelete={onDeleteSegment}>
+                <MovableSegment id="p2-topics" position={segmentPositions?.['p2-topics']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={5}>
                                 <h3 className="text-[11px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: '1px solid rgba(255,255,255,0.3)', color: paletteAccent }}>
                                     <EditableText path="headings.topics" value={headings.topics} onEdit={onEdit} className="inline" />
                                 </h3>
@@ -193,7 +194,7 @@ export default function PageTwo({
                 )}
 
                 {!isHidden('p2-speakers') && (
-                <MovableSegment id="p2-speakers" position={segmentPositions?.['p2-speakers']} onMove={onSegmentMove} index={6} className="flex-1" onDelete={onDeleteSegment}>
+                <MovableSegment id="p2-speakers" position={segmentPositions?.['p2-speakers']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={6} className="flex-1">
                                 <h3 className="text-[12px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: '1px solid rgba(255,255,255,0.3)', color: paletteAccent }}>
                                     <EditableText path="headings.speakers" value={headings.speakers} onEdit={onEdit} className="inline" />
                                 </h3>
@@ -206,17 +207,6 @@ export default function PageTwo({
                         </div>
                     ))}
                 </div>
-                </MovableSegment>
-                )}
-
-                {!isHidden('p2-footer') && (
-                <MovableSegment id="p2-footer" position={segmentPositions?.['p2-footer']} onMove={onSegmentMove} index={7} onDelete={onDeleteSegment}>
-                    <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${paletteAccent}55` }}>
-                        <div className="flex items-center justify-between text-white" style={{ opacity: 0.9 }}>
-                            <span className="text-[9px] font-black uppercase" style={{ color: `${palettePrimaryText}CC` }}>MADE WITH BROCHIFY</span>
-                            <span className="text-[9px] font-black" style={{ color: paletteAccent }}>SRM-KTR • 2026</span>
-                        </div>
-                    </div>
                 </MovableSegment>
                 )}
             </div>

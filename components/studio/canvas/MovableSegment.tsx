@@ -1,10 +1,24 @@
 "use client";
 
 import React, { useMemo, useRef, useState } from "react";
+import { SegmentPosition } from "@/lib/domains/brochure";
 
-type SegmentPosition = {
+type ResizeHandle = "nw" | "ne" | "sw" | "se";
+
+type InteractionState = {
+  mode: "move" | "resize";
+  handle?: ResizeHandle;
   x: number;
   y: number;
+  baseX: number;
+  baseY: number;
+  baseWidth: number;
+  baseHeight: number;
+  scale: number;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 };
 
 type MovableSegmentProps = {
@@ -14,8 +28,16 @@ type MovableSegmentProps = {
   children: React.ReactNode;
   className?: string;
   index?: number;
-  onDelete?: (id: string) => void;
+  isSelected?: boolean;
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+  canvasScale?: number;
+  style?: React.CSSProperties;
+  minWidth?: number;
+  minHeight?: number;
 };
+
+const SOFT_LIMIT = 2000;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -27,40 +49,39 @@ export default function MovableSegment({
   children,
   className,
   index = 0,
-  onDelete,
+  isSelected = false,
+  selectedId = null,
+  onSelect,
+  canvasScale = 1,
+  style,
+  minWidth = 140,
+  minHeight = 64,
 }: MovableSegmentProps) {
-  const [isDragging, setIsDragging] = useState(false);
+  const [interactionMode, setInteractionMode] = useState<InteractionState["mode"] | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const dragStartRef = useRef<{
-    x: number;
-    y: number;
-    baseX: number;
-    baseY: number;
-    scale: number;
-    minX: number;
-    maxX: number;
-    minY: number;
-    maxY: number;
-  } | null>(null);
+  const interactionRef = useRef<InteractionState | null>(null);
 
   const currentPosition = useMemo(
     () => position ?? { x: 0, y: 0 },
     [position],
   );
+  const isSegmentSelected = isSelected || selectedId === id;
 
-  const onHandlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!hostRef.current || !onMove) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const host = hostRef.current;
+  const buildBounds = (host: HTMLElement) => {
     const parent = host.parentElement;
-    if (!parent) return;
+    if (!parent) {
+      return {
+        scale: canvasScale || 1,
+        minX: -SOFT_LIMIT,
+        maxX: SOFT_LIMIT,
+        minY: -SOFT_LIMIT,
+        maxY: SOFT_LIMIT,
+      };
+    }
 
     const stage = host.closest(".preview-stage") as HTMLElement | null;
     const matrix = stage ? window.getComputedStyle(stage).transform : "none";
-    const scale = matrix && matrix !== "none" ? Number(matrix.split("(")[1]?.split(",")[0]) || 1 : 1;
+    const scale = matrix && matrix !== "none" ? Number(matrix.split("(")[1]?.split(",")[0]) || canvasScale || 1 : canvasScale || 1;
 
     const parentRect = parent.getBoundingClientRect();
     const hostRect = host.getBoundingClientRect();
@@ -70,65 +91,181 @@ export default function MovableSegment({
     const topSpace = Math.max(0, hostRect.top - parentRect.top) / scale;
     const bottomSpace = Math.max(0, parentRect.bottom - hostRect.bottom) / scale;
 
-    const softLimit = 2000; // allow movement well outside the column bounds
+    return {
+      scale,
+      minX: -leftSpace - SOFT_LIMIT,
+      maxX: rightSpace + SOFT_LIMIT,
+      minY: -topSpace - SOFT_LIMIT,
+      maxY: bottomSpace + SOFT_LIMIT,
+    };
+  };
+
+  const beginInteraction = (
+    e: React.PointerEvent<HTMLElement>,
+    mode: InteractionState["mode"],
+    handle?: ResizeHandle,
+  ) => {
+    if (!hostRef.current || !onMove) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    onSelect?.(id);
+
+    const host = hostRef.current;
+    const hostRect = host.getBoundingClientRect();
+    const bounds = buildBounds(host);
+    const baseWidth = currentPosition.width ?? hostRect.width / bounds.scale;
+    const baseHeight = currentPosition.height ?? hostRect.height / bounds.scale;
 
     e.currentTarget.setPointerCapture(e.pointerId);
-    setIsDragging(true);
+    setInteractionMode(mode);
 
-    dragStartRef.current = {
+    interactionRef.current = {
+      mode,
+      handle,
       x: e.clientX,
       y: e.clientY,
       baseX: currentPosition.x,
       baseY: currentPosition.y,
-      scale,
-      minX: -leftSpace - softLimit,
-      maxX: rightSpace + softLimit,
-      minY: -topSpace - softLimit,
-      maxY: bottomSpace + softLimit,
+      baseWidth,
+      baseHeight,
+      scale: bounds.scale,
+      minX: bounds.minX,
+      maxX: bounds.maxX,
+      minY: bounds.minY,
+      maxY: bounds.maxY,
     };
   };
 
-  const onHandlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!onMove || !hostRef.current || !dragStartRef.current || !isDragging) return;
+  const onMoveHandlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    beginInteraction(e, "move");
+  };
 
-    const dx = (e.clientX - dragStartRef.current.x) / dragStartRef.current.scale;
-    const dy = (e.clientY - dragStartRef.current.y) / dragStartRef.current.scale;
+  const onResizeHandlePointerDown = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    handle: ResizeHandle,
+  ) => {
+    beginInteraction(e, "resize", handle);
+  };
 
-    const rawX = dragStartRef.current.baseX + dx;
-    const rawY = dragStartRef.current.baseY + dy;
+  const onHandlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!onMove || !hostRef.current || !interactionRef.current || !interactionMode) return;
+
+    const interaction = interactionRef.current;
+    const dx = (e.clientX - interaction.x) / interaction.scale;
+    const dy = (e.clientY - interaction.y) / interaction.scale;
+
+    if (interaction.mode === "move") {
+      const rawX = interaction.baseX + dx;
+      const rawY = interaction.baseY + dy;
+
+      onMove(id, {
+        ...currentPosition,
+        x: clamp(rawX, interaction.minX, interaction.maxX),
+        y: clamp(rawY, interaction.minY, interaction.maxY),
+      });
+
+      return;
+    }
+
+    let nextX = interaction.baseX;
+    let nextY = interaction.baseY;
+    let nextWidth = interaction.baseWidth;
+    let nextHeight = interaction.baseHeight;
+
+    if (interaction.handle?.includes("e")) {
+      nextWidth = Math.max(minWidth, interaction.baseWidth + dx);
+    }
+    if (interaction.handle?.includes("s")) {
+      nextHeight = Math.max(minHeight, interaction.baseHeight + dy);
+    }
+    if (interaction.handle?.includes("w")) {
+      nextWidth = Math.max(minWidth, interaction.baseWidth - dx);
+      nextX = interaction.baseX + (interaction.baseWidth - nextWidth);
+    }
+    if (interaction.handle?.includes("n")) {
+      nextHeight = Math.max(minHeight, interaction.baseHeight - dy);
+      nextY = interaction.baseY + (interaction.baseHeight - nextHeight);
+    }
 
     onMove(id, {
-      x: clamp(rawX, dragStartRef.current.minX, dragStartRef.current.maxX),
-      y: clamp(rawY, dragStartRef.current.minY, dragStartRef.current.maxY),
+      ...currentPosition,
+      x: clamp(nextX, interaction.minX, interaction.maxX),
+      y: clamp(nextY, interaction.minY, interaction.maxY),
+      width: clamp(nextWidth, minWidth, SOFT_LIMIT * 2),
+      height: clamp(nextHeight, minHeight, SOFT_LIMIT * 2),
     });
   };
 
-  const onHandlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+  const onHandlePointerUp = (e: React.PointerEvent<HTMLElement>) => {
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
-    dragStartRef.current = null;
-    setIsDragging(false);
+    interactionRef.current = null;
+    setInteractionMode(null);
   };
 
   const onLostPointerCapture = () => {
-    dragStartRef.current = null;
-    setIsDragging(false);
+    interactionRef.current = null;
+    setInteractionMode(null);
   };
+
+  const cssVars: React.CSSProperties = {};
+  if (currentPosition.fontFamily) {
+    (cssVars as Record<string, string>)["--segment-font-family"] = currentPosition.fontFamily;
+  }
+  if (currentPosition.fontSize) {
+    (cssVars as Record<string, string>)["--segment-font-size"] = `${currentPosition.fontSize}px`;
+  }
+  if (currentPosition.fontWeight) {
+    (cssVars as Record<string, string>)["--segment-font-weight"] = String(currentPosition.fontWeight);
+  }
+  if (currentPosition.color) {
+    (cssVars as Record<string, string>)["--segment-font-color"] = currentPosition.color;
+  }
+  if (currentPosition.align) {
+    (cssVars as Record<string, string>)["--segment-text-align"] = currentPosition.align;
+  }
+
+  const isDragging = interactionMode === "move";
+  const isResizing = interactionMode === "resize";
 
   return (
     <div
       ref={hostRef}
-      className={`segment-shell ${isDragging ? "segment-shell-dragging" : ""} ${className ?? ""}`}
+      className={`segment-shell ${isSegmentSelected ? "segment-shell-selected" : ""} ${isDragging ? "segment-shell-dragging" : ""} ${isResizing ? "segment-shell-resizing" : ""} ${className ?? ""}`}
       style={{
         transform: `translate3d(${currentPosition.x}px, ${currentPosition.y}px, 0)`,
+        width: currentPosition.width,
+        height: currentPosition.height,
+        ...cssVars,
       }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onSelect?.(id);
+
+        if (!onMove) return;
+
+        const target = e.target as HTMLElement;
+        if (target.closest(".segment-handle") || target.closest(".segment-resize-handle")) {
+          return;
+        }
+        if (target.closest("[contenteditable='true']")) {
+          return;
+        }
+
+        beginInteraction(e, "move");
+      }}
+      onPointerMove={onHandlePointerMove}
+      onPointerUp={onHandlePointerUp}
+      onPointerCancel={onHandlePointerUp}
+      onLostPointerCapture={onLostPointerCapture}
     >
       {onMove && (
         <button
           type="button"
           className="segment-handle"
-          onPointerDown={onHandlePointerDown}
+          onPointerDown={onMoveHandlePointerDown}
           onPointerMove={onHandlePointerMove}
           onPointerUp={onHandlePointerUp}
           onPointerCancel={onHandlePointerUp}
@@ -141,20 +278,58 @@ export default function MovableSegment({
           <span />
         </button>
       )}
-      {onDelete && (
-        <button
-          type="button"
-          className="segment-delete"
-          onClick={() => onDelete(id)}
-          title="Delete"
-          aria-label="Delete segment"
-        >
-          ×
-        </button>
+
+      {onMove && isSegmentSelected && (
+        <>
+          <button
+            type="button"
+            className="segment-resize-handle segment-resize-nw"
+            onPointerDown={(e) => onResizeHandlePointerDown(e, "nw")}
+            onPointerMove={onHandlePointerMove}
+            onPointerUp={onHandlePointerUp}
+            onPointerCancel={onHandlePointerUp}
+            onLostPointerCapture={onLostPointerCapture}
+            aria-label="Resize from top left"
+          />
+          <button
+            type="button"
+            className="segment-resize-handle segment-resize-ne"
+            onPointerDown={(e) => onResizeHandlePointerDown(e, "ne")}
+            onPointerMove={onHandlePointerMove}
+            onPointerUp={onHandlePointerUp}
+            onPointerCancel={onHandlePointerUp}
+            onLostPointerCapture={onLostPointerCapture}
+            aria-label="Resize from top right"
+          />
+          <button
+            type="button"
+            className="segment-resize-handle segment-resize-sw"
+            onPointerDown={(e) => onResizeHandlePointerDown(e, "sw")}
+            onPointerMove={onHandlePointerMove}
+            onPointerUp={onHandlePointerUp}
+            onPointerCancel={onHandlePointerUp}
+            onLostPointerCapture={onLostPointerCapture}
+            aria-label="Resize from bottom left"
+          />
+          <button
+            type="button"
+            className="segment-resize-handle segment-resize-se"
+            onPointerDown={(e) => onResizeHandlePointerDown(e, "se")}
+            onPointerMove={onHandlePointerMove}
+            onPointerUp={onHandlePointerUp}
+            onPointerCancel={onHandlePointerUp}
+            onLostPointerCapture={onLostPointerCapture}
+            aria-label="Resize from bottom right"
+          />
+        </>
       )}
+
       <div
         className="segment-surface"
-        style={{ animationDelay: `${index * 70}ms` }}
+        style={{
+          animationDelay: `${index * 70}ms`,
+          ...style,
+        }}
       >
         {children}
       </div>

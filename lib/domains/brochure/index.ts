@@ -74,6 +74,13 @@ export type BrochureData = {
 export type SegmentPosition = {
   x: number;
   y: number;
+  width?: number;
+  height?: number;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  color?: string;
+  align?: OverlayTextAlign;
 };
 
 export type OverlayTextAlign = "left" | "center" | "right";
