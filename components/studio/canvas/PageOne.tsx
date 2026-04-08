@@ -31,17 +31,24 @@ interface PageOneProps {
     onEdit?: (path: string, value: string) => void;
     segmentPositions?: Record<string, SegmentPosition>;
     onSegmentMove?: (id: string, position: SegmentPosition) => void;
+    onSegmentInteractionStart?: (id: string, mode: 'move' | 'resize') => void;
+    onSegmentInteractionEnd?: (id: string, mode: 'move' | 'resize') => void;
     selectedSegmentId?: string | null;
     onSelectSegment?: (id: string) => void;
     overlayItems?: OverlayItem[];
     selectedOverlayId?: string | null;
     onSelectOverlay?: (id: string | null) => void;
     onUpdateOverlay?: (id: string, patch: Partial<OverlayItem>) => void;
+    onOverlayInteractionStart?: (id: string, mode: 'move' | 'resize') => void;
+    onOverlayInteractionEnd?: (id: string, mode: 'move' | 'resize') => void;
         canvasScale?: number;
     pageStyle: CSSProperties;
     palette?: Palette;
     hiddenSegments?: string[];
     formLineStyles?: Record<string, FormLineStyle>;
+    activeEditingLineKey?: string | null;
+    onBeginEditLine?: (lineKey: string, segmentId: string | null) => void;
+    onEndEditLine?: () => void;
 }
 
 type EditableTextProps = {
@@ -55,6 +62,9 @@ type EditableTextProps = {
 
 type EditableTextContextValue = {
     lineStyles?: Record<string, FormLineStyle>;
+    activeEditingLineKey?: string | null;
+    onBeginEditLine?: (lineKey: string, segmentId: string | null) => void;
+    onEndEditLine?: () => void;
 };
 
 const EditableTextContext = React.createContext<EditableTextContextValue>({});
@@ -71,7 +81,20 @@ const toLineStyle = (lineStyle?: FormLineStyle): React.CSSProperties => {
 
 const EditableText = ({ path, value, onEdit, className, style, multiline = false }: EditableTextProps) => {
     const safeValue = value ?? '';
-    const { lineStyles } = React.useContext(EditableTextContext);
+    const {
+        lineStyles,
+        activeEditingLineKey,
+        onBeginEditLine,
+        onEndEditLine,
+    } = React.useContext(EditableTextContext);
+
+    const beginEdit = (lineKey: string, eventTarget: HTMLElement) => {
+        const segmentId = (eventTarget.closest('.segment-shell') as HTMLElement | null)?.dataset.segmentId ?? null;
+        onBeginEditLine?.(lineKey, segmentId);
+        window.requestAnimationFrame(() => {
+            eventTarget.focus();
+        });
+    };
 
     const resolveStyle = (lineKey: string): React.CSSProperties => ({
         ...(style ?? {}),
@@ -122,25 +145,39 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
             <div className={className}>
                 {lines.map((line, lineIndex) => {
                     const lineKey = `${path}::${lineIndex}`;
+                    const isEditing = activeEditingLineKey === lineKey;
                     return (
                         <div
                             key={lineKey}
-                            className="editable-block"
+                            className={`editable-block ${isEditing ? 'editable-line-editing' : ''}`.trim()}
                             style={resolveStyle(lineKey)}
-                            contentEditable
+                            contentEditable={isEditing}
                             suppressContentEditableWarning
                             spellCheck={false}
+                            tabIndex={-1}
                             data-editable-path={path}
                             data-editable-line={lineIndex}
                             data-form-line-key={lineKey}
+                            onDoubleClick={(event) => {
+                                event.stopPropagation();
+                                beginEdit(lineKey, event.currentTarget as HTMLElement);
+                            }}
                             onBlur={(e) => {
+                                if (!isEditing) return;
                                 const nextLines = [...lines];
                                 nextLines[lineIndex] = e.currentTarget.textContent ?? '';
                                 onEdit(path, nextLines.join('\n'));
+                                onEndEditLine?.();
                             }}
                             onKeyDown={(e) => {
+                                if (!isEditing) return;
                                 if (e.key === 'Enter') {
                                     e.preventDefault();
+                                    (e.currentTarget as HTMLElement).blur();
+                                }
+                                if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    onEndEditLine?.();
                                     (e.currentTarget as HTMLElement).blur();
                                 }
                             }}
@@ -159,15 +196,30 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
         <Tag
             className={`editable-inline ${className ?? ''}`.trim()}
             style={resolveStyle(lineKey)}
-            contentEditable
+            contentEditable={activeEditingLineKey === lineKey}
             suppressContentEditableWarning
             spellCheck={false}
+            tabIndex={-1}
             data-editable-path={path}
             data-form-line-key={lineKey}
-            onBlur={(e) => onEdit(path, e.currentTarget.textContent ?? '')}
+            onDoubleClick={(event) => {
+                event.stopPropagation();
+                beginEdit(lineKey, event.currentTarget as HTMLElement);
+            }}
+            onBlur={(e) => {
+                if (activeEditingLineKey !== lineKey) return;
+                onEdit(path, e.currentTarget.textContent ?? '');
+                onEndEditLine?.();
+            }}
             onKeyDown={(e) => {
+                if (activeEditingLineKey !== lineKey) return;
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    (e.currentTarget as HTMLElement).blur();
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    onEndEditLine?.();
                     (e.currentTarget as HTMLElement).blur();
                 }
             }}
@@ -193,17 +245,24 @@ export default function PageOne({
     onEdit,
     segmentPositions,
     onSegmentMove,
+    onSegmentInteractionStart,
+    onSegmentInteractionEnd,
     selectedSegmentId = null,
     onSelectSegment,
     overlayItems = [],
     selectedOverlayId = null,
     onSelectOverlay,
     onUpdateOverlay,
+    onOverlayInteractionStart,
+    onOverlayInteractionEnd,
     canvasScale = 1,
     pageStyle,
     palette,
     hiddenSegments = [],
     formLineStyles,
+    activeEditingLineKey = null,
+    onBeginEditLine,
+    onEndEditLine,
 }: PageOneProps) {
     const committee = data.committee ?? [];
     const committeeWithIndex = committee.map((member, index) => ({ member, index }));
@@ -242,13 +301,20 @@ export default function PageOne({
     const isHidden = (id: string) => hiddenSegments.includes(id);
 
     return (
-        <EditableTextContext.Provider value={{ lineStyles: formLineStyles }}>
+        <EditableTextContext.Provider
+            value={{
+                lineStyles: formLineStyles,
+                activeEditingLineKey,
+                onBeginEditLine,
+                onEndEditLine,
+            }}
+        >
         <div id="brochure-page-1" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
             {/* Column 1: Committees (White) */}
                         <div className="column !p-4 flex flex-col" style={{ backgroundColor: paletteSurface, borderRight: `1px solid ${paletteSurfaceBorder}` }}>
                                 <div className="flex-1 p-5 rounded-[32px] border space-y-6 shadow-sm" style={{ backgroundColor: paletteSurface, borderColor: `${paletteSurfaceBorder}` }}>
             {chiefPatrons.length > 0 && !isHidden('p1-chief-patrons') && (
-                <MovableSegment id="p1-chief-patrons" position={segmentPositions?.['p1-chief-patrons']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={0}>
+                <MovableSegment id="p1-chief-patrons" position={segmentPositions?.['p1-chief-patrons']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={0}>
                 <div>
                                         <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.chiefPatrons" value={headings.chiefPatrons} onEdit={onEdit} />
@@ -267,7 +333,7 @@ export default function PageOne({
             )}
             
             {patrons.length > 0 && !isHidden('p1-patrons') && (
-                <MovableSegment id="p1-patrons" position={segmentPositions?.['p1-patrons']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={1}>
+                <MovableSegment id="p1-patrons" position={segmentPositions?.['p1-patrons']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={1}>
                 <div>
                                         <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.patrons" value={headings.patrons} onEdit={onEdit} />
@@ -286,7 +352,7 @@ export default function PageOne({
             )}
 
             {(convener || coConvener) && !isHidden('p1-conveners') && (
-                <MovableSegment id="p1-conveners" position={segmentPositions?.['p1-conveners']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={2}>
+                <MovableSegment id="p1-conveners" position={segmentPositions?.['p1-conveners']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={2}>
                 <div className="flex gap-4">
                     {convener && (
                         <div className="flex-1">
@@ -319,7 +385,7 @@ export default function PageOne({
             )}
 
             {!isHidden('p1-advisory') && (
-            <MovableSegment id="p1-advisory" position={segmentPositions?.['p1-advisory']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={3}>
+            <MovableSegment id="p1-advisory" position={segmentPositions?.['p1-advisory']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={3}>
             <div>
                                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.advisoryCommittee" value={headings.advisoryCommittee} onEdit={onEdit} />
@@ -338,7 +404,7 @@ export default function PageOne({
             )}
 
             {!isHidden('p1-organizing') && (
-            <MovableSegment id="p1-organizing" position={segmentPositions?.['p1-organizing']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={4}>
+            <MovableSegment id="p1-organizing" position={segmentPositions?.['p1-organizing']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={4}>
             <div>
                                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.organizingCommittee" value={headings.organizingCommittee} onEdit={onEdit} />
@@ -365,7 +431,7 @@ export default function PageOne({
                 </h2>
         
         {!isHidden('p1-registration-fee') && (
-        <MovableSegment id="p1-registration-fee" position={segmentPositions?.['p1-registration-fee']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={5} className="w-full">
+        <MovableSegment id="p1-registration-fee" position={segmentPositions?.['p1-registration-fee']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={5} className="w-full">
         <div className="w-full space-y-2 mb-4">
             <div className="flex justify-between text-[12px] font-bold pb-1" style={{ borderBottom: `1px solid ${paletteSurfaceBorder}` }}>
                 <span style={{ color: paletteAccent }}><EditableText path="headings.registrationFee" value={headings.registrationFee} onEdit={onEdit} className="inline" /></span>
@@ -384,7 +450,7 @@ export default function PageOne({
         )}
 
         {!isHidden('p1-registration-notes') && (
-        <MovableSegment id="p1-registration-notes" position={segmentPositions?.['p1-registration-notes']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={6} className="w-full">
+        <MovableSegment id="p1-registration-notes" position={segmentPositions?.['p1-registration-notes']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={6} className="w-full">
         <div className="w-full text-left p-2 rounded-lg mb-4" style={{ backgroundColor: `${paletteSurface}AA`, border: `1px solid ${paletteSurfaceBorder}` }}>
                         <p className="text-[11px] font-black mb-1 uppercase tracking-widest" style={{ color: paletteAccent }}>
                             <EditableText path="headings.registrationNote" value={headings.registrationNote} onEdit={onEdit} className="inline" />
@@ -409,7 +475,7 @@ export default function PageOne({
         )}
 
                                 {!isHidden('p1-qr') && (
-                <MovableSegment id="p1-qr" position={segmentPositions?.['p1-qr']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={7} className="w-full flex flex-col items-center">
+                <MovableSegment id="p1-qr" position={segmentPositions?.['p1-qr']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={7} className="w-full flex flex-col items-center">
                             <div className="bg-white p-2 rounded-lg mb-2 shadow-inner flex items-center justify-center">
                     <QRCodeSVG value={data.googleForm || ""} size={96} marginSize={1} />
                 </div>
@@ -420,7 +486,7 @@ export default function PageOne({
                                 )}
 
                 {!isHidden('p1-account') && (
-                <MovableSegment id="p1-account" position={segmentPositions?.['p1-account']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={8} className="mt-auto w-full">
+                <MovableSegment id="p1-account" position={segmentPositions?.['p1-account']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={8} className="mt-auto w-full">
         <div className="mt-auto w-full">
                         <div className="bg-white text-[12px] font-black py-0.5 px-4 rounded-full text-center mb-2 uppercase tracking-widest shadow-md" style={{ color: palettePrimary }}>
                             <EditableText path="headings.accountDetail" value={headings.accountDetail} onEdit={onEdit} className="inline" />
@@ -444,7 +510,7 @@ export default function PageOne({
             {/* Column 3: Event Details (White) */}
             <div className="column column-white flex flex-col items-center !p-4" style={{ backgroundColor: paletteSurface }}>
         {!isHidden('p1-logos') && (
-        <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={9} className="w-full">
+        <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={9} className="w-full">
         <div className="flex justify-center flex-wrap gap-2 w-full mb-4">
             {selectedLogos.slice(0, selectedLogos.length > 1 ? -1 : undefined).map(id => {
                 const src = resolveLogoSrc(id);
@@ -457,7 +523,7 @@ export default function PageOne({
         )}
 
         {!isHidden('p1-title') && (
-        <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={10} className="w-full flex flex-col items-center" style={{ backgroundColor: paletteSurface }}>
+        <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={10} className="w-full flex flex-col items-center" style={{ backgroundColor: paletteSurface }}>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: palettePrimary }}>
                     <EditableText path="headings.sponsoredBy" value={headings.sponsoredBy} onEdit={onEdit} className="inline" />
                 </p>
@@ -469,7 +535,7 @@ export default function PageOne({
         )}
 
         {!isHidden('p1-image') && (
-        <MovableSegment id="p1-image" position={segmentPositions?.['p1-image']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={11} className="w-full flex-1">
+        <MovableSegment id="p1-image" position={segmentPositions?.['p1-image']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={11} className="w-full flex-1">
         <div className="flex-1 w-full rounded-xl overflow-hidden border shadow-inner mb-4 relative min-h-[160px]" style={{ backgroundColor: paletteSurface, borderColor: paletteSurfaceBorder }}>
             {data.eventImage ? (
                 <Image src={data.eventImage} alt="Event AI" className="w-full h-full object-cover" fill unoptimized />
@@ -485,7 +551,7 @@ export default function PageOne({
         )}
 
         {!isHidden('p1-footer') && (
-        <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={12} className="w-full">
+        <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={12} className="w-full">
             <div className="text-center mt-auto pt-3 flex flex-col items-center w-full" style={{ borderTop: `1px solid ${paletteSurfaceBorder}` }}>
                         <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: paletteMuted }}>
                             <EditableText path="headings.organizedBy" value={headings.organizedBy} onEdit={onEdit} className="inline" />
@@ -514,6 +580,8 @@ export default function PageOne({
                     selectedId={selectedOverlayId}
                     onSelect={onSelectOverlay}
                     onUpdate={onUpdateOverlay}
+                    onInteractionStart={onOverlayInteractionStart}
+                    onInteractionEnd={onOverlayInteractionEnd}
                     canvasScale={canvasScale}
                 />
             )}

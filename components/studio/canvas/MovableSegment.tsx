@@ -30,6 +30,8 @@ type MovableSegmentProps = {
   id: string;
   position?: SegmentPosition;
   onMove?: (id: string, position: SegmentPosition) => void;
+  onInteractionStart?: (id: string, mode: "move" | "resize") => void;
+  onInteractionEnd?: (id: string, mode: "move" | "resize") => void;
   children: React.ReactNode;
   className?: string;
   index?: number;
@@ -52,6 +54,8 @@ export default function MovableSegment({
   id,
   position,
   onMove,
+  onInteractionStart,
+  onInteractionEnd,
   children,
   className,
   index = 0,
@@ -127,6 +131,7 @@ export default function MovableSegment({
     pendingMoveRef.current = null;
     e.currentTarget.setPointerCapture(e.pointerId);
     setInteractionMode(mode);
+    onInteractionStart?.(id, mode);
 
     interactionRef.current = {
       mode,
@@ -204,19 +209,25 @@ export default function MovableSegment({
   const onHandlePointerUp = (e: React.PointerEvent<HTMLElement>) => {
     pendingMoveRef.current = null;
 
-    if (!interactionRef.current) {
+    const currentInteraction = interactionRef.current;
+    if (!currentInteraction) {
       return;
     }
 
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
+    onInteractionEnd?.(id, currentInteraction.mode);
     interactionRef.current = null;
     setInteractionMode(null);
   };
 
   const onLostPointerCapture = () => {
+    const currentInteraction = interactionRef.current;
     pendingMoveRef.current = null;
+    if (currentInteraction) {
+      onInteractionEnd?.(id, currentInteraction.mode);
+    }
     interactionRef.current = null;
     setInteractionMode(null);
   };
@@ -268,8 +279,9 @@ export default function MovableSegment({
           startY: e.clientY,
         };
 
-        if (!target.closest("[contenteditable='true']")) {
-          beginInteraction(e, "move");
+        if (target.closest("[contenteditable='true']")) {
+          pendingMoveRef.current = null;
+          return;
         }
       }}
       onPointerMove={(e) => {

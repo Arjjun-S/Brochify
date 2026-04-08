@@ -206,11 +206,13 @@ export default function Dashboard() {
   const [hiddenSegments, setHiddenSegments] = useState<string[]>([]);
   const [formLineStyles, setFormLineStyles] = useState<Record<string, FormLineStyle>>({});
   const [selectedFormLineKey, setSelectedFormLineKey] = useState<string | null>(null);
+  const [editingFormLineKey, setEditingFormLineKey] = useState<string | null>(null);
   const previewViewportRef = useRef<HTMLDivElement | null>(null);
   const pageOneRef = useRef<HTMLDivElement | null>(null);
   const pageTwoRef = useRef<HTMLDivElement | null>(null);
   const historyIndexRef = useRef(-1);
   const latestRef = useRef<EditorSnapshot | null>(null);
+  const historyInteractionRef = useRef<{ active: boolean; changed: boolean }>({ active: false, changed: false });
 
   const isLoading = loadingTask !== "idle";
 
@@ -290,6 +292,27 @@ export default function Dashboard() {
     [],
   );
 
+  const beginCanvasInteraction = useCallback(() => {
+    if (!historyInteractionRef.current.active) {
+      historyInteractionRef.current.active = true;
+      historyInteractionRef.current.changed = false;
+    }
+  }, []);
+
+  const endCanvasInteraction = useCallback(() => {
+    if (!historyInteractionRef.current.active) return;
+
+    const shouldPushHistory = historyInteractionRef.current.changed;
+    historyInteractionRef.current.active = false;
+    historyInteractionRef.current.changed = false;
+
+    if (!shouldPushHistory) return;
+
+    window.requestAnimationFrame(() => {
+      pushWith({});
+    });
+  }, [pushWith]);
+
   const applySnapshot = useCallback((snapshot: EditorSnapshot) => {
     latestRef.current = snapshot;
     setBrochureData(snapshot.brochureData);
@@ -310,6 +333,7 @@ export default function Dashboard() {
     applySnapshot(snapshot);
     setSelectedElement(null);
     setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const redo = () => {
@@ -321,6 +345,7 @@ export default function Dashboard() {
     applySnapshot(snapshot);
     setSelectedElement(null);
     setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const selectedOverlayId = selectedElement?.kind === "overlay" ? selectedElement.id : null;
@@ -504,19 +529,71 @@ export default function Dashboard() {
 
   const handleSegmentMove = (id: string, position: SegmentPosition) => {
     setSegmentPositions((prev) => {
+      const previousPosition = prev[id];
+      if (JSON.stringify(previousPosition ?? {}) === JSON.stringify(position)) {
+        return prev;
+      }
+
       const next = {
         ...prev,
         [id]: position,
       };
-      pushWith({ segmentPositions: next });
+
+      if (historyInteractionRef.current.active) {
+        historyInteractionRef.current.changed = true;
+        latestRef.current = {
+          ...(latestRef.current ?? {
+            brochureData,
+            selectedLogos,
+            segmentPositions: prev,
+            overlayItems,
+            template,
+            hiddenSegments,
+            formLineStyles,
+          }),
+          segmentPositions: next,
+        };
+      } else {
+        pushWith({ segmentPositions: next });
+      }
+
       return next;
     });
   };
 
   const updateOverlayItem = (id: string, patch: Partial<OverlayItem>) => {
     setOverlayItems((prev) => {
-      const next = prev.map((item) => (item.id === id ? ({ ...item, ...patch } as OverlayItem) : item));
-      pushWith({ overlayItems: next });
+      const itemIndex = prev.findIndex((item) => item.id === id);
+      if (itemIndex < 0) return prev;
+
+      const currentItem = prev[itemIndex];
+      const hasChange = Object.entries(patch).some(([key, value]) => {
+        return (currentItem as Record<string, unknown>)[key] !== value;
+      });
+
+      if (!hasChange) return prev;
+
+      const next = [...prev];
+      next[itemIndex] = { ...currentItem, ...patch } as OverlayItem;
+
+      if (historyInteractionRef.current.active) {
+        historyInteractionRef.current.changed = true;
+        latestRef.current = {
+          ...(latestRef.current ?? {
+            brochureData,
+            selectedLogos,
+            segmentPositions,
+            overlayItems: prev,
+            template,
+            hiddenSegments,
+            formLineStyles,
+          }),
+          overlayItems: next,
+        };
+      } else {
+        pushWith({ overlayItems: next });
+      }
+
       return next;
     });
   };
@@ -530,6 +607,7 @@ export default function Dashboard() {
     });
     setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
     setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const addShapeOverlay = (shape: "rectangle" | "circle") => {
@@ -541,6 +619,7 @@ export default function Dashboard() {
     });
     setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
     setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const handleChangeTemplate = (next: BrochureTemplate) => {
@@ -562,6 +641,7 @@ export default function Dashboard() {
     });
     setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
     setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const addImageOverlayAtPoint = (
@@ -581,6 +661,7 @@ export default function Dashboard() {
     });
     setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
     setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const deleteSegment = (id: string) => {
@@ -630,12 +711,14 @@ export default function Dashboard() {
       });
       setSelectedElement(null);
       setSelectedFormLineKey(null);
+      setEditingFormLineKey(null);
       return;
     }
 
     deleteSegment(selectedElement.id);
     setSelectedElement(null);
     setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const handleUploadAssets = async (files: FileList | null, tagsInput: string) => {
@@ -765,6 +848,28 @@ export default function Dashboard() {
 
   const adjustZoom = (delta: number) => {
     setZoomFactor((prev) => Math.min(2, Math.max(0.5, Number((prev + delta).toFixed(2)))));
+  };
+
+  const handleCanvasInteractionStart = () => {
+    beginCanvasInteraction();
+    setEditingFormLineKey(null);
+  };
+
+  const handleCanvasInteractionEnd = () => {
+    endCanvasInteraction();
+  };
+
+  const handleBeginEditLine = (lineKey: string, segmentId: string | null) => {
+    setSelectedFormLineKey(lineKey);
+    setEditingFormLineKey(lineKey);
+
+    if (!segmentId) return;
+    const page = segmentId.startsWith("p2-") ? 2 : 1;
+    setSelectedElement({ kind: "segment", id: segmentId, page });
+  };
+
+  const handleEndEditLine = () => {
+    setEditingFormLineKey(null);
   };
 
   return (
@@ -1077,7 +1182,8 @@ export default function Dashboard() {
               className="w-full flex flex-col items-center gap-10 py-4 relative z-10"
               onFocusCapture={(event) => {
                 const target = event.target as HTMLElement;
-                const lineKey = target.getAttribute("data-form-line-key");
+                const lineNode = target.closest("[data-form-line-key]") as HTMLElement | null;
+                const lineKey = lineNode?.getAttribute("data-form-line-key");
                 if (!lineKey) return;
 
                 setSelectedFormLineKey(lineKey);
@@ -1091,11 +1197,35 @@ export default function Dashboard() {
               }}
               onPointerDownCapture={(event) => {
                 const target = event.target as HTMLElement;
-                if (target.closest(".overlay-item") || target.closest(".segment-shell")) {
+                const lineNode = target.closest("[data-form-line-key]") as HTMLElement | null;
+                const lineKey = lineNode?.getAttribute("data-form-line-key");
+                if (lineKey) {
+                  setSelectedFormLineKey(lineKey);
+
+                  const segmentHost = lineNode?.closest(".segment-shell") as HTMLElement | null;
+                  const segmentId = segmentHost?.dataset.segmentId;
+                  if (segmentId) {
+                    const page = segmentId.startsWith("p2-") ? 2 : 1;
+                    setSelectedElement({ kind: "segment", id: segmentId, page });
+                  }
                   return;
                 }
+
+                if (target.closest(".overlay-item")) {
+                  setSelectedFormLineKey(null);
+                  setEditingFormLineKey(null);
+                  return;
+                }
+
+                if (target.closest(".segment-shell")) {
+                  setSelectedFormLineKey(null);
+                  setEditingFormLineKey(null);
+                  return;
+                }
+
                 setSelectedElement(null);
                 setSelectedFormLineKey(null);
+                setEditingFormLineKey(null);
               }}
               onDragOver={(event) => {
                 event.preventDefault();
@@ -1139,24 +1269,33 @@ export default function Dashboard() {
                         onEdit={(path, value) => handleFieldChange(path, value)}
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
+                        onSegmentInteractionStart={handleCanvasInteractionStart}
+                        onSegmentInteractionEnd={handleCanvasInteractionEnd}
                         selectedSegmentId={selectedSegmentId}
                         onSelectSegment={(id) => {
                           setSelectedElement({ kind: "segment", id, page: 1 });
                           setSelectedFormLineKey(null);
+                          setEditingFormLineKey(null);
                         }}
                         overlayItems={overlayItems.filter((item) => item.page === 1)}
                         selectedOverlayId={selectedOverlayId}
                         onSelectOverlay={(id) => {
                           setSelectedElement(id ? { kind: "overlay", id, page: 1 } : null);
                           setSelectedFormLineKey(null);
+                          setEditingFormLineKey(null);
                         }}
                         onUpdateOverlay={updateOverlayItem}
+                        onOverlayInteractionStart={handleCanvasInteractionStart}
+                        onOverlayInteractionEnd={handleCanvasInteractionEnd}
                         logoCatalog={logoCatalog}
                         canvasScale={effectiveScale}
                         pageStyle={TEMPLATE_THEMES[template].pageStyle}
                         palette={TEMPLATE_THEMES[template].palette}
                         hiddenSegments={hiddenSegments}
                         formLineStyles={formLineStyles}
+                        activeEditingLineKey={editingFormLineKey}
+                        onBeginEditLine={handleBeginEditLine}
+                        onEndEditLine={handleEndEditLine}
                       />
                     </div>
                     <div style={{ height: PAGE_GAP }} />
@@ -1167,23 +1306,32 @@ export default function Dashboard() {
                         onEdit={(path, value) => handleFieldChange(path, value)}
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
+                        onSegmentInteractionStart={handleCanvasInteractionStart}
+                        onSegmentInteractionEnd={handleCanvasInteractionEnd}
                         selectedSegmentId={selectedSegmentId}
                         onSelectSegment={(id) => {
                           setSelectedElement({ kind: "segment", id, page: 2 });
                           setSelectedFormLineKey(null);
+                          setEditingFormLineKey(null);
                         }}
                         overlayItems={overlayItems.filter((item) => item.page === 2)}
                         selectedOverlayId={selectedOverlayId}
                         onSelectOverlay={(id) => {
                           setSelectedElement(id ? { kind: "overlay", id, page: 2 } : null);
                           setSelectedFormLineKey(null);
+                          setEditingFormLineKey(null);
                         }}
                         onUpdateOverlay={updateOverlayItem}
+                        onOverlayInteractionStart={handleCanvasInteractionStart}
+                        onOverlayInteractionEnd={handleCanvasInteractionEnd}
                         canvasScale={effectiveScale}
                         pageStyle={TEMPLATE_THEMES[template].pageStyle}
                         palette={TEMPLATE_THEMES[template].palette}
                         hiddenSegments={hiddenSegments}
                         formLineStyles={formLineStyles}
+                        activeEditingLineKey={editingFormLineKey}
+                        onBeginEditLine={handleBeginEditLine}
+                        onEndEditLine={handleEndEditLine}
                       />
                     </div>
                   </div>

@@ -28,17 +28,24 @@ interface PageTwoProps {
     onEdit?: (path: string, value: string) => void;
     segmentPositions?: Record<string, SegmentPosition>;
     onSegmentMove?: (id: string, position: SegmentPosition) => void;
+    onSegmentInteractionStart?: (id: string, mode: 'move' | 'resize') => void;
+    onSegmentInteractionEnd?: (id: string, mode: 'move' | 'resize') => void;
     selectedSegmentId?: string | null;
     onSelectSegment?: (id: string) => void;
     overlayItems?: OverlayItem[];
     selectedOverlayId?: string | null;
     onSelectOverlay?: (id: string | null) => void;
     onUpdateOverlay?: (id: string, patch: Partial<OverlayItem>) => void;
+    onOverlayInteractionStart?: (id: string, mode: 'move' | 'resize') => void;
+    onOverlayInteractionEnd?: (id: string, mode: 'move' | 'resize') => void;
     canvasScale?: number;
     pageStyle: CSSProperties;
     palette?: Palette;
     hiddenSegments?: string[];
     formLineStyles?: Record<string, FormLineStyle>;
+    activeEditingLineKey?: string | null;
+    onBeginEditLine?: (lineKey: string, segmentId: string | null) => void;
+    onEndEditLine?: () => void;
 }
 
 type EditableTextProps = {
@@ -51,6 +58,9 @@ type EditableTextProps = {
 
 type EditableTextContextValue = {
     lineStyles?: Record<string, FormLineStyle>;
+    activeEditingLineKey?: string | null;
+    onBeginEditLine?: (lineKey: string, segmentId: string | null) => void;
+    onEndEditLine?: () => void;
 };
 
 const EditableTextContext = React.createContext<EditableTextContextValue>({});
@@ -67,7 +77,20 @@ const toLineStyle = (lineStyle?: FormLineStyle): React.CSSProperties => {
 
 const EditableText = ({ path, value, onEdit, className, multiline = false }: EditableTextProps) => {
     const safeValue = value ?? '';
-    const { lineStyles } = React.useContext(EditableTextContext);
+    const {
+        lineStyles,
+        activeEditingLineKey,
+        onBeginEditLine,
+        onEndEditLine,
+    } = React.useContext(EditableTextContext);
+
+    const beginEdit = (lineKey: string, eventTarget: HTMLElement) => {
+        const segmentId = (eventTarget.closest('.segment-shell') as HTMLElement | null)?.dataset.segmentId ?? null;
+        onBeginEditLine?.(lineKey, segmentId);
+        window.requestAnimationFrame(() => {
+            eventTarget.focus();
+        });
+    };
 
     const resolveStyle = (lineKey: string): React.CSSProperties => ({
         ...toLineStyle(lineStyles?.[lineKey]),
@@ -116,25 +139,39 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
             <div className={className}>
                 {lines.map((line, lineIndex) => {
                     const lineKey = `${path}::${lineIndex}`;
+                    const isEditing = activeEditingLineKey === lineKey;
                     return (
                         <div
                             key={lineKey}
-                            className="editable-block"
+                            className={`editable-block ${isEditing ? 'editable-line-editing' : ''}`.trim()}
                             style={resolveStyle(lineKey)}
-                            contentEditable
+                            contentEditable={isEditing}
                             suppressContentEditableWarning
                             spellCheck={false}
+                            tabIndex={-1}
                             data-editable-path={path}
                             data-editable-line={lineIndex}
                             data-form-line-key={lineKey}
+                            onDoubleClick={(event) => {
+                                event.stopPropagation();
+                                beginEdit(lineKey, event.currentTarget as HTMLElement);
+                            }}
                             onBlur={(e) => {
+                                if (!isEditing) return;
                                 const nextLines = [...lines];
                                 nextLines[lineIndex] = e.currentTarget.textContent ?? '';
                                 onEdit(path, nextLines.join('\n'));
+                                onEndEditLine?.();
                             }}
                             onKeyDown={(e) => {
+                                if (!isEditing) return;
                                 if (e.key === 'Enter') {
                                     e.preventDefault();
+                                    (e.currentTarget as HTMLElement).blur();
+                                }
+                                if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    onEndEditLine?.();
                                     (e.currentTarget as HTMLElement).blur();
                                 }
                             }}
@@ -153,15 +190,30 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
         <span
             className={`editable-inline ${className ?? ''}`.trim()}
             style={resolveStyle(lineKey)}
-            contentEditable
+            contentEditable={activeEditingLineKey === lineKey}
             suppressContentEditableWarning
             spellCheck={false}
+            tabIndex={-1}
             data-editable-path={path}
             data-form-line-key={lineKey}
-            onBlur={(e) => onEdit(path, e.currentTarget.textContent ?? '')}
+            onDoubleClick={(event) => {
+                event.stopPropagation();
+                beginEdit(lineKey, event.currentTarget as HTMLElement);
+            }}
+            onBlur={(e) => {
+                if (activeEditingLineKey !== lineKey) return;
+                onEdit(path, e.currentTarget.textContent ?? '');
+                onEndEditLine?.();
+            }}
             onKeyDown={(e) => {
+                if (activeEditingLineKey !== lineKey) return;
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    (e.currentTarget as HTMLElement).blur();
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    onEndEditLine?.();
                     (e.currentTarget as HTMLElement).blur();
                 }
             }}
@@ -177,17 +229,24 @@ export default function PageTwo({
     onEdit,
     segmentPositions,
     onSegmentMove,
+    onSegmentInteractionStart,
+    onSegmentInteractionEnd,
     selectedSegmentId = null,
     onSelectSegment,
     overlayItems = [],
     selectedOverlayId = null,
     onSelectOverlay,
     onUpdateOverlay,
+    onOverlayInteractionStart,
+    onOverlayInteractionEnd,
     canvasScale = 1,
     pageStyle,
     palette,
     hiddenSegments = [],
     formLineStyles,
+    activeEditingLineKey = null,
+    onBeginEditLine,
+    onEndEditLine,
 }: PageTwoProps) {
         void selectedLogos;
     const headings = data.headings;
@@ -200,11 +259,18 @@ export default function PageTwo({
         const pageBackgroundStyle = { backgroundColor: paletteSurface, ...pageStyle };
         const isHidden = (id: string) => hiddenSegments.includes(id);
     return (
-        <EditableTextContext.Provider value={{ lineStyles: formLineStyles }}>
+        <EditableTextContext.Provider
+            value={{
+                lineStyles: formLineStyles,
+                activeEditingLineKey,
+                onBeginEditLine,
+                onEndEditLine,
+            }}
+        >
         <div id="brochure-page-2" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
             <div className="column flex-[0.8] !p-5 flex flex-col gap-5" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText, fontSize: '11.5px' }}>
                                 {!isHidden('p2-about-srm') && (
-                                <MovableSegment id="p2-about-srm" position={segmentPositions?.['p2-about-srm']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={0}>
+                                <MovableSegment id="p2-about-srm" position={segmentPositions?.['p2-about-srm']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={0}>
                 <div className="text-center">
                     <h3 className="text-base font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
                       <EditableText path="headings.aboutCollege" value={headings.aboutCollege} onEdit={onEdit} className="inline" />
@@ -214,7 +280,7 @@ export default function PageTwo({
                 </MovableSegment>
                                 )}
                                 {!isHidden('p2-about-school') && (
-                                <MovableSegment id="p2-about-school" position={segmentPositions?.['p2-about-school']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={1}>
+                                <MovableSegment id="p2-about-school" position={segmentPositions?.['p2-about-school']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={1}>
                 <div className="text-center">
                     <h3 className="text-[14px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
                       <EditableText path="headings.aboutSchool" value={headings.aboutSchool} onEdit={onEdit} className="inline" />
@@ -228,7 +294,7 @@ export default function PageTwo({
             {/* Column 2: About Dept & FDP (White) */}
             <div className="column border-x flex flex-col gap-5 !p-5" style={{ backgroundColor: paletteSurface, borderColor: paletteSurfaceBorder, color: '#334155', fontSize: '10px' }}>
                 {!isHidden('p2-about-dept') && (
-                <MovableSegment id="p2-about-dept" position={segmentPositions?.['p2-about-dept']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={2}>
+                <MovableSegment id="p2-about-dept" position={segmentPositions?.['p2-about-dept']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={2}>
                 <div className="text-center">
                                         <h3 className="text-[13px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ color: palettePrimary, backgroundColor: `${palettePrimary}14`, borderBottom: `1px solid ${palettePrimary}26` }}>
                                             <EditableText path="headings.aboutDepartment" value={headings.aboutDepartment} onEdit={onEdit} className="inline" />
@@ -238,7 +304,7 @@ export default function PageTwo({
                 </MovableSegment>
                 )}
                 {!isHidden('p2-about-fdp') && (
-                <MovableSegment id="p2-about-fdp" position={segmentPositions?.['p2-about-fdp']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={3}>
+                <MovableSegment id="p2-about-fdp" position={segmentPositions?.['p2-about-fdp']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={3}>
                 <div className="text-center">
                                         <h3 className="text-[13px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ color: palettePrimary, backgroundColor: `${palettePrimary}14`, borderBottom: `1px solid ${palettePrimary}26` }}>
                                             <EditableText path="headings.aboutFdp" value={headings.aboutFdp} onEdit={onEdit} className="inline" />
@@ -249,7 +315,7 @@ export default function PageTwo({
                 )}
 
                 {!isHidden('p2-highlights') && (
-                <MovableSegment id="p2-highlights" position={segmentPositions?.['p2-highlights']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={4}>
+                <MovableSegment id="p2-highlights" position={segmentPositions?.['p2-highlights']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={4}>
                 <div className="mt-2 p-3 border rounded-2xl" style={{ backgroundColor: paletteSurface, borderColor: paletteSurfaceBorder }}>
                                         <p className="text-[10px] font-black uppercase mb-1 underline" style={{ color: palettePrimary }}>
                                             <EditableText path="headings.programHighlights" value={headings.programHighlights} onEdit={onEdit} className="inline" />
@@ -267,7 +333,7 @@ export default function PageTwo({
             {/* Column 3: Topics & Speakers (Blue) */}
             <div className="column column-blue flex flex-col !p-4 gap-2" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText }}>
                 {!isHidden('p2-topics') && (
-                <MovableSegment id="p2-topics" position={segmentPositions?.['p2-topics']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={5}>
+                <MovableSegment id="p2-topics" position={segmentPositions?.['p2-topics']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={5}>
                                 <h3 className="text-[11px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: '1px solid rgba(255,255,255,0.3)', color: paletteAccent }}>
                                     <EditableText path="headings.topics" value={headings.topics} onEdit={onEdit} className="inline" />
                                 </h3>
@@ -297,7 +363,7 @@ export default function PageTwo({
                 )}
 
                 {!isHidden('p2-speakers') && (
-                <MovableSegment id="p2-speakers" position={segmentPositions?.['p2-speakers']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} index={6} className="flex-1">
+                <MovableSegment id="p2-speakers" position={segmentPositions?.['p2-speakers']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={6} className="flex-1">
                                 <h3 className="text-[12px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: '1px solid rgba(255,255,255,0.3)', color: paletteAccent }}>
                                     <EditableText path="headings.speakers" value={headings.speakers} onEdit={onEdit} className="inline" />
                                 </h3>
@@ -312,6 +378,16 @@ export default function PageTwo({
                 </div>
                 </MovableSegment>
                 )}
+
+                <div
+                    className="mt-auto w-full pt-2 text-[9px] font-medium tracking-wide"
+                    style={{ color: 'rgba(255,255,255,0.62)' }}
+                >
+                    <div className="flex items-center justify-between">
+                        <span>made with brochify</span>
+                        <span>SRM-KTR</span>
+                    </div>
+                </div>
             </div>
 
             {onSelectOverlay && onUpdateOverlay && (
@@ -320,6 +396,8 @@ export default function PageTwo({
                     selectedId={selectedOverlayId}
                     onSelect={onSelectOverlay}
                     onUpdate={onUpdateOverlay}
+                    onInteractionStart={onOverlayInteractionStart}
+                    onInteractionEnd={onOverlayInteractionEnd}
                     canvasScale={canvasScale}
                 />
             )}

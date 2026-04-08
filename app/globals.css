@@ -98,6 +98,12 @@
   transition: none;
 }
 
+.segment-shell-dragging,
+.segment-shell-dragging * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .segment-shell-resizing {
   z-index: 44;
   transition: none;
@@ -165,6 +171,12 @@
 
 .overlay-item-active {
   cursor: grabbing;
+}
+
+.overlay-item-active,
+.overlay-item-active * {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .overlay-item::after {
@@ -295,6 +307,8 @@
   font-weight: var(--segment-font-weight, inherit);
   color: var(--segment-font-color, inherit);
   text-align: var(--segment-text-align, inherit);
+  user-select: none;
+  -webkit-user-select: none;
   transition:
     background-color 140ms ease,
     box-shadow 140ms ease;
@@ -319,9 +333,17 @@
   font-weight: var(--segment-font-weight, inherit);
   color: var(--segment-font-color, inherit);
   text-align: var(--segment-text-align, inherit);
+  user-select: none;
+  -webkit-user-select: none;
   transition:
     background-color 140ms ease,
     box-shadow 140ms ease;
+}
+
+.editable-line-editing {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 .editable-block:focus {
