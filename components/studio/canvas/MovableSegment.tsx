@@ -14,6 +14,7 @@ type MovableSegmentProps = {
   children: React.ReactNode;
   className?: string;
   index?: number;
+  onDelete?: (id: string) => void;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -26,6 +27,7 @@ export default function MovableSegment({
   children,
   className,
   index = 0,
+  onDelete,
 }: MovableSegmentProps) {
   const [isDragging, setIsDragging] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -137,6 +139,17 @@ export default function MovableSegment({
           <span />
           <span />
           <span />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          className="segment-delete"
+          onClick={() => onDelete(id)}
+          title="Delete"
+          aria-label="Delete segment"
+        >
+          ×
         </button>
       )}
       <div

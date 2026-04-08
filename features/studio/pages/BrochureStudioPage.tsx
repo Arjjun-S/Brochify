@@ -128,6 +128,7 @@ type EditorSnapshot = {
   segmentPositions: Record<string, SegmentPosition>;
   overlayItems: OverlayItem[];
   template: BrochureTemplate;
+  hiddenSegments: string[];
 };
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -161,6 +162,7 @@ export default function Dashboard() {
   const [template, setTemplate] = useState<BrochureTemplate>("whiteBlue");
   const [history, setHistory] = useState<EditorSnapshot[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [hiddenSegments, setHiddenSegments] = useState<string[]>([]);
   const previewViewportRef = useRef<HTMLDivElement | null>(null);
   const pageOneRef = useRef<HTMLDivElement | null>(null);
   const pageTwoRef = useRef<HTMLDivElement | null>(null);
@@ -206,8 +208,8 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    latestRef.current = { brochureData, selectedLogos, segmentPositions, overlayItems, template };
-  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template]);
+    latestRef.current = { brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments };
+  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments]);
 
   useEffect(() => {
     const initial: EditorSnapshot = {
@@ -216,6 +218,7 @@ export default function Dashboard() {
       segmentPositions,
       overlayItems,
       template,
+      hiddenSegments,
     };
     setHistory([initial]);
     setHistoryIndex(0);
@@ -237,7 +240,7 @@ export default function Dashboard() {
   const pushWith = useCallback(
     (partial: Partial<EditorSnapshot>) => {
       const base =
-        latestRef.current ?? ({ brochureData, selectedLogos, segmentPositions, overlayItems, template } as EditorSnapshot);
+        latestRef.current ?? ({ brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments } as EditorSnapshot);
       pushHistorySnapshot({ ...base, ...partial });
     },
     [],
@@ -250,6 +253,7 @@ export default function Dashboard() {
     setSegmentPositions(snapshot.segmentPositions);
     setOverlayItems(snapshot.overlayItems);
     setTemplate(snapshot.template);
+    setHiddenSegments(snapshot.hiddenSegments ?? []);
   }, []);
 
   const undo = () => {
@@ -494,6 +498,15 @@ export default function Dashboard() {
       return next;
     });
     setSelectedOverlayId(nextItem.id);
+  };
+
+  const deleteSegment = (id: string) => {
+    setHiddenSegments((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      pushWith({ hiddenSegments: next });
+      return next;
+    });
   };
 
   const removeSelectedOverlay = () => {
@@ -986,6 +999,7 @@ export default function Dashboard() {
                         onEdit={(path, value) => handleFieldChange(path, value)}
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
+                        onDeleteSegment={deleteSegment}
                         overlayItems={overlayItems.filter((item) => item.page === 1)}
                         selectedOverlayId={selectedOverlayId}
                         onSelectOverlay={setSelectedOverlayId}
@@ -994,6 +1008,7 @@ export default function Dashboard() {
                         canvasScale={effectiveScale}
                         pageStyle={TEMPLATE_THEMES[template].pageStyle}
                         palette={TEMPLATE_THEMES[template].palette}
+                        hiddenSegments={hiddenSegments}
                       />
                     </div>
                     <div style={{ height: PAGE_GAP }} />
@@ -1004,6 +1019,7 @@ export default function Dashboard() {
                         onEdit={(path, value) => handleFieldChange(path, value)}
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
+                        onDeleteSegment={deleteSegment}
                         overlayItems={overlayItems.filter((item) => item.page === 2)}
                         selectedOverlayId={selectedOverlayId}
                         onSelectOverlay={setSelectedOverlayId}
@@ -1011,6 +1027,7 @@ export default function Dashboard() {
                         canvasScale={effectiveScale}
                         pageStyle={TEMPLATE_THEMES[template].pageStyle}
                         palette={TEMPLATE_THEMES[template].palette}
+                        hiddenSegments={hiddenSegments}
                       />
                     </div>
                   </div>

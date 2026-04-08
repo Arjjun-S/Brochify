@@ -25,6 +25,7 @@ interface PageOneProps {
     onEdit?: (path: string, value: string) => void;
     segmentPositions?: Record<string, SegmentPosition>;
     onSegmentMove?: (id: string, position: SegmentPosition) => void;
+    onDeleteSegment?: (id: string) => void;
     overlayItems?: OverlayItem[];
     selectedOverlayId?: string | null;
     onSelectOverlay?: (id: string | null) => void;
@@ -32,6 +33,7 @@ interface PageOneProps {
         canvasScale?: number;
     pageStyle: CSSProperties;
     palette?: Palette;
+    hiddenSegments?: string[];
 }
 
 type EditableTextProps = {
@@ -99,6 +101,7 @@ export default function PageOne({
     onEdit,
     segmentPositions,
     onSegmentMove,
+    onDeleteSegment,
     overlayItems = [],
     selectedOverlayId = null,
     onSelectOverlay,
@@ -106,6 +109,7 @@ export default function PageOne({
     canvasScale = 1,
     pageStyle,
     palette,
+    hiddenSegments = [],
 }: PageOneProps) {
     const committee = data.committee ?? [];
     const committeeWithIndex = committee.map((member, index) => ({ member, index }));
@@ -142,14 +146,15 @@ export default function PageOne({
     };
 
     const pageBackgroundStyle = { backgroundColor: paletteSurface, ...pageStyle };
+    const isHidden = (id: string) => hiddenSegments.includes(id);
 
     return (
         <div id="brochure-page-1" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
             {/* Column 1: Committees (White) */}
                         <div className="column !p-4 flex flex-col" style={{ backgroundColor: paletteSurface, borderRight: `1px solid ${paletteSurfaceBorder}` }}>
                                 <div className="flex-1 p-5 rounded-[32px] border space-y-6 shadow-sm" style={{ backgroundColor: paletteSurface, borderColor: `${paletteSurfaceBorder}` }}>
-            {chiefPatrons.length > 0 && (
-                <MovableSegment id="p1-chief-patrons" position={segmentPositions?.['p1-chief-patrons']} onMove={onSegmentMove} index={0}>
+            {chiefPatrons.length > 0 && !isHidden('p1-chief-patrons') && (
+                <MovableSegment id="p1-chief-patrons" position={segmentPositions?.['p1-chief-patrons']} onMove={onSegmentMove} index={0} onDelete={onDeleteSegment}>
                 <div>
                                         <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.chiefPatrons" value={headings.chiefPatrons} onEdit={onEdit} />
@@ -167,8 +172,8 @@ export default function PageOne({
                 </MovableSegment>
             )}
             
-            {patrons.length > 0 && (
-                <MovableSegment id="p1-patrons" position={segmentPositions?.['p1-patrons']} onMove={onSegmentMove} index={1}>
+            {patrons.length > 0 && !isHidden('p1-patrons') && (
+                <MovableSegment id="p1-patrons" position={segmentPositions?.['p1-patrons']} onMove={onSegmentMove} index={1} onDelete={onDeleteSegment}>
                 <div>
                                         <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.patrons" value={headings.patrons} onEdit={onEdit} />
@@ -186,8 +191,8 @@ export default function PageOne({
                 </MovableSegment>
             )}
 
-            {(convener || coConvener) && (
-                <MovableSegment id="p1-conveners" position={segmentPositions?.['p1-conveners']} onMove={onSegmentMove} index={2}>
+            {(convener || coConvener) && !isHidden('p1-conveners') && (
+                <MovableSegment id="p1-conveners" position={segmentPositions?.['p1-conveners']} onMove={onSegmentMove} index={2} onDelete={onDeleteSegment}>
                 <div className="flex gap-4">
                     {convener && (
                         <div className="flex-1">
@@ -219,7 +224,8 @@ export default function PageOne({
                 </MovableSegment>
             )}
 
-            <MovableSegment id="p1-advisory" position={segmentPositions?.['p1-advisory']} onMove={onSegmentMove} index={3}>
+            {!isHidden('p1-advisory') && (
+            <MovableSegment id="p1-advisory" position={segmentPositions?.['p1-advisory']} onMove={onSegmentMove} index={3} onDelete={onDeleteSegment}>
             <div>
                                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.advisoryCommittee" value={headings.advisoryCommittee} onEdit={onEdit} />
@@ -235,8 +241,10 @@ export default function PageOne({
                 </ul>
             </div>
             </MovableSegment>
+            )}
 
-            <MovableSegment id="p1-organizing" position={segmentPositions?.['p1-organizing']} onMove={onSegmentMove} index={4}>
+            {!isHidden('p1-organizing') && (
+            <MovableSegment id="p1-organizing" position={segmentPositions?.['p1-organizing']} onMove={onSegmentMove} index={4} onDelete={onDeleteSegment}>
             <div>
                                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.organizingCommittee" value={headings.organizingCommittee} onEdit={onEdit} />
@@ -252,6 +260,7 @@ export default function PageOne({
                 </ul>
             </div>
             </MovableSegment>
+            )}
         </div>
       </div>
 
@@ -261,7 +270,8 @@ export default function PageOne({
                     <EditableText path="headings.registrationDetail" value={headings.registrationDetail} onEdit={onEdit} />
                 </h2>
         
-        <MovableSegment id="p1-registration-fee" position={segmentPositions?.['p1-registration-fee']} onMove={onSegmentMove} index={5} className="w-full">
+        {!isHidden('p1-registration-fee') && (
+        <MovableSegment id="p1-registration-fee" position={segmentPositions?.['p1-registration-fee']} onMove={onSegmentMove} index={5} className="w-full" onDelete={onDeleteSegment}>
         <div className="w-full space-y-2 mb-4">
             <div className="flex justify-between text-[12px] font-bold pb-1" style={{ borderBottom: `1px solid ${paletteSurfaceBorder}` }}>
                 <span style={{ color: paletteAccent }}><EditableText path="headings.registrationFee" value={headings.registrationFee} onEdit={onEdit} className="inline" /></span>
@@ -277,8 +287,10 @@ export default function PageOne({
             <p className="text-[10px] italic" style={{ color: paletteMuted }}>(Rs. 250 refundable upon IEEE Membership enrollment)</p>
         </div>
         </MovableSegment>
+        )}
 
-        <MovableSegment id="p1-registration-notes" position={segmentPositions?.['p1-registration-notes']} onMove={onSegmentMove} index={6} className="w-full">
+        {!isHidden('p1-registration-notes') && (
+        <MovableSegment id="p1-registration-notes" position={segmentPositions?.['p1-registration-notes']} onMove={onSegmentMove} index={6} className="w-full" onDelete={onDeleteSegment}>
         <div className="w-full text-left p-2 rounded-lg mb-4" style={{ backgroundColor: `${paletteSurface}AA`, border: `1px solid ${paletteSurfaceBorder}` }}>
                         <p className="text-[11px] font-black mb-1 uppercase tracking-widest" style={{ color: paletteAccent }}>
                             <EditableText path="headings.registrationNote" value={headings.registrationNote} onEdit={onEdit} className="inline" />
@@ -300,8 +312,10 @@ export default function PageOne({
             </ul>
         </div>
                 </MovableSegment>
+        )}
 
-                                <MovableSegment id="p1-qr" position={segmentPositions?.['p1-qr']} onMove={onSegmentMove} index={7} className="w-full flex flex-col items-center">
+                                {!isHidden('p1-qr') && (
+                <MovableSegment id="p1-qr" position={segmentPositions?.['p1-qr']} onMove={onSegmentMove} index={7} className="w-full flex flex-col items-center" onDelete={onDeleteSegment}>
                             <div className="bg-white p-2 rounded-lg mb-2 shadow-inner flex items-center justify-center">
                     <QRCodeSVG value={data.googleForm || ""} size={96} marginSize={1} />
                 </div>
@@ -309,8 +323,10 @@ export default function PageOne({
                     <EditableText path="googleForm" value={data.googleForm} onEdit={onEdit} className="inline" />
                 </p>
                 </MovableSegment>
+                                )}
 
-                <MovableSegment id="p1-account" position={segmentPositions?.['p1-account']} onMove={onSegmentMove} index={8} className="mt-auto w-full">
+                {!isHidden('p1-account') && (
+                <MovableSegment id="p1-account" position={segmentPositions?.['p1-account']} onMove={onSegmentMove} index={8} className="mt-auto w-full" onDelete={onDeleteSegment}>
         <div className="mt-auto w-full">
                         <div className="bg-white text-[12px] font-black py-0.5 px-4 rounded-full text-center mb-2 uppercase tracking-widest shadow-md" style={{ color: palettePrimary }}>
                             <EditableText path="headings.accountDetail" value={headings.accountDetail} onEdit={onEdit} className="inline" />
@@ -328,11 +344,13 @@ export default function PageOne({
             </div>
         </div>
                 </MovableSegment>
+                )}
       </div>
 
             {/* Column 3: Event Details (White) */}
             <div className="column column-white flex flex-col items-center !p-4" style={{ backgroundColor: paletteSurface }}>
-        <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} index={9} className="w-full">
+        {!isHidden('p1-logos') && (
+        <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} index={9} className="w-full" onDelete={onDeleteSegment}>
         <div className="flex justify-center flex-wrap gap-2 w-full mb-4">
             {selectedLogos.slice(0, selectedLogos.length > 1 ? -1 : undefined).map(id => {
                 const src = resolveLogoSrc(id);
@@ -342,8 +360,10 @@ export default function PageOne({
             })}
         </div>
         </MovableSegment>
+        )}
 
-        <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} index={10} className="w-full flex flex-col items-center" style={{ backgroundColor: paletteSurface }}>
+        {!isHidden('p1-title') && (
+        <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} index={10} className="w-full flex flex-col items-center" style={{ backgroundColor: paletteSurface }} onDelete={onDeleteSegment}>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: palettePrimary }}>
                     <EditableText path="headings.sponsoredBy" value={headings.sponsoredBy} onEdit={onEdit} className="inline" />
                 </p>
@@ -352,8 +372,10 @@ export default function PageOne({
         </h1>
         <p className="text-[12px] font-bold mb-4" style={{ color: palettePrimary }}><EditableText path="dates" value={data.dates} onEdit={onEdit} /></p>
         </MovableSegment>
+        )}
 
-        <MovableSegment id="p1-image" position={segmentPositions?.['p1-image']} onMove={onSegmentMove} index={11} className="w-full flex-1">
+        {!isHidden('p1-image') && (
+        <MovableSegment id="p1-image" position={segmentPositions?.['p1-image']} onMove={onSegmentMove} index={11} className="w-full flex-1" onDelete={onDeleteSegment}>
         <div className="flex-1 w-full rounded-xl overflow-hidden border shadow-inner mb-4 relative min-h-[160px]" style={{ backgroundColor: paletteSurface, borderColor: paletteSurfaceBorder }}>
             {data.eventImage ? (
                 <Image src={data.eventImage} alt="Event AI" className="w-full h-full object-cover" fill unoptimized />
@@ -366,8 +388,10 @@ export default function PageOne({
             )}
         </div>
         </MovableSegment>
+        )}
 
-        <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} index={12} className="w-full">
+        {!isHidden('p1-footer') && (
+        <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} index={12} className="w-full" onDelete={onDeleteSegment}>
             <div className="text-center mt-auto pt-3 flex flex-col items-center w-full" style={{ borderTop: `1px solid ${paletteSurfaceBorder}` }}>
                         <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: paletteMuted }}>
                             <EditableText path="headings.organizedBy" value={headings.organizedBy} onEdit={onEdit} className="inline" />
@@ -387,6 +411,7 @@ export default function PageOne({
             <p className="text-[10px] font-bold mt-0.5" style={{ color: paletteMuted }}>SRM Institute of Science and Technology</p>
         </div>
                 </MovableSegment>
+        )}
       </div>
 
             {onSelectOverlay && onUpdateOverlay && (
