@@ -256,6 +256,16 @@ export default function PageTwo({
     const paletteSurfaceBorder = palette?.surfaceBorder ?? '#e2e8f0';
     const paletteStrongSurface = palette?.strongSurface ?? palettePrimary;
     const paletteAccent = palette?.accent ?? '#facc15';
+    const strongSurfaceToneIsDark = palettePrimaryText.toLowerCase() === '#ffffff';
+    const columnHighlight = strongSurfaceToneIsDark ? palette?.secondary ?? '#93c5fd' : paletteAccent;
+    const columnBorder = strongSurfaceToneIsDark ? 'rgba(255,255,255,0.3)' : 'rgba(15,23,42,0.2)';
+    const columnCardBackground = strongSurfaceToneIsDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.58)';
+    const columnHeadBackground = strongSurfaceToneIsDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.76)';
+    const columnHeadText = strongSurfaceToneIsDark ? '#ffffff' : '#111827';
+    const columnBodyText = strongSurfaceToneIsDark ? 'rgba(255,255,255,0.9)' : '#1f2937';
+    const speakerRoleColor = strongSurfaceToneIsDark ? 'rgba(255,255,255,0.74)' : '#334155';
+    const speakerOrgColor = strongSurfaceToneIsDark ? 'rgba(255,255,255,0.58)' : '#475569';
+    const footerTextColor = strongSurfaceToneIsDark ? 'rgba(255,255,255,0.62)' : 'rgba(15,23,42,0.68)';
         const pageBackgroundStyle = { backgroundColor: paletteSurface, ...pageStyle };
         const isHidden = (id: string) => hiddenSegments.includes(id);
     return (
@@ -330,28 +340,28 @@ export default function PageTwo({
                 )}
             </div>
 
-            {/* Column 3: Topics & Speakers (Blue) */}
+            {/* Column 3: Topics & Speakers */}
             <div className="column column-blue flex flex-col !p-4 gap-2" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText }}>
                 {!isHidden('p2-topics') && (
                 <MovableSegment id="p2-topics" position={segmentPositions?.['p2-topics']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={5}>
-                                <h3 className="text-[11px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: '1px solid rgba(255,255,255,0.3)', color: paletteAccent }}>
+                                <h3 className="text-[11px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: '1px solid rgba(15,23,42,0.24)', color: '#111827', backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: '999px', padding: '4px 10px', boxShadow: '0 8px 24px -20px rgba(15,23,42,0.65)' }}>
                                     <EditableText path="headings.topics" value={headings.topics} onEdit={onEdit} className="inline" />
                                 </h3>
 
-                <div className="overflow-hidden rounded-md border mb-4" style={{ borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                <div className="overflow-hidden rounded-md border mb-4" style={{ borderColor: columnBorder, backgroundColor: columnCardBackground }}>
                     <table className="w-full text-[8.5px] border-collapse">
-                        <thead className="uppercase font-black" style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: '#ffffff' }}>
+                        <thead className="uppercase font-black" style={{ backgroundColor: columnHeadBackground, color: columnHeadText }}>
                             <tr>
-                                <th className="p-1 text-center w-10" style={{ borderRight: '1px solid rgba(255,255,255,0.3)' }}>Date</th>
+                                <th className="p-1 text-center w-10" style={{ borderRight: `1px solid ${columnBorder}` }}>Date</th>
                                 <th className="p-1 text-left">Forenoon / Afternoon Session</th>
                             </tr>
                         </thead>
-                        <tbody style={{ color: 'rgba(255,255,255,0.9)' }}>
+                        <tbody style={{ color: columnBodyText }}>
                             {data.topics?.slice(0, 5).map((t, i: number) => (
-                                <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.3)' }}>
-                                    <td className="p-1.5 text-center font-bold" style={{ borderRight: '1px solid rgba(255,255,255,0.3)' }}><EditableText path={`topics.${i}.date`} value={t.date} onEdit={onEdit} /></td>
+                                <tr key={i} style={{ borderTop: `1px solid ${columnBorder}` }}>
+                                    <td className="p-1.5 text-center font-bold" style={{ borderRight: `1px solid ${columnBorder}` }}><EditableText path={`topics.${i}.date`} value={t.date} onEdit={onEdit} /></td>
                                     <td className="p-1.5">
-                                            <div className="font-bold break-words whitespace-normal" style={{ color: paletteAccent }}><EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></div>
+                                            <div className="font-bold break-words whitespace-normal" style={{ color: columnHighlight }}><EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></div>
                                         <div className="italic break-words whitespace-normal" style={{ opacity: 0.7 }}><EditableText path={`topics.${i}.afternoon`} value={t.afternoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></div>
                                     </td>
                                 </tr>
@@ -364,15 +374,15 @@ export default function PageTwo({
 
                 {!isHidden('p2-speakers') && (
                 <MovableSegment id="p2-speakers" position={segmentPositions?.['p2-speakers']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={6} className="flex-1">
-                                <h3 className="text-[12px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: '1px solid rgba(255,255,255,0.3)', color: paletteAccent }}>
+                                <h3 className="text-[12px] font-black text-center mb-3 pb-1 uppercase tracking-widest" style={{ borderBottom: `1px solid ${columnBorder}`, color: columnHighlight }}>
                                     <EditableText path="headings.speakers" value={headings.speakers} onEdit={onEdit} className="inline" />
                                 </h3>
                 <div className="grid grid-cols-2 gap-2 flex-1">
                     {data.speakers?.slice(0, 8).map((s, i: number) => (
-                            <div key={i} className="p-1.5 rounded border flex flex-col justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}>
-                                <p className="font-black text-[9.5px] leading-none mb-0.5" style={{ color: paletteAccent }}><EditableText path={`speakers.${i}.name`} value={s.name} onEdit={onEdit} /></p>
-                            <p className="text-[8.5px] italic leading-tight break-words whitespace-normal" style={{ color: 'rgba(255,255,255,0.7)' }}><EditableText path={`speakers.${i}.role`} value={s.role} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></p>
-                            <p className="text-[8px] leading-tight break-words whitespace-normal" style={{ color: 'rgba(255,255,255,0.5)' }}><EditableText path={`speakers.${i}.org`} value={s.org} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></p>
+                            <div key={i} className="p-1.5 rounded border flex flex-col justify-center" style={{ backgroundColor: columnCardBackground, borderColor: columnBorder }}>
+                                <p className="font-black text-[9.5px] leading-none mb-0.5" style={{ color: columnHighlight }}><EditableText path={`speakers.${i}.name`} value={s.name} onEdit={onEdit} /></p>
+                            <p className="text-[8.5px] italic leading-tight break-words whitespace-normal" style={{ color: speakerRoleColor }}><EditableText path={`speakers.${i}.role`} value={s.role} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></p>
+                            <p className="text-[8px] leading-tight break-words whitespace-normal" style={{ color: speakerOrgColor }}><EditableText path={`speakers.${i}.org`} value={s.org} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></p>
                         </div>
                     ))}
                 </div>
@@ -381,10 +391,10 @@ export default function PageTwo({
 
                 <div
                     className="mt-auto w-full pt-2 text-[9px] font-medium tracking-wide"
-                    style={{ color: 'rgba(255,255,255,0.62)' }}
+                    style={{ color: footerTextColor }}
                 >
                     <div className="flex items-center justify-between">
-                        <span>made with brochify</span>
+                        <span>MADE WITH BROCHIFY</span>
                         <span>SRM-KTR</span>
                     </div>
                 </div>

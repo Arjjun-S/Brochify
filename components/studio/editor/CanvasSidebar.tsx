@@ -5,7 +5,7 @@ import { Search, UploadCloud } from "lucide-react";
 import { BrandAsset } from "@/lib/domains/brochure";
 import { cn } from "@/lib/ui/cn";
 
-export type BrochureTemplate = "whiteBlue" | "beigeDust" | "softBlue";
+export type BrochureTemplate = "whiteBlue" | "beigeDust" | "softBlue" | "tealGloss" | "yellowDust";
 
 type LogoOption = {
   id: string;
@@ -63,6 +63,16 @@ export default function CanvasSidebar({
       id: "softBlue" as BrochureTemplate,
       label: "White + Mist",
       stops: ["#ffffff", "#eef5ff", "#ffffff"],
+    },
+    {
+      id: "tealGloss" as BrochureTemplate,
+      label: "Teal Gloss",
+      stops: ["#ffffff", "#0f8f84", "#ffffff"],
+    },
+    {
+      id: "yellowDust" as BrochureTemplate,
+      label: "Yellow Dust",
+      stops: ["#ffffff", "#f8eecf", "#ffffff"],
     },
   ];
 

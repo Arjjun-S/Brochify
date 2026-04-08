@@ -123,6 +123,40 @@ const TEMPLATE_THEMES: Record<BrochureTemplate, { pageStyle: CSSProperties; pale
       mutedText: "#1f2937",
     },
   },
+  tealGloss: {
+    pageStyle: {
+      backgroundImage:
+        "radial-gradient(circle at 20% 16%, rgba(15, 143, 132, 0.18) 0, transparent 34%), radial-gradient(circle at 84% 14%, rgba(13, 148, 136, 0.16) 0, transparent 40%), linear-gradient(180deg, #ffffff 0%, #effcf9 100%)",
+      backgroundColor: "#ffffff",
+    },
+    palette: {
+      primary: "#0f766e",
+      secondary: "#7dd3c7",
+      primaryText: "#ffffff",
+      surface: "#ffffff",
+      strongSurface: "#0f8f84",
+      surfaceBorder: "#d6ece9",
+      accent: "#115e59",
+      mutedText: "#4a6763",
+    },
+  },
+  yellowDust: {
+    pageStyle: {
+      backgroundImage:
+        "radial-gradient(circle at 24% 18%, rgba(217, 180, 95, 0.16) 0, transparent 36%), radial-gradient(circle at 82% 14%, rgba(184, 140, 42, 0.14) 0, transparent 38%), linear-gradient(180deg, #ffffff 0%, #fff9e8 100%)",
+      backgroundColor: "#ffffff",
+    },
+    palette: {
+      primary: "#b58a35",
+      secondary: "#ead08f",
+      primaryText: "#1f2937",
+      surface: "#ffffff",
+      strongSurface: "#f8eecf",
+      surfaceBorder: "#ecdfbb",
+      accent: "#6f531f",
+      mutedText: "#5f5645",
+    },
+  },
 };
 
 type EditorSnapshot = {
@@ -324,7 +358,7 @@ export default function Dashboard() {
     setFormLineStyles(snapshot.formLineStyles ?? {});
   }, []);
 
-  const undo = () => {
+  const undo = useCallback(() => {
     if (historyIndexRef.current <= 0) return;
     const nextIndex = historyIndexRef.current - 1;
     const snapshot = history[nextIndex];
@@ -334,9 +368,9 @@ export default function Dashboard() {
     setSelectedElement(null);
     setSelectedFormLineKey(null);
     setEditingFormLineKey(null);
-  };
+  }, [applySnapshot, history]);
 
-  const redo = () => {
+  const redo = useCallback(() => {
     if (historyIndexRef.current >= history.length - 1) return;
     const nextIndex = historyIndexRef.current + 1;
     const snapshot = history[nextIndex];
@@ -346,7 +380,39 @@ export default function Dashboard() {
     setSelectedElement(null);
     setSelectedFormLineKey(null);
     setEditingFormLineKey(null);
-  };
+  }, [applySnapshot, history]);
+
+  useEffect(() => {
+    const handleHistoryHotkeys = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget =
+        !!target &&
+        (target.closest("[contenteditable='true']") !== null ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT");
+
+      if (isTypingTarget) return;
+
+      const isMetaCommand = event.metaKey || event.ctrlKey;
+      if (!isMetaCommand || event.altKey) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", handleHistoryHotkeys);
+    return () => window.removeEventListener("keydown", handleHistoryHotkeys);
+  }, [undo, redo]);
 
   const selectedOverlayId = selectedElement?.kind === "overlay" ? selectedElement.id : null;
   const selectedSegmentId = selectedElement?.kind === "segment" ? selectedElement.id : null;
