@@ -389,7 +389,7 @@ export function createTextOverlay(page: 1 | 2): TextOverlayItem {
     fontWeight: 700,
     color: "#0f172a",
     align: "left",
-    backgroundColor: "rgba(255,255,255,0.85)",
+    backgroundColor: "transparent",
   };
 }
 

@@ -132,6 +132,7 @@ type EditorSnapshot = {
   overlayItems: OverlayItem[];
   template: BrochureTemplate;
   hiddenSegments: string[];
+  formLineStyles: Record<string, FormLineStyle>;
 };
 
 type SelectedCanvasElement =
@@ -146,6 +147,30 @@ type CanvasTextStylePatch = {
   align?: TextOverlayItem["align"];
   fontWeight?: number;
 };
+
+type FormLineStyle = {
+  fontSize?: number;
+  color?: string;
+  align?: TextOverlayItem["align"];
+};
+
+type SelectedTextTarget =
+  | {
+      kind: "overlay";
+      id: string;
+      fontFamily: string;
+      fontSize: number;
+      color: string;
+      align: TextOverlayItem["align"];
+      fontWeight: number;
+    }
+  | {
+      kind: "form-line";
+      key: string;
+      fontSize: number;
+      color: string;
+      align: TextOverlayItem["align"];
+    };
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -179,6 +204,8 @@ export default function Dashboard() {
   const [history, setHistory] = useState<EditorSnapshot[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [hiddenSegments, setHiddenSegments] = useState<string[]>([]);
+  const [formLineStyles, setFormLineStyles] = useState<Record<string, FormLineStyle>>({});
+  const [selectedFormLineKey, setSelectedFormLineKey] = useState<string | null>(null);
   const previewViewportRef = useRef<HTMLDivElement | null>(null);
   const pageOneRef = useRef<HTMLDivElement | null>(null);
   const pageTwoRef = useRef<HTMLDivElement | null>(null);
@@ -224,8 +251,8 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    latestRef.current = { brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments };
-  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments]);
+    latestRef.current = { brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles };
+  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles]);
 
   useEffect(() => {
     const initial: EditorSnapshot = {
@@ -235,6 +262,7 @@ export default function Dashboard() {
       overlayItems,
       template,
       hiddenSegments,
+      formLineStyles,
     };
     setHistory([initial]);
     setHistoryIndex(0);
@@ -256,7 +284,7 @@ export default function Dashboard() {
   const pushWith = useCallback(
     (partial: Partial<EditorSnapshot>) => {
       const base =
-        latestRef.current ?? ({ brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments } as EditorSnapshot);
+        latestRef.current ?? ({ brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles } as EditorSnapshot);
       pushHistorySnapshot({ ...base, ...partial });
     },
     [],
@@ -270,6 +298,7 @@ export default function Dashboard() {
     setOverlayItems(snapshot.overlayItems);
     setTemplate(snapshot.template);
     setHiddenSegments(snapshot.hiddenSegments ?? []);
+    setFormLineStyles(snapshot.formLineStyles ?? {});
   }, []);
 
   const undo = () => {
@@ -280,6 +309,7 @@ export default function Dashboard() {
     setHistoryIndex(nextIndex);
     applySnapshot(snapshot);
     setSelectedElement(null);
+    setSelectedFormLineKey(null);
   };
 
   const redo = () => {
@@ -290,6 +320,7 @@ export default function Dashboard() {
     setHistoryIndex(nextIndex);
     applySnapshot(snapshot);
     setSelectedElement(null);
+    setSelectedFormLineKey(null);
   };
 
   const selectedOverlayId = selectedElement?.kind === "overlay" ? selectedElement.id : null;
@@ -300,7 +331,7 @@ export default function Dashboard() {
     [overlayItems, selectedOverlayId],
   );
 
-  const selectedTextTarget = useMemo(() => {
+  const selectedTextTarget = useMemo<SelectedTextTarget | null>(() => {
     if (selectedOverlay?.type === "text") {
       return {
         kind: "overlay" as const,
@@ -313,21 +344,19 @@ export default function Dashboard() {
       };
     }
 
-    if (selectedSegmentId && !NON_TEXT_SEGMENT_IDS.has(selectedSegmentId)) {
-      const segment = segmentPositions[selectedSegmentId];
+    if (selectedSegmentId && selectedFormLineKey && !NON_TEXT_SEGMENT_IDS.has(selectedSegmentId)) {
+      const lineStyle = formLineStyles[selectedFormLineKey] ?? {};
       return {
-        kind: "segment" as const,
-        id: selectedSegmentId,
-        fontFamily: segment?.fontFamily ?? FONT_OPTIONS[0].value,
-        fontSize: segment?.fontSize ?? 16,
-        color: segment?.color ?? "#0f172a",
-        align: segment?.align ?? "left",
-        fontWeight: segment?.fontWeight ?? 600,
+        kind: "form-line" as const,
+        key: selectedFormLineKey,
+        fontSize: lineStyle.fontSize ?? 16,
+        color: lineStyle.color ?? "#0f172a",
+        align: lineStyle.align ?? "left",
       };
     }
 
     return null;
-  }, [selectedOverlay, selectedSegmentId, segmentPositions]);
+  }, [selectedOverlay, selectedSegmentId, selectedFormLineKey, formLineStyles]);
 
   const logoOptions = useMemo(() => builtinLogos, []);
 
@@ -372,9 +401,7 @@ export default function Dashboard() {
       const exportCleanupCss = `
         .brochure-overlay-layer { pointer-events: none !important; }
         .overlay-item::after,
-        .overlay-item-toolbar,
         .overlay-resize-handle,
-        .segment-handle,
         .segment-resize-handle { display: none !important; box-shadow: none !important; border: none !important; }
         .segment-surface { outline: none !important; box-shadow: none !important; }
         .overlay-textbox { outline: none !important; }
@@ -486,21 +513,6 @@ export default function Dashboard() {
     });
   };
 
-  const updateSegmentPosition = useCallback((id: string, patch: Partial<SegmentPosition>) => {
-    setSegmentPositions((prev) => {
-      const base = prev[id] ?? { x: 0, y: 0 };
-      const next = {
-        ...prev,
-        [id]: {
-          ...base,
-          ...patch,
-        },
-      };
-      pushWith({ segmentPositions: next });
-      return next;
-    });
-  }, [pushWith]);
-
   const updateOverlayItem = (id: string, patch: Partial<OverlayItem>) => {
     setOverlayItems((prev) => {
       const next = prev.map((item) => (item.id === id ? ({ ...item, ...patch } as OverlayItem) : item));
@@ -517,6 +529,7 @@ export default function Dashboard() {
       return next;
     });
     setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
+    setSelectedFormLineKey(null);
   };
 
   const addShapeOverlay = (shape: "rectangle" | "circle") => {
@@ -527,6 +540,7 @@ export default function Dashboard() {
       return next;
     });
     setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
+    setSelectedFormLineKey(null);
   };
 
   const handleChangeTemplate = (next: BrochureTemplate) => {
@@ -547,6 +561,7 @@ export default function Dashboard() {
       return next;
     });
     setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
+    setSelectedFormLineKey(null);
   };
 
   const addImageOverlayAtPoint = (
@@ -565,6 +580,7 @@ export default function Dashboard() {
       return next;
     });
     setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
+    setSelectedFormLineKey(null);
   };
 
   const deleteSegment = (id: string) => {
@@ -584,7 +600,23 @@ export default function Dashboard() {
       return;
     }
 
-    updateSegmentPosition(selectedTextTarget.id, patch);
+    const nextPatch: FormLineStyle = {
+      ...(typeof patch.fontSize === "number" ? { fontSize: patch.fontSize } : {}),
+      ...(typeof patch.color === "string" ? { color: patch.color } : {}),
+      ...(patch.align ? { align: patch.align } : {}),
+    };
+
+    setFormLineStyles((prev) => {
+      const next = {
+        ...prev,
+        [selectedTextTarget.key]: {
+          ...(prev[selectedTextTarget.key] ?? {}),
+          ...nextPatch,
+        },
+      };
+      pushWith({ formLineStyles: next });
+      return next;
+    });
   };
 
   const removeSelectedElement = () => {
@@ -597,11 +629,13 @@ export default function Dashboard() {
         return next;
       });
       setSelectedElement(null);
+      setSelectedFormLineKey(null);
       return;
     }
 
     deleteSegment(selectedElement.id);
     setSelectedElement(null);
+    setSelectedFormLineKey(null);
   };
 
   const handleUploadAssets = async (files: FileList | null, tagsInput: string) => {
@@ -924,17 +958,19 @@ export default function Dashboard() {
 
                 {selectedTextTarget && (
                   <>
-                    <select
-                      value={selectedTextTarget.fontFamily}
-                      onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
-                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
-                    >
-                      {FONT_OPTIONS.map((font) => (
-                        <option key={font.value} value={font.value}>
-                          {font.label}
-                        </option>
-                      ))}
-                    </select>
+                    {selectedTextTarget.kind === "overlay" && (
+                      <select
+                        value={selectedTextTarget.fontFamily}
+                        onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
+                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
+                      >
+                        {FONT_OPTIONS.map((font) => (
+                          <option key={font.value} value={font.value}>
+                            {font.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <input
                       type="number"
                       min={12}
@@ -949,23 +985,25 @@ export default function Dashboard() {
                       onChange={(event) => updateSelectedTextStyle({ color: event.target.value })}
                       className="h-10 w-12 rounded-full border border-slate-200 bg-white px-1"
                     />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateSelectedTextStyle({
-                          fontWeight: selectedTextTarget.fontWeight >= 700 ? 500 : 700,
-                        })
-                      }
-                      className={cn(
-                        "rounded-full border border-slate-200 bg-white p-2 transition-colors",
-                        selectedTextTarget.fontWeight >= 700
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
-                      )}
-                      title="Toggle bold"
-                    >
-                      <Bold className="h-4 w-4" />
-                    </button>
+                    {selectedTextTarget.kind === "overlay" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSelectedTextStyle({
+                            fontWeight: selectedTextTarget.fontWeight >= 700 ? 500 : 700,
+                          })
+                        }
+                        className={cn(
+                          "rounded-full border border-slate-200 bg-white p-2 transition-colors",
+                          selectedTextTarget.fontWeight >= 700
+                            ? "bg-slate-900 text-white"
+                            : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                        )}
+                        title="Toggle bold"
+                      >
+                        <Bold className="h-4 w-4" />
+                      </button>
+                    )}
                     <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
                       {[
                         { value: "left", icon: AlignLeft },
@@ -1037,12 +1075,27 @@ export default function Dashboard() {
             <div
               ref={previewViewportRef}
               className="w-full flex flex-col items-center gap-10 py-4 relative z-10"
+              onFocusCapture={(event) => {
+                const target = event.target as HTMLElement;
+                const lineKey = target.getAttribute("data-form-line-key");
+                if (!lineKey) return;
+
+                setSelectedFormLineKey(lineKey);
+
+                const segmentHost = target.closest(".segment-shell") as HTMLElement | null;
+                const segmentId = segmentHost?.dataset.segmentId;
+                if (!segmentId) return;
+
+                const page = segmentId.startsWith("p2-") ? 2 : 1;
+                setSelectedElement({ kind: "segment", id: segmentId, page });
+              }}
               onPointerDownCapture={(event) => {
                 const target = event.target as HTMLElement;
                 if (target.closest(".overlay-item") || target.closest(".segment-shell")) {
                   return;
                 }
                 setSelectedElement(null);
+                setSelectedFormLineKey(null);
               }}
               onDragOver={(event) => {
                 event.preventDefault();
@@ -1087,18 +1140,23 @@ export default function Dashboard() {
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
                         selectedSegmentId={selectedSegmentId}
-                        onSelectSegment={(id) => setSelectedElement({ kind: "segment", id, page: 1 })}
+                        onSelectSegment={(id) => {
+                          setSelectedElement({ kind: "segment", id, page: 1 });
+                          setSelectedFormLineKey(null);
+                        }}
                         overlayItems={overlayItems.filter((item) => item.page === 1)}
                         selectedOverlayId={selectedOverlayId}
-                        onSelectOverlay={(id) =>
-                          setSelectedElement(id ? { kind: "overlay", id, page: 1 } : null)
-                        }
+                        onSelectOverlay={(id) => {
+                          setSelectedElement(id ? { kind: "overlay", id, page: 1 } : null);
+                          setSelectedFormLineKey(null);
+                        }}
                         onUpdateOverlay={updateOverlayItem}
                         logoCatalog={logoCatalog}
                         canvasScale={effectiveScale}
                         pageStyle={TEMPLATE_THEMES[template].pageStyle}
                         palette={TEMPLATE_THEMES[template].palette}
                         hiddenSegments={hiddenSegments}
+                        formLineStyles={formLineStyles}
                       />
                     </div>
                     <div style={{ height: PAGE_GAP }} />
@@ -1110,17 +1168,22 @@ export default function Dashboard() {
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
                         selectedSegmentId={selectedSegmentId}
-                        onSelectSegment={(id) => setSelectedElement({ kind: "segment", id, page: 2 })}
+                        onSelectSegment={(id) => {
+                          setSelectedElement({ kind: "segment", id, page: 2 });
+                          setSelectedFormLineKey(null);
+                        }}
                         overlayItems={overlayItems.filter((item) => item.page === 2)}
                         selectedOverlayId={selectedOverlayId}
-                        onSelectOverlay={(id) =>
-                          setSelectedElement(id ? { kind: "overlay", id, page: 2 } : null)
-                        }
+                        onSelectOverlay={(id) => {
+                          setSelectedElement(id ? { kind: "overlay", id, page: 2 } : null);
+                          setSelectedFormLineKey(null);
+                        }}
                         onUpdateOverlay={updateOverlayItem}
                         canvasScale={effectiveScale}
                         pageStyle={TEMPLATE_THEMES[template].pageStyle}
                         palette={TEMPLATE_THEMES[template].palette}
                         hiddenSegments={hiddenSegments}
+                        formLineStyles={formLineStyles}
                       />
                     </div>
                   </div>

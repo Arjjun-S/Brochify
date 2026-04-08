@@ -21,6 +21,11 @@ type InteractionState = {
   maxY: number;
 };
 
+type PendingMoveState = {
+  startX: number;
+  startY: number;
+};
+
 type MovableSegmentProps = {
   id: string;
   position?: SegmentPosition;
@@ -38,6 +43,7 @@ type MovableSegmentProps = {
 };
 
 const SOFT_LIMIT = 2000;
+const DRAG_START_THRESHOLD = 4;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -60,6 +66,7 @@ export default function MovableSegment({
   const [interactionMode, setInteractionMode] = useState<InteractionState["mode"] | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const interactionRef = useRef<InteractionState | null>(null);
+  const pendingMoveRef = useRef<PendingMoveState | null>(null);
 
   const currentPosition = useMemo(
     () => position ?? { x: 0, y: 0 },
@@ -117,6 +124,7 @@ export default function MovableSegment({
     const baseWidth = currentPosition.width ?? hostRect.width / bounds.scale;
     const baseHeight = currentPosition.height ?? hostRect.height / bounds.scale;
 
+    pendingMoveRef.current = null;
     e.currentTarget.setPointerCapture(e.pointerId);
     setInteractionMode(mode);
 
@@ -135,10 +143,6 @@ export default function MovableSegment({
       minY: bounds.minY,
       maxY: bounds.maxY,
     };
-  };
-
-  const onMoveHandlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    beginInteraction(e, "move");
   };
 
   const onResizeHandlePointerDown = (
@@ -198,6 +202,12 @@ export default function MovableSegment({
   };
 
   const onHandlePointerUp = (e: React.PointerEvent<HTMLElement>) => {
+    pendingMoveRef.current = null;
+
+    if (!interactionRef.current) {
+      return;
+    }
+
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
@@ -206,6 +216,7 @@ export default function MovableSegment({
   };
 
   const onLostPointerCapture = () => {
+    pendingMoveRef.current = null;
     interactionRef.current = null;
     setInteractionMode(null);
   };
@@ -233,6 +244,7 @@ export default function MovableSegment({
   return (
     <div
       ref={hostRef}
+      data-segment-id={id}
       className={`segment-shell ${isSegmentSelected ? "segment-shell-selected" : ""} ${isDragging ? "segment-shell-dragging" : ""} ${isResizing ? "segment-shell-resizing" : ""} ${className ?? ""}`}
       style={{
         transform: `translate3d(${currentPosition.x}px, ${currentPosition.y}px, 0)`,
@@ -247,38 +259,35 @@ export default function MovableSegment({
         if (!onMove) return;
 
         const target = e.target as HTMLElement;
-        if (target.closest(".segment-handle") || target.closest(".segment-resize-handle")) {
-          return;
-        }
-        if (target.closest("[contenteditable='true']")) {
+        if (target.closest(".segment-resize-handle")) {
           return;
         }
 
-        beginInteraction(e, "move");
+        pendingMoveRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+        };
+
+        if (!target.closest("[contenteditable='true']")) {
+          beginInteraction(e, "move");
+        }
       }}
-      onPointerMove={onHandlePointerMove}
+      onPointerMove={(e) => {
+        if (!interactionMode && pendingMoveRef.current && onMove) {
+          const dx = e.clientX - pendingMoveRef.current.startX;
+          const dy = e.clientY - pendingMoveRef.current.startY;
+          if (Math.hypot(dx, dy) >= DRAG_START_THRESHOLD) {
+            beginInteraction(e, "move");
+            return;
+          }
+        }
+
+        onHandlePointerMove(e);
+      }}
       onPointerUp={onHandlePointerUp}
       onPointerCancel={onHandlePointerUp}
       onLostPointerCapture={onLostPointerCapture}
     >
-      {onMove && (
-        <button
-          type="button"
-          className="segment-handle"
-          onPointerDown={onMoveHandlePointerDown}
-          onPointerMove={onHandlePointerMove}
-          onPointerUp={onHandlePointerUp}
-          onPointerCancel={onHandlePointerUp}
-          onLostPointerCapture={onLostPointerCapture}
-          title="Drag segment"
-          aria-label="Drag segment"
-        >
-          <span />
-          <span />
-          <span />
-        </button>
-      )}
-
       {onMove && isSegmentSelected && (
         <>
           <button

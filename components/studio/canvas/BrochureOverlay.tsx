@@ -265,12 +265,6 @@ export default function BrochureOverlay({
             onPointerCancel={endInteraction}
             onLostPointerCapture={endInteraction}
           >
-            <div className="overlay-item-toolbar">
-              <span className="overlay-item-dot" />
-              <span className="overlay-item-dot" />
-              <span className="overlay-item-dot" />
-            </div>
-
             {item.type === "shape" ? (
               <div
                 className={`overlay-shape overlay-shape-${item.shape}`}
@@ -304,7 +298,7 @@ export default function BrochureOverlay({
                   fontWeight: item.fontWeight,
                   color: item.color,
                   textAlign: item.align,
-                  background: item.backgroundColor,
+                  background: "transparent",
                 }}
                 onClick={(e) => {
                   e.stopPropagation();

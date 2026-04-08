@@ -18,6 +18,12 @@ type Palette = {
     strongSurface?: string;
 };
 
+type FormLineStyle = {
+    align?: 'left' | 'center' | 'right';
+    fontSize?: number;
+    color?: string;
+};
+
 interface PageOneProps {
     data: BrochureData;
   selectedLogos: string[];
@@ -35,6 +41,7 @@ interface PageOneProps {
     pageStyle: CSSProperties;
     palette?: Palette;
     hiddenSegments?: string[];
+    formLineStyles?: Record<string, FormLineStyle>;
 }
 
 type EditableTextProps = {
@@ -46,36 +53,120 @@ type EditableTextProps = {
     multiline?: boolean;
 };
 
+type EditableTextContextValue = {
+    lineStyles?: Record<string, FormLineStyle>;
+};
+
+const EditableTextContext = React.createContext<EditableTextContextValue>({});
+
+const toLineStyle = (lineStyle?: FormLineStyle): React.CSSProperties => {
+    if (!lineStyle) return {};
+
+    return {
+        ...(lineStyle.align ? { textAlign: lineStyle.align } : {}),
+        ...(lineStyle.fontSize ? { fontSize: `${lineStyle.fontSize}px` } : {}),
+        ...(lineStyle.color ? { color: lineStyle.color } : {}),
+    };
+};
+
 const EditableText = ({ path, value, onEdit, className, style, multiline = false }: EditableTextProps) => {
     const safeValue = value ?? '';
+    const { lineStyles } = React.useContext(EditableTextContext);
+
+    const resolveStyle = (lineKey: string): React.CSSProperties => ({
+        ...(style ?? {}),
+        ...toLineStyle(lineStyles?.[lineKey]),
+    });
 
     if (!onEdit) {
-        const StaticTag = multiline ? 'div' : 'span';
+        if (multiline) {
+            const lines = safeValue.split('\n');
+            return (
+                <div className={className}>
+                    {lines.map((line, lineIndex) => {
+                        const lineKey = `${path}::${lineIndex}`;
+                        return (
+                            <div
+                                key={lineKey}
+                                className="editable-block"
+                                style={resolveStyle(lineKey)}
+                                data-editable-path={path}
+                                data-editable-line={lineIndex}
+                                data-form-line-key={lineKey}
+                            >
+                                {line}
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        }
+
+        const lineKey = path;
+        const StaticTag = 'span';
         return (
-            <StaticTag className={className} style={style}>
+            <StaticTag
+                className={className}
+                style={resolveStyle(lineKey)}
+                data-editable-path={path}
+                data-form-line-key={lineKey}
+            >
                 {safeValue}
             </StaticTag>
         );
     }
 
-    const Tag = multiline ? 'div' : 'span';
+    if (multiline) {
+        const lines = safeValue.split('\n');
+        return (
+            <div className={className}>
+                {lines.map((line, lineIndex) => {
+                    const lineKey = `${path}::${lineIndex}`;
+                    return (
+                        <div
+                            key={lineKey}
+                            className="editable-block"
+                            style={resolveStyle(lineKey)}
+                            contentEditable
+                            suppressContentEditableWarning
+                            spellCheck={false}
+                            data-editable-path={path}
+                            data-editable-line={lineIndex}
+                            data-form-line-key={lineKey}
+                            onBlur={(e) => {
+                                const nextLines = [...lines];
+                                nextLines[lineIndex] = e.currentTarget.textContent ?? '';
+                                onEdit(path, nextLines.join('\n'));
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    (e.currentTarget as HTMLElement).blur();
+                                }
+                            }}
+                        >
+                            {line}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
+
+    const lineKey = path;
+    const Tag = 'span';
     return (
         <Tag
-            className={`${multiline ? 'editable-block' : 'editable-inline'} ${className ?? ''}`.trim()}
-            style={style}
+            className={`editable-inline ${className ?? ''}`.trim()}
+            style={resolveStyle(lineKey)}
             contentEditable
             suppressContentEditableWarning
             spellCheck={false}
-            onInput={(e) => {
-                if (multiline) {
-                    const node = e.currentTarget as HTMLElement;
-                    node.style.height = 'auto';
-                    node.style.height = `${node.scrollHeight}px`;
-                }
-            }}
+            data-editable-path={path}
+            data-form-line-key={lineKey}
             onBlur={(e) => onEdit(path, e.currentTarget.textContent ?? '')}
             onKeyDown={(e) => {
-                if (!multiline && e.key === 'Enter') {
+                if (e.key === 'Enter') {
                     e.preventDefault();
                     (e.currentTarget as HTMLElement).blur();
                 }
@@ -112,6 +203,7 @@ export default function PageOne({
     pageStyle,
     palette,
     hiddenSegments = [],
+    formLineStyles,
 }: PageOneProps) {
     const committee = data.committee ?? [];
     const committeeWithIndex = committee.map((member, index) => ({ member, index }));
@@ -150,6 +242,7 @@ export default function PageOne({
     const isHidden = (id: string) => hiddenSegments.includes(id);
 
     return (
+        <EditableTextContext.Provider value={{ lineStyles: formLineStyles }}>
         <div id="brochure-page-1" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
             {/* Column 1: Committees (White) */}
                         <div className="column !p-4 flex flex-col" style={{ backgroundColor: paletteSurface, borderRight: `1px solid ${paletteSurfaceBorder}` }}>
@@ -425,6 +518,7 @@ export default function PageOne({
                 />
             )}
     </div>
+        </EditableTextContext.Provider>
   );
 }
 

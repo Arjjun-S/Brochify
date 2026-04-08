@@ -108,59 +108,6 @@
   outline-color: rgba(14, 165, 233, 0.45);
 }
 
-.segment-handle {
-  position: absolute;
-  top: -12px;
-  right: -12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  animation: segment-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  border-radius: 9999px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--color-primary);
-  box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--color-primary) 45%, transparent);
-  cursor: grab;
-  opacity: 0;
-  outline: 1px solid transparent;
-  outline-offset: 8px;
-  filter: saturate(1.02);
-  transform: scale(0.92);
-  transition:
-    filter 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    outline-color 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 180ms ease,
-    transform 180ms ease;
-  touch-action: none;
-  z-index: 30;
-}
-
-.segment-shell:hover .segment-handle,
-.segment-shell:focus-within .segment-handle,
-.segment-shell-dragging .segment-handle,
-.segment-shell-selected .segment-handle {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.segment-handle:active {
-  cursor: grabbing;
-  box-shadow: 0 18px 28px -14px color-mix(in srgb, var(--color-primary) 55%, transparent);
-}
-
-.segment-handle span {
-  width: 2px;
-  height: 9px;
-  border-radius: 2px;
-  background: var(--color-primary);
-  margin: 0 1px;
-  opacity: 0.8;
-}
-
 .segment-resize-handle {
   position: absolute;
   width: 12px;
@@ -238,37 +185,6 @@
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-secondary) 8%, transparent);
 }
 
-.overlay-item-toolbar {
-  position: absolute;
-  top: -12px;
-  right: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 7px;
-  border-radius: 9999px;
-  background: rgba(15, 23, 42, 0.92);
-  box-shadow: 0 12px 28px -14px rgba(15, 23, 42, 0.7);
-  opacity: 0;
-  transform: translateY(2px);
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease;
-}
-
-.overlay-item:hover .overlay-item-toolbar,
-.overlay-item-selected .overlay-item-toolbar {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.overlay-item-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.9);
-}
-
 .overlay-guide-line {
   position: absolute;
   pointer-events: none;
@@ -328,10 +244,11 @@
 .overlay-textbox {
   width: 100%;
   height: 100%;
-  padding: 16px 18px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.25);
+  padding: 8px 10px;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
   outline: none;
   overflow-wrap: anywhere;
   cursor: text;
@@ -384,8 +301,8 @@
 }
 
 .editable-inline:focus {
-  background: rgba(255, 255, 255, 0.24);
-  box-shadow: 0 0 0 1px rgba(186, 230, 253, 0.9);
+  background: transparent;
+  box-shadow: none;
 }
 
 .editable-block {
@@ -408,22 +325,8 @@
 }
 
 .editable-block:focus {
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 0 0 1px rgba(186, 230, 253, 0.95),
-    0 0 0 4px rgba(14, 165, 233, 0.12);
-}
-
-@keyframes segment-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.995);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Scrollbar Utility */
