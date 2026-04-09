@@ -3,7 +3,7 @@
 import React, { CSSProperties } from 'react';
 import MovableSegment from './MovableSegment';
 import BrochureOverlay from './BrochureOverlay';
-import { BrochureData, OverlayItem, SegmentPosition } from '@/lib/domains/brochure';
+import { BrochureData, OverlayItem, SegmentPosition, TextEntity } from '@/lib/domains/brochure';
 
 type Palette = {
     primary: string;
@@ -26,6 +26,7 @@ interface PageTwoProps {
     data: BrochureData;
     selectedLogos: string[];
     onEdit?: (path: string, value: string) => void;
+    activeTypingPath?: string | null;
     segmentPositions?: Record<string, SegmentPosition>;
     onSegmentMove?: (id: string, position: SegmentPosition) => void;
     onSegmentInteractionStart?: (id: string, mode: 'move' | 'resize') => void;
@@ -59,6 +60,7 @@ type EditableTextProps = {
 type EditableTextContextValue = {
     lineStyles?: Record<string, FormLineStyle>;
     activeEditingLineKey?: string | null;
+    activeTypingPath?: string | null;
     onBeginEditLine?: (lineKey: string, segmentId: string | null) => void;
     onEndEditLine?: () => void;
     textEntityPositions?: Record<string, SegmentPosition>;
@@ -88,6 +90,7 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
     const {
         lineStyles,
         activeEditingLineKey,
+        activeTypingPath,
         onBeginEditLine,
         onEndEditLine,
         textEntityPositions,
@@ -100,17 +103,105 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
         textEntityCanvasScale = 1,
     } = React.useContext(EditableTextContext);
 
-    const beginEdit = (lineKey: string, eventTarget: HTMLElement) => {
+    type PointerPoint = { x: number; y: number };
+    type CaretLookupDocument = Document & {
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    };
+
+    const resolveEditableNode = (lineKey: string, fallbackTarget: HTMLElement): HTMLElement => {
+        const matches = Array.from(document.querySelectorAll<HTMLElement>('[data-form-line-key]'));
+        return matches.find((node) => node.getAttribute('data-form-line-key') === lineKey) ?? fallbackTarget;
+    };
+
+    const placeCaretAtEnd = (node: HTMLElement) => {
+        const selection = window.getSelection();
+        if (!selection) return;
+        const range = node.ownerDocument.createRange();
+        range.selectNodeContents(node);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    };
+
+    const placeCaretFromPoint = (node: HTMLElement, point?: PointerPoint): boolean => {
+        if (!point) return false;
+        const selection = window.getSelection();
+        if (!selection) return false;
+
+        const doc = node.ownerDocument as CaretLookupDocument;
+        let range: Range | null = null;
+
+        if (typeof doc.caretRangeFromPoint === 'function') {
+            range = doc.caretRangeFromPoint(point.x, point.y);
+        } else if (typeof doc.caretPositionFromPoint === 'function') {
+            const position = doc.caretPositionFromPoint(point.x, point.y);
+            if (position) {
+                range = doc.createRange();
+                range.setStart(position.offsetNode, position.offset);
+                range.collapse(true);
+            }
+        }
+
+        if (!range || !node.contains(range.startContainer)) {
+            return false;
+        }
+
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+    };
+
+    const focusEditableNode = (lineKey: string, fallbackTarget: HTMLElement, point?: PointerPoint) => {
+        const applyFocus = () => {
+            const node = resolveEditableNode(lineKey, fallbackTarget);
+            if (node.getAttribute('contenteditable') !== 'true') return;
+            node.focus({ preventScroll: true });
+            const placedFromClick = placeCaretFromPoint(node, point);
+            if (!placedFromClick) {
+                placeCaretAtEnd(node);
+            }
+        };
+
+        window.requestAnimationFrame(() => {
+            applyFocus();
+            window.setTimeout(applyFocus, 0);
+        });
+    };
+
+    const beginEdit = (lineKey: string, eventTarget: HTMLElement, point?: PointerPoint) => {
         const segmentId = (eventTarget.closest('.segment-shell') as HTMLElement | null)?.dataset.segmentId ?? null;
         onBeginEditLine?.(lineKey, segmentId);
-        window.requestAnimationFrame(() => {
-            eventTarget.focus();
-        });
+        focusEditableNode(lineKey, eventTarget, point);
     };
 
     const resolveStyle = (lineKey: string): React.CSSProperties => ({
         ...toLineStyle(lineStyles?.[lineKey]),
     });
+
+    const isPathTypingActive = (candidatePath: string | null | undefined, basePath: string) => {
+        if (!candidatePath) return false;
+        return candidatePath === basePath || candidatePath.startsWith(`${basePath}.`);
+    };
+
+    const toEntity = (lineKey: string, text: string, isEditing: boolean): TextEntity => {
+        const entityId = `${textEntityPrefix}${lineKey}`;
+        const position = textEntityPositions?.[entityId];
+        return {
+            id: entityId,
+            text,
+            position: {
+                x: position?.x ?? 0,
+                y: position?.y ?? 0,
+            },
+            style: {
+                fontSize: lineStyles?.[lineKey]?.fontSize ?? 16,
+                color: lineStyles?.[lineKey]?.color ?? '#0f172a',
+                align: lineStyles?.[lineKey]?.align ?? 'left',
+            },
+            isEditing,
+        };
+    };
 
     if (!onEdit) {
         if (multiline) {
@@ -156,10 +247,12 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
                 {lines.map((line, lineIndex) => {
                     const lineKey = `${path}::${lineIndex}`;
                     const isEditing = activeEditingLineKey === lineKey;
+                    const isTypingActive = isPathTypingActive(activeTypingPath, path);
+                    const textEntity = toEntity(lineKey, line, isEditing);
                     const lineNode = (
                         <div
                             key={lineKey}
-                            className={`editable-block ${isEditing ? 'editable-line-editing' : ''}`.trim()}
+                            className={`editable-block ${isEditing ? 'editable-line-editing' : ''} ${isTypingActive ? 'ai-typing-active' : ''}`.trim()}
                             style={resolveStyle(lineKey)}
                             contentEditable={isEditing}
                             suppressContentEditableWarning
@@ -168,9 +261,21 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
                             data-editable-path={path}
                             data-editable-line={lineIndex}
                             data-form-line-key={lineKey}
+                            onPointerDown={(event) => {
+                                if (event.detail >= 2) {
+                                    event.stopPropagation();
+                                    beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                                        x: event.clientX,
+                                        y: event.clientY,
+                                    });
+                                }
+                            }}
                             onDoubleClick={(event) => {
                                 event.stopPropagation();
-                                beginEdit(lineKey, event.currentTarget as HTMLElement);
+                                beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                                    x: event.clientX,
+                                    y: event.clientY,
+                                });
                             }}
                             onBlur={(e) => {
                                 if (!isEditing) return;
@@ -196,19 +301,18 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
                         </div>
                     );
 
-                    const textEntityId = `${textEntityPrefix}${lineKey}`;
                     if (!onMoveTextEntity || !onSelectTextEntity) {
                         return lineNode;
                     }
 
                     return (
                         <MovableSegment
-                            key={textEntityId}
-                            id={textEntityId}
-                            position={textEntityPositions?.[textEntityId]}
-                            onMove={onMoveTextEntity}
-                            onInteractionStart={onTextEntityInteractionStart}
-                            onInteractionEnd={onTextEntityInteractionEnd}
+                            key={textEntity.id}
+                            id={textEntity.id}
+                            position={textEntityPositions?.[textEntity.id]}
+                            onMove={isEditing ? undefined : onMoveTextEntity}
+                            onInteractionStart={isEditing ? undefined : onTextEntityInteractionStart}
+                            onInteractionEnd={isEditing ? undefined : onTextEntityInteractionEnd}
                             selectedId={selectedTextEntityId}
                             onSelect={onSelectTextEntity}
                             canvasScale={textEntityCanvasScale}
@@ -226,20 +330,35 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
     }
 
     const lineKey = path;
+    const isTypingActive = isPathTypingActive(activeTypingPath, path);
+    const isInlineEditing = activeEditingLineKey === lineKey;
+    const textEntity = toEntity(lineKey, safeValue, isInlineEditing);
 
     const inlineNode = (
         <span
-            className={`editable-inline ${className ?? ''}`.trim()}
+            className={`editable-inline ${className ?? ''} ${isTypingActive ? 'ai-typing-active' : ''}`.trim()}
             style={resolveStyle(lineKey)}
-            contentEditable={activeEditingLineKey === lineKey}
+            contentEditable={isInlineEditing}
             suppressContentEditableWarning
             spellCheck={false}
             tabIndex={-1}
             data-editable-path={path}
             data-form-line-key={lineKey}
+            onPointerDown={(event) => {
+                if (event.detail >= 2) {
+                    event.stopPropagation();
+                    beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                        x: event.clientX,
+                        y: event.clientY,
+                    });
+                }
+            }}
             onDoubleClick={(event) => {
                 event.stopPropagation();
-                beginEdit(lineKey, event.currentTarget as HTMLElement);
+                beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                    x: event.clientX,
+                    y: event.clientY,
+                });
             }}
             onBlur={(e) => {
                 if (activeEditingLineKey !== lineKey) return;
@@ -263,24 +382,25 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
         </span>
     );
 
-    const textEntityId = `${textEntityPrefix}${lineKey}`;
     if (!onMoveTextEntity || !onSelectTextEntity) {
         return inlineNode;
     }
 
     return (
         <MovableSegment
-            id={textEntityId}
-            position={textEntityPositions?.[textEntityId]}
-            onMove={onMoveTextEntity}
-            onInteractionStart={onTextEntityInteractionStart}
-            onInteractionEnd={onTextEntityInteractionEnd}
+            id={textEntity.id}
+            position={textEntityPositions?.[textEntity.id]}
+            onMove={isInlineEditing ? undefined : onMoveTextEntity}
+            onInteractionStart={isInlineEditing ? undefined : onTextEntityInteractionStart}
+            onInteractionEnd={isInlineEditing ? undefined : onTextEntityInteractionEnd}
             selectedId={selectedTextEntityId}
             onSelect={onSelectTextEntity}
             canvasScale={textEntityCanvasScale}
             className="inline-block align-baseline"
             minWidth={48}
             minHeight={24}
+            hostAs="span"
+            surfaceAs="span"
         >
             {inlineNode}
         </MovableSegment>
@@ -291,6 +411,7 @@ export default function PageTwo({
     data,
     selectedLogos,
     onEdit,
+    activeTypingPath = null,
     segmentPositions,
     onSegmentMove,
     onSegmentInteractionStart,
@@ -337,6 +458,7 @@ export default function PageTwo({
             value={{
                 lineStyles: formLineStyles,
                 activeEditingLineKey,
+                activeTypingPath,
                 onBeginEditLine,
                 onEndEditLine,
                 textEntityPositions: segmentPositions,
@@ -404,7 +526,7 @@ export default function PageTwo({
                                         </p>
                     <ul className="text-[10px] space-y-1" style={{ color: '#475569' }}>
                         {data.topics?.slice(0, 5).map((t, i: number) => (
-                            <li key={i} className="break-words whitespace-normal">• Day {i + 1}: <EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></li>
+                            <li key={i} className="break-words whitespace-normal">• <EditableText path="templateText.p2_dayLabel" value={data.templateText?.p2_dayLabel} onEdit={onEdit} className="inline" /> {i + 1}: <EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></li>
                         ))}
                     </ul>
                 </div>
@@ -424,14 +546,14 @@ export default function PageTwo({
                     <table className="w-full text-[8.5px] border-collapse">
                         <thead className="uppercase font-black" style={{ backgroundColor: columnHeadBackground, color: columnHeadText }}>
                             <tr>
-                                <th className="p-1 text-center w-10" style={{ borderRight: `1px solid ${columnBorder}` }}>Date</th>
-                                <th className="p-1 text-left">Forenoon / Afternoon Session</th>
+                                <th className="p-1 text-center w-10" style={{ borderRight: `1px solid ${columnBorder}` }}><EditableText path="templateText.p2_tableDateLabel" value={data.templateText?.p2_tableDateLabel} onEdit={onEdit} className="inline" /></th>
+                                <th className="p-1 text-left"><EditableText path="templateText.p2_tableSessionLabel" value={data.templateText?.p2_tableSessionLabel} onEdit={onEdit} className="inline" /></th>
                             </tr>
                         </thead>
                         <tbody style={{ color: columnBodyText }}>
                             {data.topics?.slice(0, 5).map((t, i: number) => (
                                 <tr key={i} style={{ borderTop: `1px solid ${columnBorder}` }}>
-                                    <td className="p-1.5 text-center font-bold" style={{ borderRight: `1px solid ${columnBorder}` }}><EditableText path={`topics.${i}.date`} value={t.date} onEdit={onEdit} /></td>
+                                    <td className="p-1.5 text-center font-bold whitespace-nowrap" style={{ borderRight: `1px solid ${columnBorder}`, whiteSpace: 'nowrap' }}><EditableText path={`topics.${i}.date`} value={t.date} onEdit={onEdit} className="inline whitespace-nowrap" /></td>
                                     <td className="p-1.5">
                                             <div className="font-bold break-words whitespace-normal" style={{ color: columnHighlight }}><EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></div>
                                         <div className="italic break-words whitespace-normal" style={{ opacity: 0.7 }}><EditableText path={`topics.${i}.afternoon`} value={t.afternoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></div>

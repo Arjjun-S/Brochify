@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import Image from 'next/image';
 import MovableSegment from './MovableSegment';
 import BrochureOverlay from './BrochureOverlay';
-import { BrochureData, OverlayItem, SegmentPosition } from '@/lib/domains/brochure';
+import { BrochureData, OverlayItem, SegmentPosition, TextEntity } from '@/lib/domains/brochure';
 
 type Palette = {
     primary: string;
@@ -29,6 +29,7 @@ interface PageOneProps {
   selectedLogos: string[];
         logoCatalog?: Record<string, string>;
     onEdit?: (path: string, value: string) => void;
+    activeTypingPath?: string | null;
     segmentPositions?: Record<string, SegmentPosition>;
     onSegmentMove?: (id: string, position: SegmentPosition) => void;
     onSegmentInteractionStart?: (id: string, mode: 'move' | 'resize') => void;
@@ -58,11 +59,14 @@ type EditableTextProps = {
     className?: string;
     style?: React.CSSProperties;
     multiline?: boolean;
+    groupAsSingleEntity?: boolean;
+    listMode?: 'plain' | 'bullets';
 };
 
 type EditableTextContextValue = {
     lineStyles?: Record<string, FormLineStyle>;
     activeEditingLineKey?: string | null;
+    activeTypingPath?: string | null;
     onBeginEditLine?: (lineKey: string, segmentId: string | null) => void;
     onEndEditLine?: () => void;
     textEntityPositions?: Record<string, SegmentPosition>;
@@ -87,11 +91,21 @@ const toLineStyle = (lineStyle?: FormLineStyle): React.CSSProperties => {
     };
 };
 
-const EditableText = ({ path, value, onEdit, className, style, multiline = false }: EditableTextProps) => {
+const EditableText = ({
+    path,
+    value,
+    onEdit,
+    className,
+    style,
+    multiline = false,
+    groupAsSingleEntity = false,
+    listMode = 'plain',
+}: EditableTextProps) => {
     const safeValue = value ?? '';
     const {
         lineStyles,
         activeEditingLineKey,
+        activeTypingPath,
         onBeginEditLine,
         onEndEditLine,
         textEntityPositions,
@@ -104,18 +118,200 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
         textEntityCanvasScale = 1,
     } = React.useContext(EditableTextContext);
 
-    const beginEdit = (lineKey: string, eventTarget: HTMLElement) => {
+    type PointerPoint = { x: number; y: number };
+    type CaretLookupDocument = Document & {
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    };
+
+    const resolveEditableNode = (lineKey: string, fallbackTarget: HTMLElement): HTMLElement => {
+        const matches = Array.from(document.querySelectorAll<HTMLElement>('[data-form-line-key]'));
+        return matches.find((node) => node.getAttribute('data-form-line-key') === lineKey) ?? fallbackTarget;
+    };
+
+    const placeCaretAtEnd = (node: HTMLElement) => {
+        const selection = window.getSelection();
+        if (!selection) return;
+        const range = node.ownerDocument.createRange();
+        range.selectNodeContents(node);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    };
+
+    const placeCaretFromPoint = (node: HTMLElement, point?: PointerPoint): boolean => {
+        if (!point) return false;
+        const selection = window.getSelection();
+        if (!selection) return false;
+
+        const doc = node.ownerDocument as CaretLookupDocument;
+        let range: Range | null = null;
+
+        if (typeof doc.caretRangeFromPoint === 'function') {
+            range = doc.caretRangeFromPoint(point.x, point.y);
+        } else if (typeof doc.caretPositionFromPoint === 'function') {
+            const position = doc.caretPositionFromPoint(point.x, point.y);
+            if (position) {
+                range = doc.createRange();
+                range.setStart(position.offsetNode, position.offset);
+                range.collapse(true);
+            }
+        }
+
+        if (!range || !node.contains(range.startContainer)) {
+            return false;
+        }
+
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+    };
+
+    const focusEditableNode = (lineKey: string, fallbackTarget: HTMLElement, point?: PointerPoint) => {
+        const applyFocus = () => {
+            const node = resolveEditableNode(lineKey, fallbackTarget);
+            if (node.getAttribute('contenteditable') !== 'true') return;
+            node.focus({ preventScroll: true });
+            const placedFromClick = placeCaretFromPoint(node, point);
+            if (!placedFromClick) {
+                placeCaretAtEnd(node);
+            }
+        };
+
+        window.requestAnimationFrame(() => {
+            applyFocus();
+            window.setTimeout(applyFocus, 0);
+        });
+    };
+
+    const beginEdit = (lineKey: string, eventTarget: HTMLElement, point?: PointerPoint) => {
         const segmentId = (eventTarget.closest('.segment-shell') as HTMLElement | null)?.dataset.segmentId ?? null;
         onBeginEditLine?.(lineKey, segmentId);
-        window.requestAnimationFrame(() => {
-            eventTarget.focus();
-        });
+        focusEditableNode(lineKey, eventTarget, point);
     };
 
     const resolveStyle = (lineKey: string): React.CSSProperties => ({
         ...(style ?? {}),
         ...toLineStyle(lineStyles?.[lineKey]),
     });
+
+    const isPathTypingActive = (candidatePath: string | null | undefined, basePath: string) => {
+        if (!candidatePath) return false;
+        return candidatePath === basePath || candidatePath.startsWith(`${basePath}.`);
+    };
+
+    const normalizeBulletLine = (line: string): string => line.replace(/^\s*(?:•|-|\*)\s?/, '');
+
+    const extractListLines = (root: HTMLElement): string[] => {
+        const listItems = Array.from(root.querySelectorAll('li'));
+        const rawLines =
+            listItems.length > 0
+                ? listItems.map((item) => (item.textContent ?? '').replace(/\u00a0/g, ' ').trim())
+                : (root.innerText ?? '')
+                      .split('\n')
+                      .map((line) => line.replace(/\u00a0/g, ' ').trim());
+
+        return rawLines.map(normalizeBulletLine).filter((line) => line.length > 0);
+    };
+
+    const createEmptyBulletItem = (): HTMLLIElement => {
+        const item = document.createElement('li');
+        item.className = 'whitespace-pre-wrap break-words';
+        item.textContent = '\u00a0';
+        return item;
+    };
+
+    const insertBulletAfterSelection = (root: HTMLElement) => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) {
+            root.appendChild(createEmptyBulletItem());
+            return;
+        }
+
+        const anchorElement =
+            selection.anchorNode instanceof Element
+                ? selection.anchorNode
+                : selection.anchorNode?.parentElement ?? null;
+
+        const currentItem = anchorElement?.closest('li');
+        const nextItem = createEmptyBulletItem();
+
+        if (currentItem && currentItem.parentElement === root) {
+            if (currentItem.nextSibling) {
+                root.insertBefore(nextItem, currentItem.nextSibling);
+            } else {
+                root.appendChild(nextItem);
+            }
+        } else {
+            root.appendChild(nextItem);
+        }
+
+        const range = document.createRange();
+        range.selectNodeContents(nextItem);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    };
+
+    const removeCurrentEmptyBullet = (root: HTMLElement): boolean => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return false;
+
+        const anchorElement =
+            selection.anchorNode instanceof Element
+                ? selection.anchorNode
+                : selection.anchorNode?.parentElement ?? null;
+
+        const currentItem = anchorElement?.closest('li') as HTMLLIElement | null;
+        if (!currentItem || currentItem.parentElement !== root) return false;
+
+        const normalizedText = (currentItem.textContent ?? '').replace(/\u00a0/g, '').trim();
+        if (normalizedText.length > 0) return false;
+
+        const previous = currentItem.previousElementSibling as HTMLElement | null;
+        const next = currentItem.nextElementSibling as HTMLElement | null;
+        currentItem.remove();
+
+        let focusTarget = previous ?? next;
+        if (!focusTarget) {
+            const replacement = createEmptyBulletItem();
+            root.appendChild(replacement);
+            focusTarget = replacement;
+        }
+
+        const range = document.createRange();
+        range.selectNodeContents(focusTarget);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+    };
+
+    const toEntity = (lineKey: string, text: string, isEditing: boolean): TextEntity => {
+        const entityId = `${textEntityPrefix}${lineKey}`;
+        const position = textEntityPositions?.[entityId];
+        const inlineFontSize = typeof style?.fontSize === 'number' ? style.fontSize : 16;
+        const inlineColor = typeof style?.color === 'string' ? style.color : '#0f172a';
+        const inlineAlign =
+            style?.textAlign === 'left' || style?.textAlign === 'center' || style?.textAlign === 'right'
+                ? style.textAlign
+                : 'left';
+
+        return {
+            id: entityId,
+            text,
+            position: {
+                x: position?.x ?? 0,
+                y: position?.y ?? 0,
+            },
+            style: {
+                fontSize: lineStyles?.[lineKey]?.fontSize ?? inlineFontSize,
+                color: lineStyles?.[lineKey]?.color ?? inlineColor,
+                align: lineStyles?.[lineKey]?.align ?? inlineAlign,
+            },
+            isEditing,
+        };
+    };
 
     if (!onEdit) {
         if (multiline) {
@@ -155,6 +351,135 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
         );
     }
 
+    if (multiline && groupAsSingleEntity) {
+        const lineKey = path;
+        const isEditing = activeEditingLineKey === lineKey;
+        const isTypingActive = isPathTypingActive(activeTypingPath, path);
+        const rawLines = safeValue.split('\n');
+        const lines = listMode === 'bullets' ? rawLines.map(normalizeBulletLine) : rawLines;
+        const textEntity = toEntity(lineKey, safeValue, isEditing);
+
+        const groupedNode = listMode === 'bullets' ? (
+            <ul
+                className={`editable-block ${isEditing ? 'editable-line-editing' : ''} ${isTypingActive ? 'ai-typing-active' : ''} list-disc pl-5 ${className ?? ''}`.trim()}
+                style={resolveStyle(lineKey)}
+                contentEditable={isEditing}
+                suppressContentEditableWarning
+                spellCheck={false}
+                tabIndex={-1}
+                data-editable-path={path}
+                data-form-line-key={lineKey}
+                onPointerDown={(event) => {
+                    if (event.detail >= 2) {
+                        event.stopPropagation();
+                        beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                            x: event.clientX,
+                            y: event.clientY,
+                        });
+                    }
+                }}
+                onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                        x: event.clientX,
+                        y: event.clientY,
+                    });
+                }}
+                onBlur={(event) => {
+                    if (!isEditing) return;
+                    const nextLines = extractListLines(event.currentTarget as HTMLElement);
+                    onEdit(path, nextLines.join('\n'));
+                    onEndEditLine?.();
+                }}
+                onKeyDown={(event) => {
+                    if (!isEditing) return;
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        insertBulletAfterSelection(event.currentTarget as HTMLElement);
+                        return;
+                    }
+                    if (event.key === 'Backspace' && removeCurrentEmptyBullet(event.currentTarget as HTMLElement)) {
+                        event.preventDefault();
+                        return;
+                    }
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        onEndEditLine?.();
+                        (event.currentTarget as HTMLElement).blur();
+                    }
+                }}
+            >
+                {(lines.length > 0 ? lines : ['']).map((line, lineIndex) => (
+                    <li key={`${lineKey}::${lineIndex}`} className="whitespace-pre-wrap break-words">
+                        {line || '\u00a0'}
+                    </li>
+                ))}
+            </ul>
+        ) : (
+            <div
+                className={`editable-block ${isEditing ? 'editable-line-editing' : ''} ${isTypingActive ? 'ai-typing-active' : ''} ${className ?? ''}`.trim()}
+                style={resolveStyle(lineKey)}
+                contentEditable={isEditing}
+                suppressContentEditableWarning
+                spellCheck={false}
+                tabIndex={-1}
+                data-editable-path={path}
+                data-form-line-key={lineKey}
+                onPointerDown={(event) => {
+                    if (event.detail >= 2) {
+                        event.stopPropagation();
+                        beginEdit(lineKey, event.currentTarget as HTMLElement);
+                    }
+                }}
+                onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    beginEdit(lineKey, event.currentTarget as HTMLElement);
+                }}
+                onBlur={(event) => {
+                    if (!isEditing) return;
+                    onEdit(path, event.currentTarget.innerText ?? '');
+                    onEndEditLine?.();
+                }}
+                onKeyDown={(event) => {
+                    if (!isEditing) return;
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        onEndEditLine?.();
+                        (event.currentTarget as HTMLElement).blur();
+                    }
+                }}
+            >
+                {lines.map((line, lineIndex) => (
+                    <div key={`${lineKey}::${lineIndex}`} className="whitespace-pre-wrap break-words">
+                        {line}
+                    </div>
+                ))}
+            </div>
+        );
+
+        if (!onMoveTextEntity || !onSelectTextEntity) {
+            return groupedNode;
+        }
+
+        return (
+            <MovableSegment
+                id={textEntity.id}
+                position={textEntityPositions?.[textEntity.id]}
+                onMove={isEditing ? undefined : onMoveTextEntity}
+                onInteractionStart={isEditing ? undefined : onTextEntityInteractionStart}
+                onInteractionEnd={isEditing ? undefined : onTextEntityInteractionEnd}
+                selectedId={selectedTextEntityId}
+                onSelect={onSelectTextEntity}
+                canvasScale={textEntityCanvasScale}
+                className="w-full"
+                minWidth={140}
+                minHeight={72}
+            >
+                {groupedNode}
+            </MovableSegment>
+        );
+    }
+
     if (multiline) {
         const lines = safeValue.split('\n');
         return (
@@ -162,10 +487,12 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
                 {lines.map((line, lineIndex) => {
                     const lineKey = `${path}::${lineIndex}`;
                     const isEditing = activeEditingLineKey === lineKey;
+                    const isTypingActive = isPathTypingActive(activeTypingPath, path);
+                    const textEntity = toEntity(lineKey, line, isEditing);
                     const lineNode = (
                         <div
                             key={lineKey}
-                            className={`editable-block ${isEditing ? 'editable-line-editing' : ''}`.trim()}
+                            className={`editable-block ${isEditing ? 'editable-line-editing' : ''} ${isTypingActive ? 'ai-typing-active' : ''}`.trim()}
                             style={resolveStyle(lineKey)}
                             contentEditable={isEditing}
                             suppressContentEditableWarning
@@ -174,9 +501,21 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
                             data-editable-path={path}
                             data-editable-line={lineIndex}
                             data-form-line-key={lineKey}
+                            onPointerDown={(event) => {
+                                if (event.detail >= 2) {
+                                    event.stopPropagation();
+                                    beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                                        x: event.clientX,
+                                        y: event.clientY,
+                                    });
+                                }
+                            }}
                             onDoubleClick={(event) => {
                                 event.stopPropagation();
-                                beginEdit(lineKey, event.currentTarget as HTMLElement);
+                                beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                                    x: event.clientX,
+                                    y: event.clientY,
+                                });
                             }}
                             onBlur={(e) => {
                                 if (!isEditing) return;
@@ -202,19 +541,18 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
                         </div>
                     );
 
-                    const textEntityId = `${textEntityPrefix}${lineKey}`;
                     if (!onMoveTextEntity || !onSelectTextEntity) {
                         return lineNode;
                     }
 
                     return (
                         <MovableSegment
-                            key={textEntityId}
-                            id={textEntityId}
-                            position={textEntityPositions?.[textEntityId]}
-                            onMove={onMoveTextEntity}
-                            onInteractionStart={onTextEntityInteractionStart}
-                            onInteractionEnd={onTextEntityInteractionEnd}
+                            key={textEntity.id}
+                            id={textEntity.id}
+                            position={textEntityPositions?.[textEntity.id]}
+                            onMove={isEditing ? undefined : onMoveTextEntity}
+                            onInteractionStart={isEditing ? undefined : onTextEntityInteractionStart}
+                            onInteractionEnd={isEditing ? undefined : onTextEntityInteractionEnd}
                             selectedId={selectedTextEntityId}
                             onSelect={onSelectTextEntity}
                             canvasScale={textEntityCanvasScale}
@@ -233,19 +571,34 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
 
     const lineKey = path;
     const Tag = 'span';
+    const isTypingActive = isPathTypingActive(activeTypingPath, path);
+    const isInlineEditing = activeEditingLineKey === lineKey;
+    const textEntity = toEntity(lineKey, safeValue, isInlineEditing);
     const inlineNode = (
         <Tag
-            className={`editable-inline ${className ?? ''}`.trim()}
+            className={`editable-inline ${className ?? ''} ${isTypingActive ? 'ai-typing-active' : ''}`.trim()}
             style={resolveStyle(lineKey)}
-            contentEditable={activeEditingLineKey === lineKey}
+            contentEditable={isInlineEditing}
             suppressContentEditableWarning
             spellCheck={false}
             tabIndex={-1}
             data-editable-path={path}
             data-form-line-key={lineKey}
+            onPointerDown={(event) => {
+                if (event.detail >= 2) {
+                    event.stopPropagation();
+                    beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                        x: event.clientX,
+                        y: event.clientY,
+                    });
+                }
+            }}
             onDoubleClick={(event) => {
                 event.stopPropagation();
-                beginEdit(lineKey, event.currentTarget as HTMLElement);
+                beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                    x: event.clientX,
+                    y: event.clientY,
+                });
             }}
             onBlur={(e) => {
                 if (activeEditingLineKey !== lineKey) return;
@@ -269,24 +622,25 @@ const EditableText = ({ path, value, onEdit, className, style, multiline = false
         </Tag>
     );
 
-    const textEntityId = `${textEntityPrefix}${lineKey}`;
     if (!onMoveTextEntity || !onSelectTextEntity) {
         return inlineNode;
     }
 
     return (
         <MovableSegment
-            id={textEntityId}
-            position={textEntityPositions?.[textEntityId]}
-            onMove={onMoveTextEntity}
-            onInteractionStart={onTextEntityInteractionStart}
-            onInteractionEnd={onTextEntityInteractionEnd}
+            id={textEntity.id}
+            position={textEntityPositions?.[textEntity.id]}
+            onMove={isInlineEditing ? undefined : onMoveTextEntity}
+            onInteractionStart={isInlineEditing ? undefined : onTextEntityInteractionStart}
+            onInteractionEnd={isInlineEditing ? undefined : onTextEntityInteractionEnd}
             selectedId={selectedTextEntityId}
             onSelect={onSelectTextEntity}
             canvasScale={textEntityCanvasScale}
             className="inline-block align-baseline"
             minWidth={48}
             minHeight={24}
+            hostAs="span"
+            surfaceAs="span"
         >
             {inlineNode}
         </MovableSegment>
@@ -307,6 +661,7 @@ export default function PageOne({
     selectedLogos,
     logoCatalog,
     onEdit,
+    activeTypingPath = null,
     segmentPositions,
     onSegmentMove,
     onSegmentInteractionStart,
@@ -362,13 +717,16 @@ export default function PageOne({
     };
 
     const pageBackgroundStyle = { backgroundColor: paletteSurface, ...pageStyle };
-    const isHidden = (id: string) => hiddenSegments.includes(id);
+    const isHidden = (id: string) =>
+        hiddenSegments.includes(id) ||
+        ((id === 'p1-qr-code' || id === 'p1-qr-link') && hiddenSegments.includes('p1-qr'));
 
     return (
         <EditableTextContext.Provider
             value={{
                 lineStyles: formLineStyles,
                 activeEditingLineKey,
+                activeTypingPath,
                 onBeginEditLine,
                 onEndEditLine,
                 textEntityPositions: segmentPositions,
@@ -509,68 +867,104 @@ export default function PageOne({
                 <span style={{ color: paletteAccent }}><EditableText path="headings.registrationFee" value={headings.registrationFee} onEdit={onEdit} className="inline" /></span>
             </div>
             <div className="flex justify-between text-[11px]" style={{ color: palettePrimaryText }}>
-                <span>IEEE Member</span>
+                <span><EditableText path="templateText.p1_ieeeMemberLabel" value={data.templateText?.p1_ieeeMemberLabel} onEdit={onEdit} className="inline" /></span>
                 <span className="font-bold">: Rs. <EditableText path="registration.ieeePrice" value={data.registration?.ieeePrice} onEdit={onEdit} className="inline" />/-</span>
             </div>
             <div className="flex justify-between text-[11px]" style={{ color: palettePrimaryText }}>
-                <span>Non IEEE Member</span>
+                <span><EditableText path="templateText.p1_nonIeeeMemberLabel" value={data.templateText?.p1_nonIeeeMemberLabel} onEdit={onEdit} className="inline" /></span>
                 <span className="font-bold">: Rs. <EditableText path="registration.nonIeeePrice" value={data.registration?.nonIeeePrice} onEdit={onEdit} className="inline" />/-</span>
             </div>
-            <p className="text-[10px] italic" style={{ color: paletteMuted }}>(Rs. 250 refundable upon IEEE Membership enrollment)</p>
+            <p className="text-[10px] italic" style={{ color: paletteMuted }}><EditableText path="templateText.p1_refundableNote" value={data.templateText?.p1_refundableNote} onEdit={onEdit} className="inline" /></p>
         </div>
         </MovableSegment>
         )}
 
         {!isHidden('p1-registration-notes') && (
-        <MovableSegment id="p1-registration-notes" position={segmentPositions?.['p1-registration-notes']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={6} className="w-full">
+        <MovableSegment id="p1-registration-notes" position={segmentPositions?.['p1-registration-notes']} onMove={activeEditingLineKey === 'registration.notes' || activeEditingLineKey === 'headings.registrationNote' ? undefined : onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={activeEditingLineKey === 'registration.notes' || activeEditingLineKey === 'headings.registrationNote' ? undefined : onSegmentInteractionStart} onInteractionEnd={activeEditingLineKey === 'registration.notes' || activeEditingLineKey === 'headings.registrationNote' ? undefined : onSegmentInteractionEnd} index={6} className="w-full">
         <div className="w-full text-left p-2 rounded-lg mb-4" style={{ backgroundColor: `${paletteSurface}AA`, border: `1px solid ${paletteSurfaceBorder}` }}>
-                        <p className="text-[11px] font-black mb-1 uppercase tracking-widest" style={{ color: paletteAccent }}>
-                            <EditableText path="headings.registrationNote" value={headings.registrationNote} onEdit={onEdit} className="inline" />
-                        </p>
-            <ul className="text-[10.5px] space-y-1" style={{ color: palettePrimaryText }}>
-                {data.registration?.notes?.map((n, i: number) => (
-                    <li key={i} className="flex gap-1">
-                        <span style={{ color: paletteAccent }}>•</span>
-                        <EditableText path={`registration.notes.${i}`} value={n} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" />
-                    </li>
-                )) || (
-                    <>
-                        <li><span style={{ color: paletteAccent }}>•</span> Registration Confirmation: 21st March 2026</li>
-                        <li><span style={{ color: paletteAccent }}>•</span> Session Timings: 9:30 AM - 4:00 PM</li>
-                        <li><span style={{ color: paletteAccent }}>•</span> Registration is compulsory for all</li>
-                        <li><span style={{ color: paletteAccent }}>•</span> Certificates will be provided by IEEE</li>
-                    </>
-                )}
-            </ul>
+            <EditableTextContext.Provider
+                value={{
+                    lineStyles: formLineStyles,
+                    activeEditingLineKey,
+                    activeTypingPath,
+                    onBeginEditLine,
+                    onEndEditLine,
+                }}
+            >
+                <p className="text-[11px] font-black mb-1 uppercase tracking-widest" style={{ color: paletteAccent }}>
+                    <EditableText path="headings.registrationNote" value={headings.registrationNote} onEdit={onEdit} className="inline" />
+                </p>
+                <EditableText
+                    path="registration.notes"
+                    value={data.registration?.notes?.join('\n') ?? ''}
+                    onEdit={onEdit}
+                    multiline
+                    groupAsSingleEntity
+                    listMode="bullets"
+                    className="text-[10.5px] space-y-1"
+                    style={{ color: palettePrimaryText }}
+                />
+            </EditableTextContext.Provider>
         </div>
                 </MovableSegment>
         )}
 
-                                {!isHidden('p1-qr') && (
-                <MovableSegment id="p1-qr" position={segmentPositions?.['p1-qr']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={7} className="w-full flex flex-col items-center">
-                            <div className="bg-white p-2 rounded-lg mb-2 shadow-inner flex items-center justify-center">
-                    <QRCodeSVG value={data.googleForm || ""} size={96} marginSize={1} />
-                </div>
-                                <p className="text-[9px] mb-4 break-all max-w-[120px] text-center" style={{ color: paletteMuted }}>
-                    <EditableText path="googleForm" value={data.googleForm} onEdit={onEdit} className="inline" />
-                </p>
-                </MovableSegment>
+                                {!isHidden('p1-qr-code') && (
+                                    <MovableSegment
+                                        id="p1-qr-code"
+                                        position={segmentPositions?.['p1-qr-code'] ?? segmentPositions?.['p1-qr']}
+                                        onMove={onSegmentMove}
+                                        selectedId={selectedSegmentId}
+                                        onSelect={onSelectSegment}
+                                        canvasScale={canvasScale}
+                                        onInteractionStart={onSegmentInteractionStart}
+                                        onInteractionEnd={onSegmentInteractionEnd}
+                                        index={7}
+                                        className="w-full flex justify-center"
+                                        minWidth={116}
+                                        minHeight={116}
+                                    >
+                                        <div className="bg-white p-2 rounded-lg mb-2 shadow-inner flex items-center justify-center">
+                                            <QRCodeSVG value={data.googleForm || ""} size={96} marginSize={1} />
+                                        </div>
+                                    </MovableSegment>
+                                )}
+
+                                {!isHidden('p1-qr-link') && (
+                                    <MovableSegment
+                                        id="p1-qr-link"
+                                        position={segmentPositions?.['p1-qr-link']}
+                                        onMove={onSegmentMove}
+                                        selectedId={selectedSegmentId}
+                                        onSelect={onSelectSegment}
+                                        canvasScale={canvasScale}
+                                        onInteractionStart={onSegmentInteractionStart}
+                                        onInteractionEnd={onSegmentInteractionEnd}
+                                        index={8}
+                                        className="w-full flex justify-center"
+                                        minWidth={128}
+                                        minHeight={28}
+                                    >
+                                        <p className="text-[9px] mb-4 break-all max-w-[120px] text-center" style={{ color: paletteMuted }}>
+                                            <EditableText path="googleForm" value={data.googleForm} onEdit={onEdit} className="inline" />
+                                        </p>
+                                    </MovableSegment>
                                 )}
 
                 {!isHidden('p1-account') && (
-                <MovableSegment id="p1-account" position={segmentPositions?.['p1-account']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={8} className="mt-auto w-full">
+                <MovableSegment id="p1-account" position={segmentPositions?.['p1-account']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={9} className="mt-auto w-full">
         <div className="mt-auto w-full">
                         <div className="bg-white text-[12px] font-black py-0.5 px-4 rounded-full text-center mb-2 uppercase tracking-widest shadow-md" style={{ color: palettePrimary }}>
                             <EditableText path="headings.accountDetail" value={headings.accountDetail} onEdit={onEdit} className="inline" />
                         </div>
             <div className="text-[10px] space-y-0.5 font-medium leading-tight px-1" style={{ color: palettePrimaryText }}>
-                <p className="flex justify-between"><span>Bank Name</span> <span>: <EditableText path="accountDetails.bankName" value={data.accountDetails?.bankName || 'Indian Bank'} onEdit={onEdit} className="inline" /></span></p>
-                <p className="flex justify-between"><span>Acc No</span> <span>: <EditableText path="accountDetails.accountNo" value={data.accountDetails?.accountNo || '7111751848'} onEdit={onEdit} className="inline" /></span></p>
-                <p className="flex justify-between gap-2"><span>Acc Name</span> <span className="text-right max-w-[140px] break-words">: <EditableText path="accountDetails.accountName" value={data.accountDetails?.accountName || 'C TECH ASSOCIATION'} onEdit={onEdit} className="inline" /></span></p>
-                <p className="flex justify-between"><span>IFSC Code</span> <span>: <EditableText path="accountDetails.ifscCode" value={data.accountDetails?.ifscCode || 'IDIB000S181'} onEdit={onEdit} className="inline" /></span></p>
+                <p className="flex justify-between"><span><EditableText path="templateText.p1_bankNameLabel" value={data.templateText?.p1_bankNameLabel} onEdit={onEdit} className="inline" /></span> <span>: <EditableText path="accountDetails.bankName" value={data.accountDetails?.bankName || 'Indian Bank'} onEdit={onEdit} className="inline" /></span></p>
+                <p className="flex justify-between"><span><EditableText path="templateText.p1_accountNoLabel" value={data.templateText?.p1_accountNoLabel} onEdit={onEdit} className="inline" /></span> <span>: <EditableText path="accountDetails.accountNo" value={data.accountDetails?.accountNo || '7111751848'} onEdit={onEdit} className="inline" /></span></p>
+                <p className="flex justify-between gap-2"><span><EditableText path="templateText.p1_accountNameLabel" value={data.templateText?.p1_accountNameLabel} onEdit={onEdit} className="inline" /></span> <span className="text-right max-w-[140px] break-words">: <EditableText path="accountDetails.accountName" value={data.accountDetails?.accountName || 'C TECH ASSOCIATION'} onEdit={onEdit} className="inline" /></span></p>
+                <p className="flex justify-between"><span><EditableText path="templateText.p1_ifscLabel" value={data.templateText?.p1_ifscLabel} onEdit={onEdit} className="inline" /></span> <span>: <EditableText path="accountDetails.ifscCode" value={data.accountDetails?.ifscCode || 'IDIB000S181'} onEdit={onEdit} className="inline" /></span></p>
             </div>
             <div className="mt-3 py-1 px-3 bg-white rounded-sm text-center text-[10px] font-black uppercase tracking-tighter" style={{ color: palettePrimary }}>
-                Contact: <EditableText path="contact.name" value={data.contact?.name || 'Convener'} onEdit={onEdit} className="inline" />
+                <EditableText path="templateText.p1_contactLabel" value={data.templateText?.p1_contactLabel} onEdit={onEdit} className="inline" />: <EditableText path="contact.name" value={data.contact?.name || 'Convener'} onEdit={onEdit} className="inline" />
                 {' • '}
                 <EditableText path="contact.mobile" value={data.contact?.mobile || '9999999999'} onEdit={onEdit} className="inline" />
             </div>
@@ -582,7 +976,7 @@ export default function PageOne({
             {/* Column 3: Event Details (White) */}
             <div className="column column-white flex flex-col items-center !p-4" style={{ backgroundColor: paletteSurface }}>
         {!isHidden('p1-logos') && (
-        <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={9} className="w-full">
+        <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={10} className="w-full">
         <div className="flex justify-center flex-wrap gap-2 w-full mb-4">
             {selectedLogos.slice(0, selectedLogos.length > 1 ? -1 : undefined).map(id => {
                 const src = resolveLogoSrc(id);
@@ -595,7 +989,7 @@ export default function PageOne({
         )}
 
         {!isHidden('p1-title') && (
-        <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={10} className="w-full flex flex-col items-center" style={{ backgroundColor: paletteSurface }}>
+        <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={11} className="w-full flex flex-col items-center" style={{ backgroundColor: paletteSurface }}>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: palettePrimary }}>
                     <EditableText path="headings.sponsoredBy" value={headings.sponsoredBy} onEdit={onEdit} className="inline" />
                 </p>
@@ -607,7 +1001,7 @@ export default function PageOne({
         )}
 
         {!isHidden('p1-image') && (
-        <MovableSegment id="p1-image" position={segmentPositions?.['p1-image']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={11} className="w-full flex-1">
+        <MovableSegment id="p1-image" position={segmentPositions?.['p1-image']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={12} className="w-full flex-1">
         <div className="flex-1 w-full rounded-xl overflow-hidden border shadow-inner mb-4 relative min-h-[160px]" style={{ backgroundColor: paletteSurface, borderColor: paletteSurfaceBorder }}>
             {data.eventImage ? (
                 <Image src={data.eventImage} alt="Event AI" className="w-full h-full object-cover" fill unoptimized />
@@ -623,7 +1017,7 @@ export default function PageOne({
         )}
 
         {!isHidden('p1-footer') && (
-        <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={12} className="w-full">
+        <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={13} className="w-full">
             <div className="text-center mt-auto pt-3 flex flex-col items-center w-full" style={{ borderTop: `1px solid ${paletteSurfaceBorder}` }}>
                         <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: paletteMuted }}>
                             <EditableText path="headings.organizedBy" value={headings.organizedBy} onEdit={onEdit} className="inline" />
@@ -640,7 +1034,7 @@ export default function PageOne({
                 </div>
             )}
             
-            <p className="text-[10px] font-bold mt-0.5" style={{ color: paletteMuted }}>SRM Institute of Science and Technology</p>
+                <p className="text-[10px] font-bold mt-0.5" style={{ color: paletteMuted }}><EditableText path="templateText.p1_institutionName" value={data.templateText?.p1_institutionName} onEdit={onEdit} className="inline" /></p>
         </div>
                 </MovableSegment>
         )}

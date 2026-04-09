@@ -43,6 +43,7 @@ export type BrochureData = {
   dates: string;
   googleForm: string;
   eventImage?: string;
+  templateText: Record<string, string>;
   headings: BrochureHeadings;
   committee: CommitteeMember[];
   registration: {
@@ -84,6 +85,18 @@ export type SegmentPosition = {
 };
 
 export type OverlayTextAlign = "left" | "center" | "right";
+
+export type TextEntity = {
+  id: string;
+  text: string;
+  position: { x: number; y: number };
+  style: {
+    fontSize: number;
+    color: string;
+    align: OverlayTextAlign;
+  };
+  isEditing: boolean;
+};
 
 type OverlayBase = {
   id: string;
@@ -178,6 +191,23 @@ const DEFAULT_HEADINGS: BrochureHeadings = {
   speakers: "Eminent Speakers",
 };
 
+const DEFAULT_TEMPLATE_TEXT: Record<string, string> = {
+  p1_ieeeMemberLabel: "IEEE Member",
+  p1_nonIeeeMemberLabel: "Non IEEE Member",
+  p1_refundableNote: "(Rs. 250 refundable upon IEEE Membership enrollment)",
+  p1_bankNameLabel: "Bank Name",
+  p1_accountNoLabel: "Acc No",
+  p1_accountNameLabel: "Acc Name",
+  p1_ifscLabel: "IFSC Code",
+  p1_contactLabel: "Contact",
+  p1_institutionName: "SRM Institute of Science and Technology",
+  p2_dayLabel: "Day",
+  p2_tableDateLabel: "Date",
+  p2_tableSessionLabel: "Forenoon / Afternoon Session",
+  p2_footerLeft: "MADE WITH BROCHIFY",
+  p2_footerRight: "SRM-KTR",
+};
+
 export function createEmptyBrochureData(): BrochureData {
   return {
     eventTitle: "Faculty Development Program on AI Systems Design",
@@ -185,6 +215,7 @@ export function createEmptyBrochureData(): BrochureData {
     dates: "23rd-27th March 2026",
     googleForm: "https://forms.google.com/registration-link",
     eventImage: "",
+    templateText: { ...DEFAULT_TEMPLATE_TEXT },
     headings: DEFAULT_HEADINGS,
     committee: [
       { name: "Dr. N. Raman", role: "Chief Patron" },
@@ -270,6 +301,14 @@ export function normalizeBrochureData(
   return {
     ...defaults,
     ...source,
+    templateText: {
+      ...DEFAULT_TEMPLATE_TEXT,
+      ...(isObjectNode(source.templateText)
+        ? Object.fromEntries(
+            Object.entries(source.templateText).map(([key, value]) => [key, `${value ?? ""}`]),
+          )
+        : {}),
+    },
     headings: {
       ...DEFAULT_HEADINGS,
       ...(source.headings ?? {}),

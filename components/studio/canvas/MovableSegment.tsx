@@ -42,6 +42,8 @@ type MovableSegmentProps = {
   style?: React.CSSProperties;
   minWidth?: number;
   minHeight?: number;
+  hostAs?: "div" | "span";
+  surfaceAs?: "div" | "span";
 };
 
 const SOFT_LIMIT = 2000;
@@ -66,9 +68,11 @@ export default function MovableSegment({
   style,
   minWidth = 140,
   minHeight = 64,
+  hostAs = "div",
+  surfaceAs = "div",
 }: MovableSegmentProps) {
   const [interactionMode, setInteractionMode] = useState<InteractionState["mode"] | null>(null);
-  const hostRef = useRef<HTMLDivElement | null>(null);
+  const hostRef = useRef<HTMLElement | null>(null);
   const interactionRef = useRef<InteractionState | null>(null);
   const pendingMoveRef = useRef<PendingMoveState | null>(null);
 
@@ -251,10 +255,14 @@ export default function MovableSegment({
 
   const isDragging = interactionMode === "move";
   const isResizing = interactionMode === "resize";
+  const HostTag = hostAs;
+  const SurfaceTag = surfaceAs;
 
   return (
-    <div
-      ref={hostRef}
+    <HostTag
+      ref={(node) => {
+        hostRef.current = node as HTMLElement | null;
+      }}
       data-segment-id={id}
       className={`segment-shell ${isSegmentSelected ? "segment-shell-selected" : ""} ${isDragging ? "segment-shell-dragging" : ""} ${isResizing ? "segment-shell-resizing" : ""} ${className ?? ""}`}
       style={{
@@ -268,6 +276,12 @@ export default function MovableSegment({
         onSelect?.(id);
 
         if (!onMove) return;
+
+        // Let text elements use double click for edit without starting drag intent.
+        if (e.detail >= 2) {
+          pendingMoveRef.current = null;
+          return;
+        }
 
         const target = e.target as HTMLElement;
         if (target.closest(".segment-resize-handle")) {
@@ -345,7 +359,7 @@ export default function MovableSegment({
         </>
       )}
 
-      <div
+      <SurfaceTag
         className="segment-surface"
         style={{
           animationDelay: `${index * 70}ms`,
@@ -353,7 +367,7 @@ export default function MovableSegment({
         }}
       >
         {children}
-      </div>
-    </div>
+      </SurfaceTag>
+    </HostTag>
   );
 }

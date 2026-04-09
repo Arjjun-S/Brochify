@@ -6,6 +6,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 type ChatHistoryMessage = {
   role: string;
   content: string;
+  reasoning_details?: unknown;
 };
 
 type BrochureRouteResponse = {

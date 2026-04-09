@@ -309,6 +309,7 @@
   text-align: var(--segment-text-align, inherit);
   user-select: none;
   -webkit-user-select: none;
+  cursor: grab;
   transition:
     background-color 140ms ease,
     box-shadow 140ms ease;
@@ -335,15 +336,36 @@
   text-align: var(--segment-text-align, inherit);
   user-select: none;
   -webkit-user-select: none;
+  cursor: grab;
   transition:
     background-color 140ms ease,
     box-shadow 140ms ease;
+}
+
+.editable-inline[contenteditable="true"],
+.editable-block[contenteditable="true"] {
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .editable-line-editing {
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
+}
+
+.ai-typing-active {
+  animation: ai-section-fade 220ms ease;
+}
+
+@keyframes ai-section-fade {
+  0% {
+    opacity: 0.58;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 .editable-block:focus {

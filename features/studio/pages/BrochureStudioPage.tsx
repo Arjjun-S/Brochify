@@ -44,13 +44,16 @@ import {
 } from "@/lib/domains/brochure";
 import { generateBrochureData } from "@/lib/services/ai/openrouterClient";
 import { LoadingTask } from "@/lib/system/loading/loadingTaskManager";
+import { LIMITS } from "@/lib/system/content/limits";
 import type { BrochureTemplate } from "@/components/studio/editor/CanvasSidebar";
 
 const PAGE_WIDTH = 983;
 const PAGE_HEIGHT = 680;
 const PAGE_GAP = 24;
+const PAGE_TYPING_TARGET_MS = 5000;
+const COLUMN_TYPING_TARGET_MS = Math.round(PAGE_TYPING_TARGET_MS / 3);
 
-const NON_TEXT_SEGMENT_IDS = new Set(["p1-image", "p1-logos", "p1-qr"]);
+const NON_TEXT_SEGMENT_IDS = new Set(["p1-image", "p1-logos", "p1-qr-code", "p1-qr-link"]);
 
 const builtinLogos: Array<{ id: string; name: string; src: string }> = [
   { id: "ieeetems", name: "IEEE (TEMS)", src: "/logos/ieeetems.png" },
@@ -215,8 +218,235 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+type EnhanceSectionTarget = {
+  key: "aboutCollege" | "aboutSchool" | "aboutDepartment" | "aboutFdp";
+  label: string;
+  minWords: number;
+  maxWords: number;
+};
+
+const ENHANCE_SECTION_TARGETS: EnhanceSectionTarget[] = [
+  { key: "aboutCollege", label: "aboutCollege", minWords: 120, maxWords: LIMITS.aboutCollege },
+  { key: "aboutSchool", label: "aboutSchool", minWords: 80, maxWords: LIMITS.aboutSchool },
+  { key: "aboutDepartment", label: "aboutDepartment", minWords: 95, maxWords: LIMITS.aboutDepartment },
+  { key: "aboutFdp", label: "aboutFdp", minWords: 80, maxWords: LIMITS.aboutFDP },
+];
+
+function countWords(text: string): number {
+  return text
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 0).length;
+}
+
+function getUnderfilledSections(data: BrochureData): EnhanceSectionTarget[] {
+  return ENHANCE_SECTION_TARGETS.filter((target) => countWords(data[target.key] ?? "") < target.minWords);
+}
+
 function buildEnhancePrompt(data: BrochureData): string {
-  return `Enhance the following brochure JSON while preserving factual fields and structure. Improve writing quality, clarity, and professionalism. Return only JSON matching the same schema.\n\n${JSON.stringify(data, null, 2)}`;
+  const sectionLimits = ENHANCE_SECTION_TARGETS.map(
+    (target) => `- ${target.label}: ${target.minWords}-${target.maxWords} words`,
+  ).join("\n");
+
+  const currentSectionCounts = ENHANCE_SECTION_TARGETS.map(
+    (target) => `- ${target.label}: currently ${countWords(data[target.key] ?? "")} words`,
+  ).join("\n");
+
+  return [
+    "Enhance the following brochure JSON while preserving factual fields and schema structure.",
+    "Improve clarity, professionalism, and academic tone.",
+    "Expand underfilled body sections to meet these layout word ranges:",
+    sectionLimits,
+    "Do not exceed the max words for each section and keep arrays/keys intact.",
+    "Return only JSON matching the same schema.",
+    "",
+    "Current section counts:",
+    currentSectionCounts,
+    "",
+    JSON.stringify(data, null, 2),
+  ].join("\n");
+}
+
+function buildLengthRefinementPrompt(data: BrochureData, underfilledSections: EnhanceSectionTarget[]): string {
+  const sections = underfilledSections
+    .map(
+      (target) =>
+        `- ${target.label}: currently ${countWords(data[target.key] ?? "")} words; rewrite to ${target.minWords}-${target.maxWords} words`,
+    )
+    .join("\n");
+
+  return [
+    "Refine only the underfilled sections below and keep all other values unchanged.",
+    "Preserve factual details and JSON schema keys exactly.",
+    "Underfilled sections to expand:",
+    sections,
+    "Return only JSON.",
+    "",
+    JSON.stringify(data, null, 2),
+  ].join("\n");
+}
+
+function waitFor(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function getValueFromPath(source: Record<string, unknown>, path: string): unknown {
+  const keys = path.split(".");
+  let cursor: unknown = source;
+
+  for (const key of keys) {
+    if (cursor == null) return undefined;
+
+    if (Array.isArray(cursor)) {
+      const index = Number(key);
+      if (!Number.isInteger(index)) return undefined;
+      cursor = cursor[index];
+      continue;
+    }
+
+    if (typeof cursor !== "object") return undefined;
+    cursor = (cursor as Record<string, unknown>)[key];
+  }
+
+  return cursor;
+}
+
+function createTypingSeedData(data: BrochureData): BrochureData {
+  const visit = (value: unknown): unknown => {
+    if (typeof value === "string") return "";
+    if (Array.isArray(value)) return value.map(visit);
+    if (value && typeof value === "object") {
+      const next: Record<string, unknown> = {};
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        next[key] = visit(nested);
+      }
+      return next;
+    }
+    return value;
+  };
+
+  return visit(structuredClone(data)) as BrochureData;
+}
+
+type TypingStage = {
+  page: 1 | 2;
+  column: 1 | 2 | 3;
+  durationMs: number;
+  paths: string[];
+};
+
+function uniquePaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  return paths.filter((path) => {
+    if (!path || seen.has(path)) return false;
+    seen.add(path);
+    return true;
+  });
+}
+
+function buildTypingPlan(data: BrochureData): TypingStage[] {
+  const pageOneColumnOne: string[] = [
+    "headings.chiefPatrons",
+    "headings.patrons",
+    "headings.convener",
+    "headings.coConvener",
+    "headings.advisoryCommittee",
+    "headings.organizingCommittee",
+  ];
+
+  for (let index = 0; index < data.committee.length; index += 1) {
+    pageOneColumnOne.push(`committee.${index}.name`);
+    pageOneColumnOne.push(`committee.${index}.role`);
+  }
+
+  const pageOneColumnTwo: string[] = [
+    "headings.registrationDetail",
+    "headings.registrationFee",
+    "templateText.p1_ieeeMemberLabel",
+    "registration.ieeePrice",
+    "templateText.p1_nonIeeeMemberLabel",
+    "registration.nonIeeePrice",
+    "templateText.p1_refundableNote",
+    "headings.registrationNote",
+  ];
+
+  for (let index = 0; index < data.registration.notes.length; index += 1) {
+    pageOneColumnTwo.push(`registration.notes.${index}`);
+  }
+
+  pageOneColumnTwo.push(
+    "googleForm",
+    "headings.accountDetail",
+    "templateText.p1_bankNameLabel",
+    "accountDetails.bankName",
+    "templateText.p1_accountNoLabel",
+    "accountDetails.accountNo",
+    "templateText.p1_accountNameLabel",
+    "accountDetails.accountName",
+    "templateText.p1_ifscLabel",
+    "accountDetails.ifscCode",
+    "templateText.p1_contactLabel",
+    "contact.name",
+    "contact.mobile",
+  );
+
+  const pageOneColumnThree: string[] = [
+    "headings.sponsoredBy",
+    "eventTitle",
+    "dates",
+    "headings.organizedBy",
+    "department",
+    "templateText.p1_institutionName",
+  ];
+
+  const pageTwoColumnOne: string[] = [
+    "headings.aboutCollege",
+    "aboutCollege",
+    "headings.aboutSchool",
+    "aboutSchool",
+  ];
+
+  const pageTwoColumnTwo: string[] = [
+    "headings.aboutDepartment",
+    "aboutDepartment",
+    "headings.aboutFdp",
+    "aboutFdp",
+    "headings.programHighlights",
+    "templateText.p2_dayLabel",
+  ];
+
+  for (let index = 0; index < data.topics.length; index += 1) {
+    pageTwoColumnTwo.push(`topics.${index}.forenoon`);
+  }
+
+  const pageTwoColumnThree: string[] = [
+    "headings.topics",
+    "templateText.p2_tableDateLabel",
+    "templateText.p2_tableSessionLabel",
+  ];
+
+  for (let index = 0; index < data.topics.length; index += 1) {
+    pageTwoColumnThree.push(`topics.${index}.date`);
+    pageTwoColumnThree.push(`topics.${index}.afternoon`);
+  }
+
+  pageTwoColumnThree.push("headings.speakers");
+  for (let index = 0; index < data.speakers.length; index += 1) {
+    pageTwoColumnThree.push(`speakers.${index}.name`);
+    pageTwoColumnThree.push(`speakers.${index}.role`);
+    pageTwoColumnThree.push(`speakers.${index}.org`);
+  }
+
+  return [
+    { page: 1, column: 1, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageOneColumnOne) },
+    { page: 1, column: 2, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageOneColumnTwo) },
+    { page: 1, column: 3, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageOneColumnThree) },
+    { page: 2, column: 1, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageTwoColumnOne) },
+    { page: 2, column: 2, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageTwoColumnTwo) },
+    { page: 2, column: 3, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageTwoColumnThree) },
+  ];
 }
 
 export default function Dashboard() {
@@ -241,14 +471,42 @@ export default function Dashboard() {
   const [formLineStyles, setFormLineStyles] = useState<Record<string, FormLineStyle>>({});
   const [selectedFormLineKey, setSelectedFormLineKey] = useState<string | null>(null);
   const [editingFormLineKey, setEditingFormLineKey] = useState<string | null>(null);
+  const [typingBrochureData, setTypingBrochureData] = useState<BrochureData | null>(null);
+  const [animationPhase, setAnimationPhase] = useState<"idle" | "preview" | "typing">("idle");
+  const [activeTypingPath, setActiveTypingPath] = useState<string | null>(null);
   const previewViewportRef = useRef<HTMLDivElement | null>(null);
   const pageOneRef = useRef<HTMLDivElement | null>(null);
   const pageTwoRef = useRef<HTMLDivElement | null>(null);
   const historyIndexRef = useRef(-1);
   const latestRef = useRef<EditorSnapshot | null>(null);
+  const currentStateRef = useRef<EditorSnapshot>({
+    brochureData,
+    selectedLogos,
+    segmentPositions,
+    overlayItems,
+    template,
+    hiddenSegments,
+    formLineStyles,
+  });
   const historyInteractionRef = useRef<{ active: boolean; changed: boolean }>({ active: false, changed: false });
+  const historyInitializedRef = useRef(false);
+  const typingRunRef = useRef(0);
+  const animationPhaseRef = useRef<"idle" | "preview" | "typing">(animationPhase);
 
   const isLoading = loadingTask !== "idle";
+  const isTypingAnimationActive = animationPhase === "typing";
+  const canvasBrochureData = typingBrochureData ?? brochureData;
+
+  const stopTypingAnimation = useCallback(() => {
+    typingRunRef.current += 1;
+    setAnimationPhase("idle");
+    setTypingBrochureData(null);
+    setActiveTypingPath(null);
+  }, []);
+
+  useEffect(() => {
+    animationPhaseRef.current = animationPhase;
+  }, [animationPhase]);
 
   useEffect(() => {
     setMounted(true);
@@ -286,12 +544,31 @@ export default function Dashboard() {
     return () => resizeObserver.disconnect();
   }, []);
 
-  useEffect(() => {
-    latestRef.current = { brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles };
-  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles]);
+  const normalizeSnapshot = useCallback((snapshot?: Partial<EditorSnapshot> | null): EditorSnapshot | null => {
+    if (!snapshot || !snapshot.brochureData) {
+      return null;
+    }
+
+    const fallback = latestRef.current ?? currentStateRef.current;
+    return {
+      brochureData: snapshot.brochureData,
+      selectedLogos: Array.isArray(snapshot.selectedLogos) ? snapshot.selectedLogos : fallback.selectedLogos,
+      segmentPositions:
+        snapshot.segmentPositions && typeof snapshot.segmentPositions === "object"
+          ? snapshot.segmentPositions
+          : fallback.segmentPositions,
+      overlayItems: Array.isArray(snapshot.overlayItems) ? snapshot.overlayItems : fallback.overlayItems,
+      template: snapshot.template ?? fallback.template,
+      hiddenSegments: Array.isArray(snapshot.hiddenSegments) ? snapshot.hiddenSegments : fallback.hiddenSegments,
+      formLineStyles:
+        snapshot.formLineStyles && typeof snapshot.formLineStyles === "object"
+          ? snapshot.formLineStyles
+          : fallback.formLineStyles,
+    };
+  }, []);
 
   useEffect(() => {
-    const initial: EditorSnapshot = {
+    const current: EditorSnapshot = {
       brochureData,
       selectedLogos,
       segmentPositions,
@@ -300,30 +577,41 @@ export default function Dashboard() {
       hiddenSegments,
       formLineStyles,
     };
-    setHistory([initial]);
-    setHistoryIndex(0);
-    historyIndexRef.current = 0;
-    latestRef.current = initial;
-  }, []);
 
-  const pushHistorySnapshot = useCallback((snapshot: EditorSnapshot) => {
-    setHistory((prev) => {
-      const truncated = prev.slice(0, historyIndexRef.current + 1);
-      const next = [...truncated, snapshot];
-      historyIndexRef.current = next.length - 1;
-      setHistoryIndex(historyIndexRef.current);
-      return next;
-    });
-    latestRef.current = snapshot;
-  }, []);
+    currentStateRef.current = current;
+    latestRef.current = current;
+
+    if (!historyInitializedRef.current) {
+      setHistory([current]);
+      setHistoryIndex(0);
+      historyIndexRef.current = 0;
+      historyInitializedRef.current = true;
+    }
+  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles]);
+
+  const pushHistorySnapshot = useCallback(
+    (snapshot: Partial<EditorSnapshot> | null | undefined) => {
+      const validSnapshot = normalizeSnapshot(snapshot);
+      if (!validSnapshot) return;
+
+      setHistory((prev) => {
+        const truncated = prev.slice(0, historyIndexRef.current + 1);
+        const next = [...truncated, validSnapshot];
+        historyIndexRef.current = next.length - 1;
+        setHistoryIndex(historyIndexRef.current);
+        return next;
+      });
+      latestRef.current = validSnapshot;
+    },
+    [normalizeSnapshot],
+  );
 
   const pushWith = useCallback(
     (partial: Partial<EditorSnapshot>) => {
-      const base =
-        latestRef.current ?? ({ brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles } as EditorSnapshot);
+      const base = latestRef.current ?? currentStateRef.current;
       pushHistorySnapshot({ ...base, ...partial });
     },
-    [],
+    [pushHistorySnapshot],
   );
 
   const beginCanvasInteraction = useCallback(() => {
@@ -347,40 +635,60 @@ export default function Dashboard() {
     });
   }, [pushWith]);
 
-  const applySnapshot = useCallback((snapshot: EditorSnapshot) => {
-    latestRef.current = snapshot;
-    setBrochureData(snapshot.brochureData);
-    setSelectedLogos(snapshot.selectedLogos);
-    setSegmentPositions(snapshot.segmentPositions);
-    setOverlayItems(snapshot.overlayItems);
-    setTemplate(snapshot.template);
-    setHiddenSegments(snapshot.hiddenSegments ?? []);
-    setFormLineStyles(snapshot.formLineStyles ?? {});
-  }, []);
+  const applySnapshot = useCallback(
+    (snapshot: EditorSnapshot | null | undefined) => {
+      const validSnapshot = normalizeSnapshot(snapshot);
+      if (!validSnapshot) {
+        return;
+      }
+
+      latestRef.current = validSnapshot;
+      setBrochureData(validSnapshot.brochureData);
+      setSelectedLogos(validSnapshot.selectedLogos);
+      setSegmentPositions(validSnapshot.segmentPositions);
+      setOverlayItems(validSnapshot.overlayItems);
+      setTemplate(validSnapshot.template);
+      setHiddenSegments(validSnapshot.hiddenSegments ?? []);
+      setFormLineStyles(validSnapshot.formLineStyles ?? {});
+    },
+    [normalizeSnapshot],
+  );
 
   const undo = useCallback(() => {
+    if (animationPhaseRef.current !== "idle") {
+      stopTypingAnimation();
+    }
+
     if (historyIndexRef.current <= 0) return;
     const nextIndex = historyIndexRef.current - 1;
     const snapshot = history[nextIndex];
+    if (!snapshot?.brochureData) return;
+
     historyIndexRef.current = nextIndex;
     setHistoryIndex(nextIndex);
     applySnapshot(snapshot);
     setSelectedElement(null);
     setSelectedFormLineKey(null);
     setEditingFormLineKey(null);
-  }, [applySnapshot, history]);
+  }, [applySnapshot, history, stopTypingAnimation]);
 
   const redo = useCallback(() => {
+    if (animationPhaseRef.current !== "idle") {
+      stopTypingAnimation();
+    }
+
     if (historyIndexRef.current >= history.length - 1) return;
     const nextIndex = historyIndexRef.current + 1;
     const snapshot = history[nextIndex];
+    if (!snapshot?.brochureData) return;
+
     historyIndexRef.current = nextIndex;
     setHistoryIndex(nextIndex);
     applySnapshot(snapshot);
     setSelectedElement(null);
     setSelectedFormLineKey(null);
     setEditingFormLineKey(null);
-  }, [applySnapshot, history]);
+  }, [applySnapshot, history, stopTypingAnimation]);
 
   useEffect(() => {
     const handleHistoryHotkeys = (event: KeyboardEvent) => {
@@ -578,12 +886,34 @@ export default function Dashboard() {
   };
 
   const handleFieldChange = useCallback((path: string, value: unknown) => {
+    if (animationPhaseRef.current !== "idle") {
+      stopTypingAnimation();
+    }
+
     setBrochureData((prev) => {
-      const next = setValueAtPath(prev, path, value);
+      const normalizedValue =
+        path === "registration.notes" && typeof value === "string"
+          ? value
+              .split(/\r?\n/)
+              .map((line) => line.replace(/^\s*(?:•|-|\*)\s?/, "").trim())
+              .filter((line) => line.length > 0)
+          : value;
+
+      const currentValue = getValueFromPath(prev as unknown as Record<string, unknown>, path);
+      const noChange =
+        Array.isArray(currentValue) && Array.isArray(normalizedValue)
+          ? JSON.stringify(currentValue) === JSON.stringify(normalizedValue)
+          : Object.is(currentValue, normalizedValue);
+
+      if (noChange) {
+        return prev;
+      }
+
+      const next = setValueAtPath(prev, path, normalizedValue);
       pushWith({ brochureData: next });
       return next;
     });
-  }, [pushWith]);
+  }, [pushWith, stopTypingAnimation]);
 
   const toggleLogo = (id: string) => {
     setSelectedLogos((prev) => {
@@ -868,14 +1198,119 @@ export default function Dashboard() {
     setSelectedLogos((prev) => prev.filter((logoId) => logoId !== id));
   };
 
+  useEffect(() => {
+    return () => {
+      typingRunRef.current += 1;
+    };
+  }, []);
+
+  const runTypingAnimation = useCallback(
+    async (target: BrochureData, options?: { previewDelayMs?: number }) => {
+      const runId = typingRunRef.current + 1;
+      typingRunRef.current = runId;
+
+      const previewDelayMs = Math.max(0, options?.previewDelayMs ?? 0);
+      if (previewDelayMs > 0) {
+        setAnimationPhase("preview");
+        setTypingBrochureData(target);
+        setActiveTypingPath(null);
+        await waitFor(previewDelayMs);
+        if (runId !== typingRunRef.current) return;
+      }
+
+      setAnimationPhase("typing");
+      const seed = createTypingSeedData(target);
+      setTypingBrochureData(seed);
+      await waitFor(50);
+      if (runId !== typingRunRef.current) return;
+
+      const typingPlan = buildTypingPlan(target);
+      const source = target as unknown as Record<string, unknown>;
+
+      for (const stage of typingPlan) {
+        if (runId !== typingRunRef.current) return;
+
+        const stageStart = performance.now();
+        const stageEntries = stage.paths
+          .map((path) => {
+            const fullValue = getValueFromPath(source, path);
+            if (typeof fullValue !== "string") return null;
+            if (!fullValue.length) return null;
+            const weight = Math.max(6, Math.min(220, fullValue.length));
+            return { path, value: fullValue, weight };
+          })
+          .filter((entry): entry is { path: string; value: string; weight: number } => entry !== null);
+
+        if (!stageEntries.length) {
+          await waitFor(stage.durationMs);
+          continue;
+        }
+
+        let remainingWeight = stageEntries.reduce((sum, entry) => sum + entry.weight, 0);
+
+        for (let index = 0; index < stageEntries.length; index += 1) {
+          if (runId !== typingRunRef.current) return;
+
+          const entry = stageEntries[index];
+          setActiveTypingPath(entry.path);
+
+          const elapsed = performance.now() - stageStart;
+          const remainingStageMs = Math.max(0, stage.durationMs - elapsed);
+          const isLastEntry = index === stageEntries.length - 1;
+          const pathBudgetMs = isLastEntry
+            ? remainingStageMs
+            : Math.max(0, (remainingStageMs * entry.weight) / Math.max(1, remainingWeight));
+
+          const stepCount = Math.max(2, Math.min(10, Math.ceil(entry.value.length / 28)));
+          const stepDelayMs = Math.max(0, Math.floor(pathBudgetMs / stepCount));
+
+          for (let step = 1; step <= stepCount; step += 1) {
+            if (runId !== typingRunRef.current) return;
+
+            const cursor = Math.min(
+              entry.value.length,
+              Math.max(1, Math.round((entry.value.length * step) / stepCount)),
+            );
+
+            setTypingBrochureData((prev) => {
+              const base = (prev ?? seed) as unknown as Record<string, unknown>;
+              return setValueAtPath(base, entry.path, entry.value.slice(0, cursor)) as BrochureData;
+            });
+
+            if (stepDelayMs > 0) {
+              await waitFor(stepDelayMs);
+            }
+          }
+
+          remainingWeight = Math.max(0, remainingWeight - entry.weight);
+        }
+
+        const stageElapsed = performance.now() - stageStart;
+        const stageRemainder = stage.durationMs - stageElapsed;
+        if (stageRemainder > 0) {
+          await waitFor(stageRemainder);
+        }
+      }
+
+      if (runId !== typingRunRef.current) return;
+      setAnimationPhase("idle");
+      setTypingBrochureData(null);
+      setActiveTypingPath(null);
+    },
+    [],
+  );
+
   const handleCreateBrochure = () => {
     setLoadingTask("building");
-    setLoadingMessage("Building brochure from your guided inputs...");
+    setLoadingMessage("Building brochure with AI reveal animation...");
     setProjectReady(true);
+
+    void runTypingAnimation(brochureData, { previewDelayMs: 0 });
+
     window.setTimeout(() => {
       setLoadingTask("idle");
       setLoadingMessage("");
-    }, 850);
+    }, 420);
   };
 
   const handleEnhanceWithAI = async () => {
@@ -884,11 +1319,37 @@ export default function Dashboard() {
 
     try {
       const prompt = buildEnhancePrompt(brochureData);
-      const result = await generateBrochureData(prompt);
-      const enhanced = normalizeBrochureData(result.data as Record<string, unknown>);
+      const firstPass = await generateBrochureData(prompt);
+      let enhanced = normalizeBrochureData(firstPass.data as Record<string, unknown>);
+
+      const underfilled = getUnderfilledSections(enhanced);
+      const assistantMessage = firstPass.rawMessage?.content;
+      if (underfilled.length > 0 && typeof assistantMessage === "string" && assistantMessage.trim()) {
+        const refinementPrompt = buildLengthRefinementPrompt(enhanced, underfilled);
+        const refinementHistory = [
+          { role: "user", content: prompt },
+          {
+            role: "assistant",
+            content: assistantMessage,
+            reasoning_details: firstPass.rawMessage?.reasoning_details,
+          },
+        ];
+
+        try {
+          const secondPass = await generateBrochureData(refinementPrompt, refinementHistory);
+          enhanced = normalizeBrochureData(secondPass.data as Record<string, unknown>);
+        } catch {
+          // Keep first pass content if refinement cannot be completed.
+        }
+      }
+
+      stopTypingAnimation();
       setBrochureData(enhanced);
       pushWith({ brochureData: enhanced });
       setProjectReady(true);
+      setLoadingTask("idle");
+      setLoadingMessage("");
+      void runTypingAnimation(enhanced, { previewDelayMs: 1200 });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Enhancement failed";
       alert(message);
@@ -1127,6 +1588,19 @@ export default function Dashboard() {
                   Circle
                 </button>
 
+                {animationPhase !== "idle" && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em]",
+                      animationPhase === "preview"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-sky-50 text-sky-700 border border-sky-200",
+                    )}
+                  >
+                    {animationPhase === "preview" ? "AI Preview Ready" : "AI Typing Animation"}
+                  </span>
+                )}
+
                 {selectedTextTarget && (
                   <>
                     {selectedTextTarget.kind === "overlay" && (
@@ -1245,7 +1719,10 @@ export default function Dashboard() {
 
             <div
               ref={previewViewportRef}
-              className="w-full flex flex-col items-center gap-10 py-4 relative z-10"
+              className={cn(
+                "w-full flex flex-col items-center gap-10 py-4 relative z-10",
+                isTypingAnimationActive && "pointer-events-none select-none",
+              )}
               onFocusCapture={(event) => {
                 const target = event.target as HTMLElement;
                 const lineNode = target.closest("[data-form-line-key]") as HTMLElement | null;
@@ -1330,9 +1807,10 @@ export default function Dashboard() {
                   >
                     <div ref={pageOneRef}>
                       <PageOne
-                        data={brochureData}
+                        data={canvasBrochureData}
                         selectedLogos={selectedLogos}
                         onEdit={(path, value) => handleFieldChange(path, value)}
+                        activeTypingPath={activeTypingPath}
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
                         onSegmentInteractionStart={handleCanvasInteractionStart}
@@ -1367,9 +1845,10 @@ export default function Dashboard() {
                     <div style={{ height: PAGE_GAP }} />
                     <div ref={pageTwoRef}>
                       <PageTwo
-                        data={brochureData}
+                        data={canvasBrochureData}
                         selectedLogos={selectedLogos}
                         onEdit={(path, value) => handleFieldChange(path, value)}
+                        activeTypingPath={activeTypingPath}
                         segmentPositions={segmentPositions}
                         onSegmentMove={handleSegmentMove}
                         onSegmentInteractionStart={handleCanvasInteractionStart}

@@ -59,6 +59,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 type ChatMessage = {
   role: string;
   content: string;
+  reasoning_details?: unknown;
 };
 
 type OpenRouterMessage = {
@@ -124,6 +125,9 @@ async function requestBrochureData(
     const formattedHistory = history.map((message) => ({
       role: message.role,
       content: message.content,
+      ...(message.role === "assistant" && message.reasoning_details !== undefined
+        ? { reasoning_details: message.reasoning_details }
+        : {}),
     }));
 
     const response = await axios.post<OpenRouterResponse>(
@@ -131,6 +135,7 @@ async function requestBrochureData(
       {
         model: "openai/gpt-oss-120b:free",
         max_tokens: 4000,
+        reasoning: { enabled: true },
         messages: [
           {
             role: "system",
