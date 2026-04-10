@@ -901,8 +901,8 @@ export default function PageOne({
                     multiline
                     groupAsSingleEntity
                     listMode="bullets"
-                    className="text-[10.5px] space-y-1"
-                    style={{ color: palettePrimaryText }}
+                    className="text-[13px] space-y-1"
+                    style={{ color: palettePrimaryText, fontSize: '13px' }}
                 />
             </EditableTextContext.Provider>
         </div>
@@ -976,16 +976,41 @@ export default function PageOne({
             {/* Column 3: Event Details (White) */}
             <div className="column column-white flex flex-col items-center !p-4" style={{ backgroundColor: paletteSurface }}>
         {!isHidden('p1-logos') && (
-        <MovableSegment id="p1-logos" position={segmentPositions?.['p1-logos']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={10} className="w-full">
         <div className="flex justify-center flex-wrap gap-2 w-full mb-4">
-            {selectedLogos.slice(0, selectedLogos.length > 1 ? -1 : undefined).map(id => {
+            {selectedLogos.slice(0, selectedLogos.length > 1 ? -1 : undefined).map((id, logoIndex) => {
                 const src = resolveLogoSrc(id);
-                                return src ? (
-                                    <Image key={id} src={src} width={72} height={32} className="h-8 w-auto object-contain" alt={id} unoptimized />
-                                ) : null;
+                if (!src) return null;
+
+                const segmentId = `p1-logo-top::${id}`;
+                if (isHidden(segmentId)) return null;
+
+                const logoPosition = segmentPositions?.[segmentId];
+                const logoWidth = logoPosition?.width ?? 72;
+                const logoHeight = logoPosition?.height ?? 32;
+
+                return (
+                    <MovableSegment
+                        key={segmentId}
+                        id={segmentId}
+                        position={logoPosition}
+                        onMove={onSegmentMove}
+                        selectedId={selectedSegmentId}
+                        onSelect={onSelectSegment}
+                        canvasScale={canvasScale}
+                        onInteractionStart={onSegmentInteractionStart}
+                        onInteractionEnd={onSegmentInteractionEnd}
+                        index={10 + logoIndex}
+                        className="flex items-center justify-center"
+                        minWidth={56}
+                        minHeight={24}
+                    >
+                        <div className="relative" style={{ width: `${logoWidth}px`, height: `${logoHeight}px` }}>
+                            <Image src={src} fill className="object-contain" alt={id} unoptimized />
+                        </div>
+                    </MovableSegment>
+                );
             })}
         </div>
-        </MovableSegment>
         )}
 
         {!isHidden('p1-title') && (
@@ -1025,11 +1050,39 @@ export default function PageOne({
             <p className="text-[12px] font-black uppercase leading-tight max-w-[180px] mb-4" style={{ color: palettePrimary }}><EditableText path="department" value={data.department} onEdit={onEdit} /></p>
             
             {selectedLogos.length > 1 && (
-                <div className="mt-2 mb-4">
+                <div className="mt-2 mb-4 w-full flex justify-center">
                     {(() => {
                         const lastId = selectedLogos[selectedLogos.length - 1];
                         const src = resolveLogoSrc(lastId);
-                        return src ? <Image src={src} width={96} height={40} className="h-10 w-auto object-contain" alt="Bottom Logo" unoptimized /> : null;
+                        if (!src) return null;
+
+                        const segmentId = `p1-logo-bottom::${lastId}`;
+                        if (isHidden(segmentId)) return null;
+
+                        const logoPosition = segmentPositions?.[segmentId];
+                        const logoWidth = logoPosition?.width ?? 96;
+                        const logoHeight = logoPosition?.height ?? 40;
+
+                        return (
+                            <MovableSegment
+                                id={segmentId}
+                                position={logoPosition}
+                                onMove={onSegmentMove}
+                                selectedId={selectedSegmentId}
+                                onSelect={onSelectSegment}
+                                canvasScale={canvasScale}
+                                onInteractionStart={onSegmentInteractionStart}
+                                onInteractionEnd={onSegmentInteractionEnd}
+                                index={14}
+                                className="flex items-center justify-center"
+                                minWidth={72}
+                                minHeight={30}
+                            >
+                                <div className="relative" style={{ width: `${logoWidth}px`, height: `${logoHeight}px` }}>
+                                    <Image src={src} fill className="object-contain" alt="Bottom Logo" unoptimized />
+                                </div>
+                            </MovableSegment>
+                        );
                     })()}
                 </div>
             )}

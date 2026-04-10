@@ -2,7 +2,6 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import { Search, UploadCloud } from "lucide-react";
-import { BrandAsset } from "@/lib/domains/brochure";
 import { cn } from "@/lib/ui/cn";
 
 export type BrochureTemplate = "whiteBlue" | "beigeDust" | "softBlue" | "tealGloss" | "yellowDust";
@@ -15,38 +14,55 @@ type LogoOption = {
 };
 
 type CanvasSidebarProps = {
-  assets: BrandAsset[];
   logoOptions: LogoOption[];
   selectedLogos: string[];
   onToggleLogo: (id: string) => void;
+  onReorderLogos: (nextOrder: string[]) => void;
   onUploadAssets: (files: FileList | null, tagsInput: string) => Promise<void>;
-  onDeleteAsset: (id: string) => void;
-  onInsertAssetAsOverlay: (id: string) => void;
   isBusy: boolean;
   template: BrochureTemplate;
   onChangeTemplate: (template: BrochureTemplate) => void;
 };
 
 export default function CanvasSidebar({
-  assets: _assets,
   logoOptions,
   selectedLogos,
   onToggleLogo,
+  onReorderLogos,
   onUploadAssets,
-  onDeleteAsset: _onDeleteAsset,
-  onInsertAssetAsOverlay: _onInsertAssetAsOverlay,
   isBusy,
   template,
   onChangeTemplate,
 }: CanvasSidebarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [logoQuery, setLogoQuery] = useState("");
+  const [dragLogoId, setDragLogoId] = useState<string | null>(null);
 
   const filteredLogos = useMemo(() => {
     const normalized = logoQuery.trim().toLowerCase();
     if (!normalized) return logoOptions;
     return logoOptions.filter((logo) => logo.name.toLowerCase().includes(normalized));
   }, [logoOptions, logoQuery]);
+
+  const selectedLogoCards = useMemo(
+    () => selectedLogos
+      .map((id) => logoOptions.find((logo) => logo.id === id))
+      .filter((logo): logo is LogoOption => Boolean(logo)),
+    [selectedLogos, logoOptions],
+  );
+
+  const reorderLogos = (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+
+    const from = selectedLogos.indexOf(draggedId);
+    const to = selectedLogos.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+
+    const next = [...selectedLogos];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onReorderLogos(next);
+  };
 
   const templateCards = [
     {
@@ -141,6 +157,49 @@ export default function CanvasSidebar({
               No logos match that search.
             </div>
           )}
+        </div>
+
+        <div className="space-y-2 pt-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Logo Order (Left to Right)</p>
+          <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
+            {selectedLogoCards.length === 0 && (
+              <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-[11px] text-slate-500">
+                Select logos above to arrange order.
+              </div>
+            )}
+            {selectedLogoCards.map((logo) => (
+              <div
+                key={logo.id}
+                draggable
+                onDragStart={(event) => {
+                  setDragLogoId(logo.id);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", logo.id);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const droppedId = event.dataTransfer.getData("text/plain") || dragLogoId;
+                  if (!droppedId) return;
+                  reorderLogos(droppedId, logo.id);
+                  setDragLogoId(null);
+                }}
+                onDragEnd={() => setDragLogoId(null)}
+                className={cn(
+                  "flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-bold",
+                  dragLogoId === logo.id
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-slate-200 bg-white text-slate-700",
+                )}
+              >
+                <span className="truncate">{logo.name}</span>
+                <span className="text-[10px] font-black tracking-wider text-slate-400">DRAG</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

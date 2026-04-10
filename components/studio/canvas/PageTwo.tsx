@@ -479,7 +479,7 @@ export default function PageTwo({
                     <h3 className="text-base font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
                       <EditableText path="headings.aboutCollege" value={headings.aboutCollege} onEdit={onEdit} className="inline" />
                     </h3>
-                                        <EditableText path="aboutCollege" value={data.aboutCollege} onEdit={onEdit} multiline className="block text-left leading-[1.34] whitespace-pre-wrap break-words" />
+                                        <EditableText path="aboutCollege" value={data.aboutCollege} onEdit={onEdit} multiline className="block text-center leading-[1.34] whitespace-pre-wrap break-words" />
                 </div>
                 </MovableSegment>
                                 )}

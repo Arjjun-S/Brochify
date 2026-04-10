@@ -245,13 +245,13 @@ export function createEmptyBrochureData(): BrochureData {
       ifscCode: "IDIB000S181",
     },
     aboutCollege:
-      "SRM Institute of Science and Technology is a multidisciplinary research university known for academic rigor, innovation, and industry integration. Its ecosystem combines advanced laboratories, international collaborations, entrepreneurial culture, and a strong emphasis on experiential learning. The institution consistently nurtures technically proficient graduates through interdisciplinary exposure, applied research, and structured faculty development initiatives.",
+      "SRM Institute of Science and Technology is a multidisciplinary university recognized for strong academics, active research, and industry collaboration. It offers modern labs, global partnerships, and practice-oriented learning pathways. The campus ecosystem encourages innovation, entrepreneurship, and interdisciplinary problem solving. Faculty and students work on applied projects that connect curriculum with real-world impact. Through continuous training programs and research culture, SRM supports professional growth and future-ready education.",
     aboutSchool:
-      "The School of Computing brings together future-facing programs in software systems, artificial intelligence, data science, and digital product engineering. It promotes collaborative learning, applied research, and strong industry engagement through a curriculum aligned with modern computing practice.",
+      "The School of Computing offers focused programs in software engineering, artificial intelligence, and data science. It promotes collaborative learning, research-driven teaching, and strong industry engagement through practice-oriented curriculum and project experience.",
     aboutDepartment:
-      "The Department of Computational Design focuses on intelligent systems, interface design, software platforms, and emerging digital workflows. It supports research-led teaching, design thinking, and advanced technical problem solving through active project-based learning.",
+      "The Department of Computational Design focuses on intelligent systems, interface engineering, and modern digital workflows. It emphasizes project-based learning, design thinking, and practical technical problem solving through research-informed instruction.",
     aboutFdp:
-      "This FDP is designed to strengthen faculty capability in AI-enabled product thinking, modern interface systems, and practical educational adoption. It combines lectures, demonstrations, and hands-on sessions to help participants translate ideas into impactful academic and industry-aligned outcomes.",
+      "This FDP strengthens faculty capability in AI-enabled design, modern interface systems, and classroom adoption strategies. It combines expert talks, demonstrations, and guided hands-on sessions for immediate academic application.",
     topics: [
       {
         date: "Day 1",

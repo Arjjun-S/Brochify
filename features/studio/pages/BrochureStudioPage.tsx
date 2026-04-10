@@ -191,6 +191,11 @@ type FormLineStyle = {
   align?: TextOverlayItem["align"];
 };
 
+const DEFAULT_FORM_LINE_STYLES: Record<string, FormLineStyle> = {
+  "aboutCollege::0": { align: "center" },
+  "registration.notes": { fontSize: 13 },
+};
+
 type SelectedTextTarget =
   | {
       kind: "overlay";
@@ -226,10 +231,10 @@ type EnhanceSectionTarget = {
 };
 
 const ENHANCE_SECTION_TARGETS: EnhanceSectionTarget[] = [
-  { key: "aboutCollege", label: "aboutCollege", minWords: 120, maxWords: LIMITS.aboutCollege },
-  { key: "aboutSchool", label: "aboutSchool", minWords: 80, maxWords: LIMITS.aboutSchool },
-  { key: "aboutDepartment", label: "aboutDepartment", minWords: 95, maxWords: LIMITS.aboutDepartment },
-  { key: "aboutFdp", label: "aboutFdp", minWords: 80, maxWords: LIMITS.aboutFDP },
+  { key: "aboutCollege", label: "aboutCollege", minWords: 85, maxWords: LIMITS.aboutCollege },
+  { key: "aboutSchool", label: "aboutSchool", minWords: 55, maxWords: LIMITS.aboutSchool },
+  { key: "aboutDepartment", label: "aboutDepartment", minWords: 70, maxWords: LIMITS.aboutDepartment },
+  { key: "aboutFdp", label: "aboutFdp", minWords: 55, maxWords: LIMITS.aboutFDP },
 ];
 
 function countWords(text: string): number {
@@ -468,7 +473,9 @@ export default function Dashboard() {
   const [history, setHistory] = useState<EditorSnapshot[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [hiddenSegments, setHiddenSegments] = useState<string[]>([]);
-  const [formLineStyles, setFormLineStyles] = useState<Record<string, FormLineStyle>>({});
+  const [formLineStyles, setFormLineStyles] = useState<Record<string, FormLineStyle>>({
+    ...DEFAULT_FORM_LINE_STYLES,
+  });
   const [selectedFormLineKey, setSelectedFormLineKey] = useState<string | null>(null);
   const [editingFormLineKey, setEditingFormLineKey] = useState<string | null>(null);
   const [typingBrochureData, setTypingBrochureData] = useState<BrochureData | null>(null);
@@ -923,6 +930,26 @@ export default function Dashboard() {
     });
   };
 
+  const reorderLogos = useCallback((nextOrder: string[]) => {
+    setSelectedLogos((prev) => {
+      const validIds = new Set(builtinLogos.map((logo) => logo.id));
+      const sanitized = nextOrder.filter((id) => validIds.has(id));
+      if (sanitized.length === 0) return prev;
+
+      const prevSet = new Set(prev);
+      const kept = sanitized.filter((id) => prevSet.has(id));
+      const appended = prev.filter((id) => !kept.includes(id));
+      const next = [...kept, ...appended];
+
+      if (JSON.stringify(prev) === JSON.stringify(next)) {
+        return prev;
+      }
+
+      pushWith({ selectedLogos: next });
+      return next;
+    });
+  }, [pushWith]);
+
   const handleSegmentMove = (id: string, position: SegmentPosition) => {
     setSegmentPositions((prev) => {
       const previousPosition = prev[id];
@@ -1193,11 +1220,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteAsset = (id: string) => {
-    setAssets((prev) => prev.filter((asset) => asset.id !== id));
-    setSelectedLogos((prev) => prev.filter((logoId) => logoId !== id));
-  };
-
   useEffect(() => {
     return () => {
       typingRunRef.current += 1;
@@ -1320,7 +1342,15 @@ export default function Dashboard() {
     try {
       const prompt = buildEnhancePrompt(brochureData);
       const firstPass = await generateBrochureData(prompt);
-      let enhanced = normalizeBrochureData(firstPass.data as Record<string, unknown>);
+      if (!firstPass?.data || typeof firstPass.data !== "object") {
+        console.warn("Enhance with AI received missing or invalid payload, using current brochure data as fallback.");
+      }
+
+      let enhanced = normalizeBrochureData(
+        (firstPass?.data && typeof firstPass.data === "object"
+          ? (firstPass.data as Record<string, unknown>)
+          : (brochureData as unknown as Record<string, unknown>)),
+      );
 
       const underfilled = getUnderfilledSections(enhanced);
       const assistantMessage = firstPass.rawMessage?.content;
@@ -1461,13 +1491,11 @@ export default function Dashboard() {
           )}
 
           <CanvasSidebar
-            assets={assets}
             logoOptions={logoOptions}
             selectedLogos={selectedLogos}
             onToggleLogo={toggleLogo}
+            onReorderLogos={reorderLogos}
             onUploadAssets={handleUploadAssets}
-            onDeleteAsset={handleDeleteAsset}
-            onInsertAssetAsOverlay={addImageOverlayFromAsset}
             isBusy={isLoading}
             template={template}
             onChangeTemplate={handleChangeTemplate}

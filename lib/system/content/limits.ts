@@ -8,10 +8,10 @@ export function truncateWords(text: string, maxWords: number) {
 }
 
 export const LIMITS = {
-  aboutCollege: 150,
-  aboutSchool: 100,
-  aboutDepartment: 120,
-  aboutFDP: 100,
+  aboutCollege: 110,
+  aboutSchool: 75,
+  aboutDepartment: 100,
+  aboutFDP: 85,
   eventTitle: 20,
   committee: 50, // per group
 };

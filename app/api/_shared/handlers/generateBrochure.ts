@@ -1,7 +1,6 @@
 import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const MAX_RETRIES = 5;
 
 const SYSTEM_PROMPT = `You are an elite academic brochure architect. Your goal is to generate HIGH-DENSITY, PROFESSIONAL content for a 3-column, 2-page brochure.
@@ -33,10 +32,10 @@ The output MUST be a valid JSON object matching this SPECIFIC structure:
     "branch": "Specific Branch",
     "ifscCode": "IFSC8888"
   },
-  "aboutCollege": "140-150 words detailed history of the university",
-  "aboutSchool": "90-100 words about the specific computing school",
-  "aboutDepartment": "110-120 words about the organizing department focus",
-  "aboutFdp": "90-100 words about this specific Faculty Development Program objective",
+  "aboutCollege": "90-110 words detailed overview of the university",
+  "aboutSchool": "60-75 words concise school summary",
+  "aboutDepartment": "75-100 words focused department summary",
+  "aboutFdp": "60-85 words clear Faculty Development Program objective",
   "topics": [
     { "date": "Date", "forenoon": "Forenoon Topic", "afternoon": "Afternoon Topic" }
   ],
@@ -49,7 +48,7 @@ REQUIREMENTS:
 1. FILL ALL PLACES: Do not leave empty arrays or strings.
 2. PROFESSIONAL TONE: Use formal, academic language.
 3. ROLE DIVERSITY: MUST include Chief Patrons, Patrons, ONE Convener, ONE Co-Convener, Advisory Committee, and Organizing Committee.
-4. DENSITY: For 'About' sections, follow strict word limits (100-150 words each) to ensure content fits the layout. Use sophisticated academic vocabulary.
+4. DENSITY: For 'About' sections, follow strict concise word limits so content fits the layout while remaining informative.
 5. CONSISTENCY: Ensure all dates match the event title.
 6. COMMITTEE PLACEMENT: Ensure Convener and Co-Convener are present in the committee list.
 IMPORTANT: Output ONLY the JSON object, NO other text.`;
@@ -79,6 +78,16 @@ type OpenRouterResponse = {
 type RouteError = Error & {
   status?: number;
 };
+
+function getOpenRouterConfig() {
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("OpenRouter API key not found");
+  }
+
+  const model = process.env.OPENROUTER_MODEL?.trim() || "openai/gpt-oss-120b:free";
+  return { apiKey, model };
+}
 
 function normalizeMessageContent(content: unknown): string {
   if (typeof content === "string") {
@@ -117,23 +126,23 @@ async function requestBrochureData(
   history: ChatMessage[],
   retries = MAX_RETRIES,
 ) {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error("Missing OPENROUTER_API_KEY server environment variable.");
-  }
+  const { apiKey, model } = getOpenRouterConfig();
 
   try {
-    const formattedHistory = history.map((message) => ({
-      role: message.role,
-      content: message.content,
-      ...(message.role === "assistant" && message.reasoning_details !== undefined
-        ? { reasoning_details: message.reasoning_details }
-        : {}),
-    }));
+    const formattedHistory = history
+      .filter((message) => typeof message?.role === "string" && typeof message?.content === "string")
+      .map((message) => ({
+        role: message.role,
+        content: message.content,
+        ...(message.role === "assistant" && message.reasoning_details !== undefined
+          ? { reasoning_details: message.reasoning_details }
+          : {}),
+      }));
 
     const response = await axios.post<OpenRouterResponse>(
       "https://openrouter.ai/api/v1/chat/completions",
       {
-        model: "openai/gpt-oss-120b:free",
+        model,
         max_tokens: 4000,
         reasoning: { enabled: true },
         messages: [
@@ -147,11 +156,15 @@ async function requestBrochureData(
       },
       {
         headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
       },
     );
+
+    if (!response || !response.data) {
+      throw new Error("OpenRouter response was undefined.");
+    }
 
     if (!response.data?.choices?.length) {
       if (response.data?.error) {
@@ -163,7 +176,11 @@ async function requestBrochureData(
       throw new Error("OpenRouter returned an empty or invalid response.");
     }
 
-    const message = response.data.choices[0].message;
+    const message = response.data.choices[0]?.message;
+    if (!message) {
+      throw new Error("OpenRouter response did not include a message payload.");
+    }
+
     let content = normalizeMessageContent(message?.content);
 
     if (!content) {
@@ -183,6 +200,9 @@ async function requestBrochureData(
 
     try {
       const parsedData = JSON.parse(content);
+      if (!parsedData || typeof parsedData !== "object" || Array.isArray(parsedData)) {
+        throw new Error("OpenRouter returned invalid JSON object structure.");
+      }
 
       return {
         data: parsedData,
@@ -202,6 +222,11 @@ async function requestBrochureData(
       axios.isAxiosError<OpenRouterResponse>(error) ? error : null;
     const fallbackErrorMessage = error instanceof Error ? error.message : "";
     const networkErrorMessage = axiosError?.message || fallbackErrorMessage;
+    console.error("OpenRouter brochure request failed", {
+      message: networkErrorMessage,
+      status: axiosError?.response?.status,
+      retriesRemaining: retries,
+    });
 
     if (axiosError?.response?.status === 429 && retries > 0) {
       const waitTime = Math.pow(2, MAX_RETRIES - retries + 1) * 1000;
@@ -228,7 +253,7 @@ export async function handleGenerateBrochure(req: NextRequest) {
   try {
     const body = await req.json();
     const prompt = typeof body?.prompt === "string" ? body.prompt : "";
-    const history = Array.isArray(body?.history) ? body.history : [];
+    const history = Array.isArray(body?.history) ? (body.history as ChatMessage[]) : [];
 
     if (!prompt.trim()) {
       return NextResponse.json(
@@ -242,6 +267,10 @@ export async function handleGenerateBrochure(req: NextRequest) {
     return NextResponse.json(result);
   } catch (error: unknown) {
     const routeError = error as RouteError;
+    console.error("Brochure route failed", {
+      message: routeError.message,
+      status: routeError.status,
+    });
 
     return NextResponse.json(
       { error: routeError.message || "Brochure generation failed." },
