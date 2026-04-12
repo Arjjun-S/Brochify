@@ -18,6 +18,7 @@ type GuidedFlowPanelProps = {
   onCreate: () => void;
   isBusy: boolean;
   fullPage?: boolean;
+  createActionLabel?: string;
 };
 
 const inputClassName =
@@ -213,15 +214,17 @@ export default function GuidedFlowPanel({
   onCreate,
   isBusy,
   fullPage = false,
+  createActionLabel = "Build Brochure",
 }: GuidedFlowPanelProps) {
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
-  const [headings, setHeadings] = useState(data.headings);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [startTime, setStartTime] = useState("09:30");
   const [endTime, setEndTime] = useState("16:00");
   const [sessionPreset, setSessionPreset] = useState(SESSION_WINDOWS[0].value);
+
+  const headings = data.headings;
 
   const sessionWindow = `${startTime} - ${endTime}`;
 
@@ -239,10 +242,6 @@ export default function GuidedFlowPanel({
     const composed = `${dateText}${dateText ? " | " : ""}${sessionWindow}`;
     onFieldChange("dates", composed.trim());
   }, [endDate, onFieldChange, sessionWindow, startDate]);
-
-  useEffect(() => {
-    setHeadings(data.headings);
-  }, [data.headings]);
 
   const steps = [
     {
@@ -297,8 +296,6 @@ export default function GuidedFlowPanel({
                 className={inputClassName}
                 value={value}
                 onChange={(e) => {
-                  const next = { ...headings, [key]: e.target.value } as typeof headings;
-                  setHeadings(next);
                   onFieldChange(`headings.${key}`, e.target.value);
                 }}
               />
@@ -551,7 +548,7 @@ export default function GuidedFlowPanel({
                   )}
                 >
                   <Sparkles className="h-4 w-4" />
-                  Build Brochure
+                  {createActionLabel}
                 </button>
                 <button
                   type="button"
