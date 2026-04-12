@@ -1,6 +1,7 @@
 "use client";
 
 import React, { CSSProperties } from 'react';
+import Image from 'next/image';
 import MovableSegment from './MovableSegment';
 import BrochureOverlay from './BrochureOverlay';
 import { BrochureData, OverlayItem, SegmentPosition, TextEntity } from '@/lib/domains/brochure';
@@ -472,6 +473,13 @@ export default function PageTwo({
             }}
         >
         <div id="brochure-page-2" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
+            <div className="pointer-events-none absolute left-1/2 top-2 z-50 -translate-x-1/2 select-none">
+                <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white/90 px-2 py-1 shadow-sm">
+                    <Image src="/icon-logo.png" alt="Brochify" width={14} height={14} />
+                    <span className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-700">Brochify</span>
+                </div>
+            </div>
+
             <div className="column flex-[0.8] !p-5 flex flex-col gap-5" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText, fontSize: '11.5px' }}>
                                 {!isHidden('p2-about-srm') && (
                                 <MovableSegment id="p2-about-srm" position={segmentPositions?.['p2-about-srm']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={0}>

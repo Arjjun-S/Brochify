@@ -14,7 +14,7 @@ export default function DevLogs() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-300 font-mono text-[10px] border-l border-white/5 shadow-2xl">
+    <div className="flex min-h-0 flex-col h-full bg-slate-950 text-slate-300 font-mono text-[10px] border-l border-white/5 shadow-2xl">
       <div className="p-4 border-b border-white/5 flex items-center justify-between bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary/20 rounded-lg border border-primary/30">
@@ -33,7 +33,7 @@ export default function DevLogs() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto overscroll-contain p-2 pr-1 space-y-2">
         {logs.length === 0 && (
           <div className="flex flex-col items-center justify-center h-40 opacity-20 text-center px-6">
             <Zap className="w-8 h-8 mb-4 animate-pulse" />

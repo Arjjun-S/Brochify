@@ -740,6 +740,13 @@ export default function PageOne({
             }}
         >
         <div id="brochure-page-1" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
+            <div className="pointer-events-none absolute left-1/2 top-2 z-50 -translate-x-1/2 select-none">
+                <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white/90 px-2 py-1 shadow-sm">
+                    <Image src="/icon-logo.png" alt="Brochify" width={14} height={14} />
+                    <span className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-700">Brochify</span>
+                </div>
+            </div>
+
             {/* Column 1: Committees (White) */}
                         <div className="column !p-4 flex flex-col" style={{ backgroundColor: paletteSurface, borderRight: `1px solid ${paletteSurfaceBorder}` }}>
                                 <div className="flex-1 p-5 rounded-[32px] border space-y-6 shadow-sm" style={{ backgroundColor: paletteSurface, borderColor: `${paletteSurfaceBorder}` }}>

@@ -93,7 +93,7 @@ export default function CanvasSidebar({
   ];
 
   return (
-    <aside className="w-[320px] shrink-0 border-r border-slate-200 bg-white/95 backdrop-blur-xl h-full flex flex-col">
+    <aside className="w-[320px] shrink-0 border-r border-slate-200 bg-white/95 backdrop-blur-xl h-full min-h-0 flex flex-col overflow-y-auto overscroll-contain">
       <div className="px-4 pt-5 pb-2">
         <h3 className="text-xl font-black tracking-tight text-slate-900">Assets Studio</h3>
       </div>
