@@ -6,6 +6,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 type ChatHistoryMessage = {
   role: string;
   content: string;
+  reasoning_details?: unknown;
 };
 
 type BrochureRouteResponse = {
@@ -32,7 +33,18 @@ export async function generateBrochureData(
       },
     );
 
-    if (!response.data?.data) {
+    if (!response || !response.data) {
+      logger.log(
+        "OPENROUTER",
+        "UNDEFINED_RESPONSE",
+        { prompt },
+        { responseExists: Boolean(response) },
+        "ERROR",
+      );
+      throw new Error("OpenRouter response was undefined.");
+    }
+
+    if (!response.data?.data || typeof response.data.data !== "object") {
       logger.log(
         "OPENROUTER",
         "INVALID_RESPONSE",

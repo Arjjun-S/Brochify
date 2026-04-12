@@ -15,12 +15,36 @@ export type Speaker = {
   org: string;
 };
 
+export type BrochureHeadings = {
+  chiefPatrons: string;
+  patrons: string;
+  convener: string;
+  coConvener: string;
+  advisoryCommittee: string;
+  organizingCommittee: string;
+  registrationDetail: string;
+  registrationFee: string;
+  registrationNote: string;
+  accountDetail: string;
+  sponsoredBy: string;
+  organizedBy: string;
+  aboutCollege: string;
+  aboutSchool: string;
+  aboutDepartment: string;
+  aboutFdp: string;
+  programHighlights: string;
+  topics: string;
+  speakers: string;
+};
+
 export type BrochureData = {
   eventTitle: string;
   department: string;
   dates: string;
   googleForm: string;
   eventImage?: string;
+  templateText: Record<string, string>;
+  headings: BrochureHeadings;
   committee: CommitteeMember[];
   registration: {
     ieeePrice: string;
@@ -51,9 +75,28 @@ export type BrochureData = {
 export type SegmentPosition = {
   x: number;
   y: number;
+  width?: number;
+  height?: number;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  color?: string;
+  align?: OverlayTextAlign;
 };
 
 export type OverlayTextAlign = "left" | "center" | "right";
+
+export type TextEntity = {
+  id: string;
+  text: string;
+  position: { x: number; y: number };
+  style: {
+    fontSize: number;
+    color: string;
+    align: OverlayTextAlign;
+  };
+  isEditing: boolean;
+};
 
 type OverlayBase = {
   id: string;
@@ -126,6 +169,45 @@ export const FONT_OPTIONS = [
 const makeId = (prefix: string) =>
   `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
+const DEFAULT_HEADINGS: BrochureHeadings = {
+  chiefPatrons: "CHIEF PATRONS",
+  patrons: "PATRONS",
+  convener: "CONVENER",
+  coConvener: "CO-CONVENER",
+  advisoryCommittee: "ACADEMIC ADVISORY COMMITTEE",
+  organizingCommittee: "ORGANIZING COMMITTEE",
+  registrationDetail: "REGISTRATION DETAIL",
+  registrationFee: "Registration Fee:",
+  registrationNote: "Note:",
+  accountDetail: "ACCOUNT DETAIL",
+  sponsoredBy: "IEEE Madras Section Sponsored",
+  organizedBy: "Organized by",
+  aboutCollege: "About SRM",
+  aboutSchool: "About the School",
+  aboutDepartment: "About Department",
+  aboutFdp: "About the FDP",
+  programHighlights: "Program Highlights:",
+  topics: "Topics to be covered",
+  speakers: "Eminent Speakers",
+};
+
+const DEFAULT_TEMPLATE_TEXT: Record<string, string> = {
+  p1_ieeeMemberLabel: "IEEE Member",
+  p1_nonIeeeMemberLabel: "Non IEEE Member",
+  p1_refundableNote: "(Rs. 250 refundable upon IEEE Membership enrollment)",
+  p1_bankNameLabel: "Bank Name",
+  p1_accountNoLabel: "Acc No",
+  p1_accountNameLabel: "Acc Name",
+  p1_ifscLabel: "IFSC Code",
+  p1_contactLabel: "Contact",
+  p1_institutionName: "SRM Institute of Science and Technology",
+  p2_dayLabel: "Day",
+  p2_tableDateLabel: "Date",
+  p2_tableSessionLabel: "Forenoon / Afternoon Session",
+  p2_footerLeft: "MADE WITH BROCHIFY",
+  p2_footerRight: "SRM-KTR",
+};
+
 export function createEmptyBrochureData(): BrochureData {
   return {
     eventTitle: "Faculty Development Program on AI Systems Design",
@@ -133,6 +215,8 @@ export function createEmptyBrochureData(): BrochureData {
     dates: "23rd-27th March 2026",
     googleForm: "https://forms.google.com/registration-link",
     eventImage: "",
+    templateText: { ...DEFAULT_TEMPLATE_TEXT },
+    headings: DEFAULT_HEADINGS,
     committee: [
       { name: "Dr. N. Raman", role: "Chief Patron" },
       { name: "Dr. S. Meena", role: "Patron" },
@@ -161,13 +245,13 @@ export function createEmptyBrochureData(): BrochureData {
       ifscCode: "IDIB000S181",
     },
     aboutCollege:
-      "SRM Institute of Science and Technology is a multidisciplinary research university known for academic rigor, innovation, and industry integration. Its ecosystem combines advanced laboratories, international collaborations, entrepreneurial culture, and a strong emphasis on experiential learning. The institution consistently nurtures technically proficient graduates through interdisciplinary exposure, applied research, and structured faculty development initiatives.",
+      "SRM Institute of Science and Technology is a multidisciplinary university recognized for strong academics, active research, and industry collaboration. It offers modern labs, global partnerships, and practice-oriented learning pathways. The campus ecosystem encourages innovation, entrepreneurship, and interdisciplinary problem solving. Faculty and students work on applied projects that connect curriculum with real-world impact. Through continuous training programs and research culture, SRM supports professional growth and future-ready education.",
     aboutSchool:
-      "The School of Computing brings together future-facing programs in software systems, artificial intelligence, data science, and digital product engineering. It promotes collaborative learning, applied research, and strong industry engagement through a curriculum aligned with modern computing practice.",
+      "The School of Computing offers focused programs in software engineering, artificial intelligence, and data science. It promotes collaborative learning, research-driven teaching, and strong industry engagement through practice-oriented curriculum and project experience.",
     aboutDepartment:
-      "The Department of Computational Design focuses on intelligent systems, interface design, software platforms, and emerging digital workflows. It supports research-led teaching, design thinking, and advanced technical problem solving through active project-based learning.",
+      "The Department of Computational Design focuses on intelligent systems, interface engineering, and modern digital workflows. It emphasizes project-based learning, design thinking, and practical technical problem solving through research-informed instruction.",
     aboutFdp:
-      "This FDP is designed to strengthen faculty capability in AI-enabled product thinking, modern interface systems, and practical educational adoption. It combines lectures, demonstrations, and hands-on sessions to help participants translate ideas into impactful academic and industry-aligned outcomes.",
+      "This FDP strengthens faculty capability in AI-enabled design, modern interface systems, and classroom adoption strategies. It combines expert talks, demonstrations, and guided hands-on sessions for immediate academic application.",
     topics: [
       {
         date: "Day 1",
@@ -217,6 +301,18 @@ export function normalizeBrochureData(
   return {
     ...defaults,
     ...source,
+    templateText: {
+      ...DEFAULT_TEMPLATE_TEXT,
+      ...(isObjectNode(source.templateText)
+        ? Object.fromEntries(
+            Object.entries(source.templateText).map(([key, value]) => [key, `${value ?? ""}`]),
+          )
+        : {}),
+    },
+    headings: {
+      ...DEFAULT_HEADINGS,
+      ...(source.headings ?? {}),
+    },
     registration: {
       ...defaults.registration,
       ...(source.registration ?? {}),
@@ -332,7 +428,7 @@ export function createTextOverlay(page: 1 | 2): TextOverlayItem {
     fontWeight: 700,
     color: "#0f172a",
     align: "left",
-    backgroundColor: "rgba(255,255,255,0.85)",
+    backgroundColor: "transparent",
   };
 }
 

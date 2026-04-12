@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import PageOne from "@/components/studio/canvas/PageOne";
 import PageTwo from "@/components/studio/canvas/PageTwo";
 import GuidedFlowPanel from "@/components/studio/editor/GuidedFlowPanel";
@@ -13,13 +14,15 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  Bold,
   Circle,
   Download,
-  Layout,
+  Redo2,
   Sparkles,
   Square,
   Trash2,
   Type,
+  Undo2,
   ChevronRight,
 } from "lucide-react";
 import {
@@ -41,17 +44,175 @@ import {
 } from "@/lib/domains/brochure";
 import { generateBrochureData } from "@/lib/services/ai/openrouterClient";
 import { LoadingTask } from "@/lib/system/loading/loadingTaskManager";
+import { LIMITS } from "@/lib/system/content/limits";
+import type { BrochureTemplate } from "@/components/studio/editor/CanvasSidebar";
 
 const PAGE_WIDTH = 983;
 const PAGE_HEIGHT = 680;
 const PAGE_GAP = 24;
+const PAGE_TYPING_TARGET_MS = 5000;
+const COLUMN_TYPING_TARGET_MS = Math.round(PAGE_TYPING_TARGET_MS / 3);
+
+const NON_TEXT_SEGMENT_IDS = new Set(["p1-image", "p1-logos", "p1-qr-code", "p1-qr-link"]);
 
 const builtinLogos: Array<{ id: string; name: string; src: string }> = [
-  { id: "srm", name: "SRM Institute of Tech", src: "/logos/srm.svg" },
-  { id: "ieee", name: "IEEE Student Branch", src: "/logos/ieee.svg" },
-  { id: "ctech", name: "Dept. of C. Tech", src: "/logos/ctech.svg" },
-  { id: "naac", name: "NAAC Accredited", src: "/logos/naac.svg" },
+  { id: "ieeetems", name: "IEEE (TEMS)", src: "/logos/ieeetems.png" },
+  { id: "ctech", name: "CTECH", src: "/logos/ctech.jpeg" },
+  { id: "ieee", name: "IEEE", src: "/logos/ieee.png" },
+  { id: "srm", name: "SRM", src: "/logos/srm.svg" },
+  { id: "iicm", name: "Institute of Innovation Council", src: "/logos/iicm.png" },
+  { id: "soct", name: "School of Computing", src: "/logos/soct.jpeg" },
 ];
+
+type Palette = {
+  primary: string;
+  secondary: string;
+  primaryText: string;
+  surface: string;
+  surfaceBorder: string;
+  strongSurface?: string;
+  accent: string;
+  mutedText: string;
+};
+
+const TEMPLATE_THEMES: Record<BrochureTemplate, { pageStyle: CSSProperties; palette: Palette }> = {
+  whiteBlue: {
+    pageStyle: {
+      backgroundImage:
+        "radial-gradient(circle at 18% 18%, rgba(128, 220, 242, 0.16) 0, transparent 36%), radial-gradient(circle at 82% 12%, rgba(11, 77, 162, 0.18) 0, transparent 42%), linear-gradient(180deg, #ffffff 0%, #eef4ff 100%)",
+    },
+    palette: {
+      primary: "#0b4da2",
+      secondary: "#5fa8ff",
+      primaryText: "#ffffff",
+      surface: "#f9fbff",
+      surfaceBorder: "#d9e3f5",
+      strongSurface: "#0f59b8",
+      accent: "#facc15",
+      mutedText: "#64748b",
+    },
+  },
+  beigeDust: {
+    pageStyle: {
+      backgroundImage:
+        "radial-gradient(rgba(120, 94, 60, 0.14) 1px, transparent 1.2px), linear-gradient(180deg, #fdf6ea 0%, #f5e9d7 100%)",
+      backgroundSize: "18px 18px, 100% 100%",
+      backgroundColor: "#f5e9d7",
+    },
+    palette: {
+      primary: "#c29d6d",
+      secondary: "#e6c89c",
+      primaryText: "#2d1f12",
+      surface: "#f9f2e6",
+      strongSurface: "#e8dcc5",
+      surfaceBorder: "#e6d6c2",
+      accent: "#8a5a1f",
+      mutedText: "#5c4a38",
+    },
+  },
+  softBlue: {
+    pageStyle: {
+      backgroundImage: "linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%)",
+      backgroundColor: "#f4f9ff",
+    },
+    palette: {
+      primary: "#1e3a8a",
+      secondary: "#93c5fd",
+      primaryText: "#0f172a",
+      surface: "#ffffff",
+      strongSurface: "#eef5ff",
+      surfaceBorder: "#dbeafe",
+      accent: "#0f172a",
+      mutedText: "#1f2937",
+    },
+  },
+  tealGloss: {
+    pageStyle: {
+      backgroundImage:
+        "radial-gradient(circle at 20% 16%, rgba(74, 164, 154, 0.16) 0, transparent 34%), radial-gradient(circle at 84% 14%, rgba(167, 224, 216, 0.2) 0, transparent 42%), linear-gradient(180deg, #ffffff 0%, #f2fcfb 100%)",
+      backgroundColor: "#ffffff",
+    },
+    palette: {
+      primary: "#2b8a82",
+      secondary: "#a8ddd7",
+      primaryText: "#ffffff",
+      surface: "#ffffff",
+      strongSurface: "#329890",
+      surfaceBorder: "#d7efeb",
+      accent: "#1f6f69",
+      mutedText: "#4d706c",
+    },
+  },
+  yellowDust: {
+    pageStyle: {
+      backgroundImage:
+        "radial-gradient(circle at 24% 18%, rgba(244, 214, 102, 0.2) 0, transparent 36%), radial-gradient(circle at 82% 14%, rgba(252, 235, 150, 0.26) 0, transparent 40%), linear-gradient(180deg, #ffffff 0%, #fffcec 100%)",
+      backgroundColor: "#ffffff",
+    },
+    palette: {
+      primary: "#d4b423",
+      secondary: "#f8e78f",
+      primaryText: "#1f2937",
+      surface: "#ffffff",
+      strongSurface: "#fdf2b8",
+      surfaceBorder: "#f1e2a1",
+      accent: "#8a6a0f",
+      mutedText: "#5f5640",
+    },
+  },
+};
+
+type EditorSnapshot = {
+  brochureData: BrochureData;
+  selectedLogos: string[];
+  segmentPositions: Record<string, SegmentPosition>;
+  overlayItems: OverlayItem[];
+  template: BrochureTemplate;
+  hiddenSegments: string[];
+  formLineStyles: Record<string, FormLineStyle>;
+};
+
+type SelectedCanvasElement =
+  | { kind: "overlay"; id: string; page: 1 | 2 }
+  | { kind: "segment"; id: string; page: 1 | 2 }
+  | null;
+
+type CanvasTextStylePatch = {
+  fontFamily?: string;
+  fontSize?: number;
+  color?: string;
+  align?: TextOverlayItem["align"];
+  fontWeight?: number;
+};
+
+type FormLineStyle = {
+  fontSize?: number;
+  color?: string;
+  align?: TextOverlayItem["align"];
+};
+
+const DEFAULT_FORM_LINE_STYLES: Record<string, FormLineStyle> = {
+  "aboutCollege::0": { align: "center" },
+  "registration.notes": { fontSize: 13 },
+};
+
+type SelectedTextTarget =
+  | {
+      kind: "overlay";
+      id: string;
+      fontFamily: string;
+      fontSize: number;
+      color: string;
+      align: TextOverlayItem["align"];
+      fontWeight: number;
+    }
+  | {
+      kind: "form-line";
+      key: string;
+      fontSize: number;
+      color: string;
+      align: TextOverlayItem["align"];
+    };
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -62,8 +223,235 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+type EnhanceSectionTarget = {
+  key: "aboutCollege" | "aboutSchool" | "aboutDepartment" | "aboutFdp";
+  label: string;
+  minWords: number;
+  maxWords: number;
+};
+
+const ENHANCE_SECTION_TARGETS: EnhanceSectionTarget[] = [
+  { key: "aboutCollege", label: "aboutCollege", minWords: 85, maxWords: LIMITS.aboutCollege },
+  { key: "aboutSchool", label: "aboutSchool", minWords: 55, maxWords: LIMITS.aboutSchool },
+  { key: "aboutDepartment", label: "aboutDepartment", minWords: 70, maxWords: LIMITS.aboutDepartment },
+  { key: "aboutFdp", label: "aboutFdp", minWords: 55, maxWords: LIMITS.aboutFDP },
+];
+
+function countWords(text: string): number {
+  return text
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 0).length;
+}
+
+function getUnderfilledSections(data: BrochureData): EnhanceSectionTarget[] {
+  return ENHANCE_SECTION_TARGETS.filter((target) => countWords(data[target.key] ?? "") < target.minWords);
+}
+
 function buildEnhancePrompt(data: BrochureData): string {
-  return `Enhance the following brochure JSON while preserving factual fields and structure. Improve writing quality, clarity, and professionalism. Return only JSON matching the same schema.\n\n${JSON.stringify(data, null, 2)}`;
+  const sectionLimits = ENHANCE_SECTION_TARGETS.map(
+    (target) => `- ${target.label}: ${target.minWords}-${target.maxWords} words`,
+  ).join("\n");
+
+  const currentSectionCounts = ENHANCE_SECTION_TARGETS.map(
+    (target) => `- ${target.label}: currently ${countWords(data[target.key] ?? "")} words`,
+  ).join("\n");
+
+  return [
+    "Enhance the following brochure JSON while preserving factual fields and schema structure.",
+    "Improve clarity, professionalism, and academic tone.",
+    "Expand underfilled body sections to meet these layout word ranges:",
+    sectionLimits,
+    "Do not exceed the max words for each section and keep arrays/keys intact.",
+    "Return only JSON matching the same schema.",
+    "",
+    "Current section counts:",
+    currentSectionCounts,
+    "",
+    JSON.stringify(data, null, 2),
+  ].join("\n");
+}
+
+function buildLengthRefinementPrompt(data: BrochureData, underfilledSections: EnhanceSectionTarget[]): string {
+  const sections = underfilledSections
+    .map(
+      (target) =>
+        `- ${target.label}: currently ${countWords(data[target.key] ?? "")} words; rewrite to ${target.minWords}-${target.maxWords} words`,
+    )
+    .join("\n");
+
+  return [
+    "Refine only the underfilled sections below and keep all other values unchanged.",
+    "Preserve factual details and JSON schema keys exactly.",
+    "Underfilled sections to expand:",
+    sections,
+    "Return only JSON.",
+    "",
+    JSON.stringify(data, null, 2),
+  ].join("\n");
+}
+
+function waitFor(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function getValueFromPath(source: Record<string, unknown>, path: string): unknown {
+  const keys = path.split(".");
+  let cursor: unknown = source;
+
+  for (const key of keys) {
+    if (cursor == null) return undefined;
+
+    if (Array.isArray(cursor)) {
+      const index = Number(key);
+      if (!Number.isInteger(index)) return undefined;
+      cursor = cursor[index];
+      continue;
+    }
+
+    if (typeof cursor !== "object") return undefined;
+    cursor = (cursor as Record<string, unknown>)[key];
+  }
+
+  return cursor;
+}
+
+function createTypingSeedData(data: BrochureData): BrochureData {
+  const visit = (value: unknown): unknown => {
+    if (typeof value === "string") return "";
+    if (Array.isArray(value)) return value.map(visit);
+    if (value && typeof value === "object") {
+      const next: Record<string, unknown> = {};
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        next[key] = visit(nested);
+      }
+      return next;
+    }
+    return value;
+  };
+
+  return visit(structuredClone(data)) as BrochureData;
+}
+
+type TypingStage = {
+  page: 1 | 2;
+  column: 1 | 2 | 3;
+  durationMs: number;
+  paths: string[];
+};
+
+function uniquePaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  return paths.filter((path) => {
+    if (!path || seen.has(path)) return false;
+    seen.add(path);
+    return true;
+  });
+}
+
+function buildTypingPlan(data: BrochureData): TypingStage[] {
+  const pageOneColumnOne: string[] = [
+    "headings.chiefPatrons",
+    "headings.patrons",
+    "headings.convener",
+    "headings.coConvener",
+    "headings.advisoryCommittee",
+    "headings.organizingCommittee",
+  ];
+
+  for (let index = 0; index < data.committee.length; index += 1) {
+    pageOneColumnOne.push(`committee.${index}.name`);
+    pageOneColumnOne.push(`committee.${index}.role`);
+  }
+
+  const pageOneColumnTwo: string[] = [
+    "headings.registrationDetail",
+    "headings.registrationFee",
+    "templateText.p1_ieeeMemberLabel",
+    "registration.ieeePrice",
+    "templateText.p1_nonIeeeMemberLabel",
+    "registration.nonIeeePrice",
+    "templateText.p1_refundableNote",
+    "headings.registrationNote",
+  ];
+
+  for (let index = 0; index < data.registration.notes.length; index += 1) {
+    pageOneColumnTwo.push(`registration.notes.${index}`);
+  }
+
+  pageOneColumnTwo.push(
+    "googleForm",
+    "headings.accountDetail",
+    "templateText.p1_bankNameLabel",
+    "accountDetails.bankName",
+    "templateText.p1_accountNoLabel",
+    "accountDetails.accountNo",
+    "templateText.p1_accountNameLabel",
+    "accountDetails.accountName",
+    "templateText.p1_ifscLabel",
+    "accountDetails.ifscCode",
+    "templateText.p1_contactLabel",
+    "contact.name",
+    "contact.mobile",
+  );
+
+  const pageOneColumnThree: string[] = [
+    "headings.sponsoredBy",
+    "eventTitle",
+    "dates",
+    "headings.organizedBy",
+    "department",
+    "templateText.p1_institutionName",
+  ];
+
+  const pageTwoColumnOne: string[] = [
+    "headings.aboutCollege",
+    "aboutCollege",
+    "headings.aboutSchool",
+    "aboutSchool",
+  ];
+
+  const pageTwoColumnTwo: string[] = [
+    "headings.aboutDepartment",
+    "aboutDepartment",
+    "headings.aboutFdp",
+    "aboutFdp",
+    "headings.programHighlights",
+    "templateText.p2_dayLabel",
+  ];
+
+  for (let index = 0; index < data.topics.length; index += 1) {
+    pageTwoColumnTwo.push(`topics.${index}.forenoon`);
+  }
+
+  const pageTwoColumnThree: string[] = [
+    "headings.topics",
+    "templateText.p2_tableDateLabel",
+    "templateText.p2_tableSessionLabel",
+  ];
+
+  for (let index = 0; index < data.topics.length; index += 1) {
+    pageTwoColumnThree.push(`topics.${index}.date`);
+    pageTwoColumnThree.push(`topics.${index}.afternoon`);
+  }
+
+  pageTwoColumnThree.push("headings.speakers");
+  for (let index = 0; index < data.speakers.length; index += 1) {
+    pageTwoColumnThree.push(`speakers.${index}.name`);
+    pageTwoColumnThree.push(`speakers.${index}.role`);
+    pageTwoColumnThree.push(`speakers.${index}.org`);
+  }
+
+  return [
+    { page: 1, column: 1, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageOneColumnOne) },
+    { page: 1, column: 2, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageOneColumnTwo) },
+    { page: 1, column: 3, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageOneColumnThree) },
+    { page: 2, column: 1, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageTwoColumnOne) },
+    { page: 2, column: 2, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageTwoColumnTwo) },
+    { page: 2, column: 3, durationMs: COLUMN_TYPING_TARGET_MS, paths: uniquePaths(pageTwoColumnThree) },
+  ];
 }
 
 export default function Dashboard() {
@@ -75,14 +463,57 @@ export default function Dashboard() {
   const [showDevLogs, setShowDevLogs] = useState(false);
   const [segmentPositions, setSegmentPositions] = useState<Record<string, SegmentPosition>>({});
   const [overlayItems, setOverlayItems] = useState<OverlayItem[]>([]);
-  const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
+  const [selectedElement, setSelectedElement] = useState<SelectedCanvasElement>(null);
   const [activePage, setActivePage] = useState<1 | 2>(1);
-  const [previewScale, setPreviewScale] = useState(1);
+  const [previewScale, setPreviewScale] = useState(1); // auto scale from viewport
+  const [zoomFactor, setZoomFactor] = useState(0.9); // user-controlled multiplier (start at 90%)
   const [projectReady, setProjectReady] = useState(false);
   const [assets, setAssets] = useState<BrandAsset[]>([]);
+  const [template, setTemplate] = useState<BrochureTemplate>("whiteBlue");
+  const [history, setHistory] = useState<EditorSnapshot[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [hiddenSegments, setHiddenSegments] = useState<string[]>([]);
+  const [formLineStyles, setFormLineStyles] = useState<Record<string, FormLineStyle>>({
+    ...DEFAULT_FORM_LINE_STYLES,
+  });
+  const [selectedFormLineKey, setSelectedFormLineKey] = useState<string | null>(null);
+  const [editingFormLineKey, setEditingFormLineKey] = useState<string | null>(null);
+  const [typingBrochureData, setTypingBrochureData] = useState<BrochureData | null>(null);
+  const [animationPhase, setAnimationPhase] = useState<"idle" | "preview" | "typing">("idle");
+  const [activeTypingPath, setActiveTypingPath] = useState<string | null>(null);
   const previewViewportRef = useRef<HTMLDivElement | null>(null);
+  const pageOneRef = useRef<HTMLDivElement | null>(null);
+  const pageTwoRef = useRef<HTMLDivElement | null>(null);
+  const historyIndexRef = useRef(-1);
+  const latestRef = useRef<EditorSnapshot | null>(null);
+  const currentStateRef = useRef<EditorSnapshot>({
+    brochureData,
+    selectedLogos,
+    segmentPositions,
+    overlayItems,
+    template,
+    hiddenSegments,
+    formLineStyles,
+  });
+  const historyInteractionRef = useRef<{ active: boolean; changed: boolean }>({ active: false, changed: false });
+  const historyInitializedRef = useRef(false);
+  const typingRunRef = useRef(0);
+  const animationPhaseRef = useRef<"idle" | "preview" | "typing">(animationPhase);
 
   const isLoading = loadingTask !== "idle";
+  const isTypingAnimationActive = animationPhase === "typing";
+  const canvasBrochureData = typingBrochureData ?? brochureData;
+
+  const stopTypingAnimation = useCallback(() => {
+    typingRunRef.current += 1;
+    setAnimationPhase("idle");
+    setTypingBrochureData(null);
+    setActiveTypingPath(null);
+  }, []);
+
+  useEffect(() => {
+    animationPhaseRef.current = animationPhase;
+  }, [animationPhase]);
 
   useEffect(() => {
     setMounted(true);
@@ -112,7 +543,7 @@ export default function Dashboard() {
     if (!node) return;
 
     const resizeObserver = new ResizeObserver(([entry]) => {
-      const nextScale = Math.min(1, Math.max(0.52, (entry.contentRect.width - 24) / PAGE_WIDTH));
+      const nextScale = Math.min(1.1, Math.max(0.7, (entry.contentRect.width - 24) / PAGE_WIDTH));
       setPreviewScale(nextScale);
     });
 
@@ -120,20 +551,220 @@ export default function Dashboard() {
     return () => resizeObserver.disconnect();
   }, []);
 
+  const normalizeSnapshot = useCallback((snapshot?: Partial<EditorSnapshot> | null): EditorSnapshot | null => {
+    if (!snapshot || !snapshot.brochureData) {
+      return null;
+    }
+
+    const fallback = latestRef.current ?? currentStateRef.current;
+    return {
+      brochureData: snapshot.brochureData,
+      selectedLogos: Array.isArray(snapshot.selectedLogos) ? snapshot.selectedLogos : fallback.selectedLogos,
+      segmentPositions:
+        snapshot.segmentPositions && typeof snapshot.segmentPositions === "object"
+          ? snapshot.segmentPositions
+          : fallback.segmentPositions,
+      overlayItems: Array.isArray(snapshot.overlayItems) ? snapshot.overlayItems : fallback.overlayItems,
+      template: snapshot.template ?? fallback.template,
+      hiddenSegments: Array.isArray(snapshot.hiddenSegments) ? snapshot.hiddenSegments : fallback.hiddenSegments,
+      formLineStyles:
+        snapshot.formLineStyles && typeof snapshot.formLineStyles === "object"
+          ? snapshot.formLineStyles
+          : fallback.formLineStyles,
+    };
+  }, []);
+
+  useEffect(() => {
+    const current: EditorSnapshot = {
+      brochureData,
+      selectedLogos,
+      segmentPositions,
+      overlayItems,
+      template,
+      hiddenSegments,
+      formLineStyles,
+    };
+
+    currentStateRef.current = current;
+    latestRef.current = current;
+
+    if (!historyInitializedRef.current) {
+      setHistory([current]);
+      setHistoryIndex(0);
+      historyIndexRef.current = 0;
+      historyInitializedRef.current = true;
+    }
+  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles]);
+
+  const pushHistorySnapshot = useCallback(
+    (snapshot: Partial<EditorSnapshot> | null | undefined) => {
+      const validSnapshot = normalizeSnapshot(snapshot);
+      if (!validSnapshot) return;
+
+      setHistory((prev) => {
+        const truncated = prev.slice(0, historyIndexRef.current + 1);
+        const next = [...truncated, validSnapshot];
+        historyIndexRef.current = next.length - 1;
+        setHistoryIndex(historyIndexRef.current);
+        return next;
+      });
+      latestRef.current = validSnapshot;
+    },
+    [normalizeSnapshot],
+  );
+
+  const pushWith = useCallback(
+    (partial: Partial<EditorSnapshot>) => {
+      const base = latestRef.current ?? currentStateRef.current;
+      pushHistorySnapshot({ ...base, ...partial });
+    },
+    [pushHistorySnapshot],
+  );
+
+  const beginCanvasInteraction = useCallback(() => {
+    if (!historyInteractionRef.current.active) {
+      historyInteractionRef.current.active = true;
+      historyInteractionRef.current.changed = false;
+    }
+  }, []);
+
+  const endCanvasInteraction = useCallback(() => {
+    if (!historyInteractionRef.current.active) return;
+
+    const shouldPushHistory = historyInteractionRef.current.changed;
+    historyInteractionRef.current.active = false;
+    historyInteractionRef.current.changed = false;
+
+    if (!shouldPushHistory) return;
+
+    window.requestAnimationFrame(() => {
+      pushWith({});
+    });
+  }, [pushWith]);
+
+  const applySnapshot = useCallback(
+    (snapshot: EditorSnapshot | null | undefined) => {
+      const validSnapshot = normalizeSnapshot(snapshot);
+      if (!validSnapshot) {
+        return;
+      }
+
+      latestRef.current = validSnapshot;
+      setBrochureData(validSnapshot.brochureData);
+      setSelectedLogos(validSnapshot.selectedLogos);
+      setSegmentPositions(validSnapshot.segmentPositions);
+      setOverlayItems(validSnapshot.overlayItems);
+      setTemplate(validSnapshot.template);
+      setHiddenSegments(validSnapshot.hiddenSegments ?? []);
+      setFormLineStyles(validSnapshot.formLineStyles ?? {});
+    },
+    [normalizeSnapshot],
+  );
+
+  const undo = useCallback(() => {
+    if (animationPhaseRef.current !== "idle") {
+      stopTypingAnimation();
+    }
+
+    if (historyIndexRef.current <= 0) return;
+    const nextIndex = historyIndexRef.current - 1;
+    const snapshot = history[nextIndex];
+    if (!snapshot?.brochureData) return;
+
+    historyIndexRef.current = nextIndex;
+    setHistoryIndex(nextIndex);
+    applySnapshot(snapshot);
+    setSelectedElement(null);
+    setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
+  }, [applySnapshot, history, stopTypingAnimation]);
+
+  const redo = useCallback(() => {
+    if (animationPhaseRef.current !== "idle") {
+      stopTypingAnimation();
+    }
+
+    if (historyIndexRef.current >= history.length - 1) return;
+    const nextIndex = historyIndexRef.current + 1;
+    const snapshot = history[nextIndex];
+    if (!snapshot?.brochureData) return;
+
+    historyIndexRef.current = nextIndex;
+    setHistoryIndex(nextIndex);
+    applySnapshot(snapshot);
+    setSelectedElement(null);
+    setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
+  }, [applySnapshot, history, stopTypingAnimation]);
+
+  useEffect(() => {
+    const handleHistoryHotkeys = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget =
+        !!target &&
+        (target.closest("[contenteditable='true']") !== null ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT");
+
+      if (isTypingTarget) return;
+
+      const isMetaCommand = event.metaKey || event.ctrlKey;
+      if (!isMetaCommand || event.altKey) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", handleHistoryHotkeys);
+    return () => window.removeEventListener("keydown", handleHistoryHotkeys);
+  }, [undo, redo]);
+
+  const selectedOverlayId = selectedElement?.kind === "overlay" ? selectedElement.id : null;
+  const selectedSegmentId = selectedElement?.kind === "segment" ? selectedElement.id : null;
+
   const selectedOverlay = useMemo(
     () => overlayItems.find((item) => item.id === selectedOverlayId) ?? null,
     [overlayItems, selectedOverlayId],
   );
 
-  const logoOptions = useMemo(() => {
-    const custom = assets.map((asset) => ({
-      id: asset.id,
-      name: asset.name,
-      src: asset.dataUrl,
-      custom: true,
-    }));
-    return [...builtinLogos, ...custom];
-  }, [assets]);
+  const selectedTextTarget = useMemo<SelectedTextTarget | null>(() => {
+    if (selectedOverlay?.type === "text") {
+      return {
+        kind: "overlay" as const,
+        id: selectedOverlay.id,
+        fontFamily: selectedOverlay.fontFamily,
+        fontSize: selectedOverlay.fontSize,
+        color: selectedOverlay.color,
+        align: selectedOverlay.align,
+        fontWeight: selectedOverlay.fontWeight,
+      };
+    }
+
+    if (selectedSegmentId && selectedFormLineKey && !NON_TEXT_SEGMENT_IDS.has(selectedSegmentId)) {
+      const lineStyle = formLineStyles[selectedFormLineKey] ?? {};
+      return {
+        kind: "form-line" as const,
+        key: selectedFormLineKey,
+        fontSize: lineStyle.fontSize ?? 16,
+        color: lineStyle.color ?? "#0f172a",
+        align: lineStyle.align ?? "left",
+      };
+    }
+
+    return null;
+  }, [selectedOverlay, selectedSegmentId, selectedFormLineKey, formLineStyles]);
+
+  const logoOptions = useMemo(() => builtinLogos, []);
 
   const logoCatalog = useMemo(
     () => Object.fromEntries(logoOptions.map((logo) => [logo.id, logo.src])),
@@ -141,10 +772,10 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    if (selectedOverlay) {
-      setActivePage(selectedOverlay.page);
+    if (selectedElement) {
+      setActivePage(selectedElement.page);
     }
-  }, [selectedOverlay]);
+  }, [selectedElement]);
 
   const handleDownload = async () => {
     const element = document.getElementById("brochure-preview");
@@ -156,23 +787,56 @@ export default function Dashboard() {
     setLoadingMessage("Preparing final PDF export...");
 
     try {
+      // Collect all styles, including Tailwind layers, by cloning <style> and <link rel="stylesheet"> content
       let styles = "";
-      const styleSheets = Array.from(document.styleSheets);
-      for (const sheet of styleSheets) {
-        try {
-          const rules = Array.from(sheet.cssRules);
-          for (const rule of rules) {
-            styles += rule.cssText;
+      document.querySelectorAll("style, link[rel='stylesheet']").forEach((node) => {
+        if (node.tagName.toLowerCase() === "style") {
+          styles += (node as HTMLStyleElement).innerHTML;
+        } else {
+          const sheet = (node as HTMLLinkElement).sheet as CSSStyleSheet | null;
+          if (!sheet) return;
+          try {
+            const rules = Array.from(sheet.cssRules);
+            for (const rule of rules) styles += rule.cssText;
+          } catch {
+            // skip cross-origin styles
           }
-        } catch {
-          // ignore stylesheet access errors for cross-origin rules
         }
-      }
+      });
 
+      const exportCleanupCss = `
+        .brochure-overlay-layer { pointer-events: none !important; }
+        .overlay-item::after,
+        .overlay-resize-handle,
+        .segment-resize-handle { display: none !important; box-shadow: none !important; border: none !important; }
+        .segment-surface { outline: none !important; box-shadow: none !important; }
+        .overlay-textbox { outline: none !important; }
+        .editable-inline, .editable-block { outline: none !important; box-shadow: none !important; background: transparent !important; }
+      `;
+
+      styles += exportCleanupCss;
+
+      const origin = window.location.origin;
       const pages = element.querySelectorAll(".brochure-page");
       let pagesHtml = "";
       pages.forEach((page) => {
-        pagesHtml += page.outerHTML;
+        const clone = page.cloneNode(true) as HTMLElement;
+        clone.style.transform = "none";
+        clone.style.transformOrigin = "top left";
+        clone.style.boxShadow = "none";
+        clone.style.margin = "0";
+        clone.style.border = "none";
+        clone.querySelectorAll("img").forEach((node) => {
+          const img = node as HTMLImageElement;
+          const src = img.getAttribute("src");
+          if (!src || src.startsWith("data:")) return;
+          img.setAttribute("src", new URL(src, origin).href);
+        });
+        clone.querySelectorAll(".overlay-item").forEach((node) => {
+          (node as HTMLElement).style.transform = (node as HTMLElement).style.transform || "";
+          (node as HTMLElement).style.opacity = "1";
+        });
+        pagesHtml += clone.outerHTML;
       });
 
       const html = `
@@ -185,6 +849,9 @@ export default function Dashboard() {
               transform: none !important;
               margin: 0 !important;
               border: none !important;
+            }
+            body {
+              background: white;
             }
           </style>
         </head>
@@ -226,46 +893,178 @@ export default function Dashboard() {
   };
 
   const handleFieldChange = useCallback((path: string, value: unknown) => {
-    setBrochureData((prev) => setValueAtPath(prev, path, value));
-  }, []);
+    if (animationPhaseRef.current !== "idle") {
+      stopTypingAnimation();
+    }
+
+    setBrochureData((prev) => {
+      const normalizedValue =
+        path === "registration.notes" && typeof value === "string"
+          ? value
+              .split(/\r?\n/)
+              .map((line) => line.replace(/^\s*(?:•|-|\*)\s?/, "").trim())
+              .filter((line) => line.length > 0)
+          : value;
+
+      const currentValue = getValueFromPath(prev as unknown as Record<string, unknown>, path);
+      const noChange =
+        Array.isArray(currentValue) && Array.isArray(normalizedValue)
+          ? JSON.stringify(currentValue) === JSON.stringify(normalizedValue)
+          : Object.is(currentValue, normalizedValue);
+
+      if (noChange) {
+        return prev;
+      }
+
+      const next = setValueAtPath(prev, path, normalizedValue);
+      pushWith({ brochureData: next });
+      return next;
+    });
+  }, [pushWith, stopTypingAnimation]);
 
   const toggleLogo = (id: string) => {
-    setSelectedLogos((prev) =>
-      prev.includes(id) ? prev.filter((logoId) => logoId !== id) : [...prev, id],
-    );
+    setSelectedLogos((prev) => {
+      const next = prev.includes(id) ? prev.filter((logoId) => logoId !== id) : [...prev, id];
+      pushWith({ selectedLogos: next });
+      return next;
+    });
   };
 
+  const reorderLogos = useCallback((nextOrder: string[]) => {
+    setSelectedLogos((prev) => {
+      const validIds = new Set(builtinLogos.map((logo) => logo.id));
+      const sanitized = nextOrder.filter((id) => validIds.has(id));
+      if (sanitized.length === 0) return prev;
+
+      const prevSet = new Set(prev);
+      const kept = sanitized.filter((id) => prevSet.has(id));
+      const appended = prev.filter((id) => !kept.includes(id));
+      const next = [...kept, ...appended];
+
+      if (JSON.stringify(prev) === JSON.stringify(next)) {
+        return prev;
+      }
+
+      pushWith({ selectedLogos: next });
+      return next;
+    });
+  }, [pushWith]);
+
   const handleSegmentMove = (id: string, position: SegmentPosition) => {
-    setSegmentPositions((prev) => ({
-      ...prev,
-      [id]: position,
-    }));
+    setSegmentPositions((prev) => {
+      const previousPosition = prev[id];
+      if (JSON.stringify(previousPosition ?? {}) === JSON.stringify(position)) {
+        return prev;
+      }
+
+      const next = {
+        ...prev,
+        [id]: position,
+      };
+
+      if (historyInteractionRef.current.active) {
+        historyInteractionRef.current.changed = true;
+        latestRef.current = {
+          ...(latestRef.current ?? {
+            brochureData,
+            selectedLogos,
+            segmentPositions: prev,
+            overlayItems,
+            template,
+            hiddenSegments,
+            formLineStyles,
+          }),
+          segmentPositions: next,
+        };
+      } else {
+        pushWith({ segmentPositions: next });
+      }
+
+      return next;
+    });
   };
 
   const updateOverlayItem = (id: string, patch: Partial<OverlayItem>) => {
-    setOverlayItems((prev) =>
-      prev.map((item) => (item.id === id ? ({ ...item, ...patch } as OverlayItem) : item)),
-    );
+    setOverlayItems((prev) => {
+      const itemIndex = prev.findIndex((item) => item.id === id);
+      if (itemIndex < 0) return prev;
+
+      const currentItem = prev[itemIndex];
+      const hasChange = Object.entries(patch).some(([key, value]) => {
+        return (currentItem as Record<string, unknown>)[key] !== value;
+      });
+
+      if (!hasChange) return prev;
+
+      const next = [...prev];
+      next[itemIndex] = { ...currentItem, ...patch } as OverlayItem;
+
+      if (historyInteractionRef.current.active) {
+        historyInteractionRef.current.changed = true;
+        latestRef.current = {
+          ...(latestRef.current ?? {
+            brochureData,
+            selectedLogos,
+            segmentPositions,
+            overlayItems: prev,
+            template,
+            hiddenSegments,
+            formLineStyles,
+          }),
+          overlayItems: next,
+        };
+      } else {
+        pushWith({ overlayItems: next });
+      }
+
+      return next;
+    });
   };
 
   const addTextOverlay = () => {
     const nextItem = createTextOverlay(activePage);
-    setOverlayItems((prev) => [...prev, nextItem]);
-    setSelectedOverlayId(nextItem.id);
+    setOverlayItems((prev) => {
+      const next = [...prev, nextItem];
+      pushWith({ overlayItems: next });
+      return next;
+    });
+    setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
+    setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const addShapeOverlay = (shape: "rectangle" | "circle") => {
     const nextItem = createShapeOverlay(activePage, shape);
-    setOverlayItems((prev) => [...prev, nextItem]);
-    setSelectedOverlayId(nextItem.id);
+    setOverlayItems((prev) => {
+      const next = [...prev, nextItem];
+      pushWith({ overlayItems: next });
+      return next;
+    });
+    setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
+    setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
+  };
+
+  const handleChangeTemplate = (next: BrochureTemplate) => {
+    setTemplate((prev) => {
+      if (prev === next) return prev;
+      pushWith({ template: next });
+      return next;
+    });
   };
 
   const addImageOverlayFromAsset = (assetId: string) => {
     const asset = assets.find((item) => item.id === assetId);
     if (!asset) return;
     const nextItem = createImageOverlay(activePage, asset);
-    setOverlayItems((prev) => [...prev, nextItem]);
-    setSelectedOverlayId(nextItem.id);
+    setOverlayItems((prev) => {
+      const next = [...prev, nextItem];
+      pushWith({ overlayItems: next });
+      return next;
+    });
+    setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
+    setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const addImageOverlayAtPoint = (
@@ -278,24 +1077,81 @@ export default function Dashboard() {
     const x = Math.max(0, Math.min(PAGE_WIDTH - 180, position.x));
     const y = Math.max(0, Math.min(PAGE_HEIGHT - 120, position.y));
     const nextItem = createImageOverlay(page, asset, { x, y });
-    setOverlayItems((prev) => [...prev, nextItem]);
-    setSelectedOverlayId(nextItem.id);
+    setOverlayItems((prev) => {
+      const next = [...prev, nextItem];
+      pushWith({ overlayItems: next });
+      return next;
+    });
+    setSelectedElement({ kind: "overlay", id: nextItem.id, page: nextItem.page });
+    setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
-  const removeSelectedOverlay = () => {
-    if (!selectedOverlayId) return;
-    setOverlayItems((prev) => prev.filter((item) => item.id !== selectedOverlayId));
-    setSelectedOverlayId(null);
+  const deleteSegment = (id: string) => {
+    setHiddenSegments((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      pushWith({ hiddenSegments: next });
+      return next;
+    });
+  };
+
+  const updateSelectedTextStyle = (patch: CanvasTextStylePatch) => {
+    if (!selectedTextTarget) return;
+
+    if (selectedTextTarget.kind === "overlay") {
+      updateOverlayItem(selectedTextTarget.id, patch as Partial<TextOverlayItem>);
+      return;
+    }
+
+    const nextPatch: FormLineStyle = {
+      ...(typeof patch.fontSize === "number" ? { fontSize: patch.fontSize } : {}),
+      ...(typeof patch.color === "string" ? { color: patch.color } : {}),
+      ...(patch.align ? { align: patch.align } : {}),
+    };
+
+    setFormLineStyles((prev) => {
+      const next = {
+        ...prev,
+        [selectedTextTarget.key]: {
+          ...(prev[selectedTextTarget.key] ?? {}),
+          ...nextPatch,
+        },
+      };
+      pushWith({ formLineStyles: next });
+      return next;
+    });
+  };
+
+  const removeSelectedElement = () => {
+    if (!selectedElement) return;
+
+    if (selectedElement.kind === "overlay") {
+      setOverlayItems((prev) => {
+        const next = prev.filter((item) => item.id !== selectedElement.id);
+        pushWith({ overlayItems: next });
+        return next;
+      });
+      setSelectedElement(null);
+      setSelectedFormLineKey(null);
+      setEditingFormLineKey(null);
+      return;
+    }
+
+    deleteSegment(selectedElement.id);
+    setSelectedElement(null);
+    setSelectedFormLineKey(null);
+    setEditingFormLineKey(null);
   };
 
   const handleUploadAssets = async (files: FileList | null, tagsInput: string) => {
     if (!files || files.length === 0) return;
     setLoadingTask("uploading");
-    setLoadingMessage("Uploading and indexing assets...");
+    setLoadingMessage("Placing image on canvas...");
 
     try {
       const tags = parseTagInput(tagsInput);
-      const incoming = await Promise.all(
+      const uploads = await Promise.all(
         Array.from(files).map(async (file) => {
           const dataUrl = await fileToDataUrl(file);
           const identity = createAssetIdentity(file.name, tags, dataUrl);
@@ -303,10 +1159,7 @@ export default function Dashboard() {
           const nextAsset: BrandAsset = {
             id: identity.id,
             name: file.name,
-            kind:
-              file.type.includes("svg") || file.name.toLowerCase().includes("logo")
-                ? "logo"
-                : "image",
+            kind: file.type.includes("svg") || file.name.toLowerCase().includes("logo") ? "logo" : "image",
             mimeType: file.type,
             dataUrl,
             tags,
@@ -321,7 +1174,7 @@ export default function Dashboard() {
 
       setAssets((prev) => {
         const merged = [...prev];
-        for (const asset of incoming) {
+        for (const asset of uploads) {
           const existingIndex = merged.findIndex((item) => item.id === asset.id);
           if (existingIndex >= 0) {
             merged[existingIndex] = asset;
@@ -331,25 +1184,155 @@ export default function Dashboard() {
         }
         return merged;
       });
+
+      let updatedOverlays: OverlayItem[] = [];
+      setOverlayItems((prev) => {
+        const baseSize = 220;
+        const startX = Math.max(24, (PAGE_WIDTH - baseSize) / 2);
+        const startY = Math.max(24, (PAGE_HEIGHT - baseSize) / 2);
+        const next = [...prev];
+
+        uploads.forEach((asset, index) => {
+          const offset = index * 18;
+          const imageOverlay = createImageOverlay(activePage, asset, {
+            x: startX + offset,
+            y: startY + offset,
+          });
+
+          next.push({
+            ...imageOverlay,
+            width: baseSize,
+            height: baseSize,
+            borderRadius: 0,
+          });
+        });
+
+        updatedOverlays = next;
+        return next;
+      });
+
+      if (updatedOverlays.length) {
+        pushWith({ overlayItems: updatedOverlays });
+      }
     } finally {
       setLoadingTask("idle");
       setLoadingMessage("");
     }
   };
 
-  const handleDeleteAsset = (id: string) => {
-    setAssets((prev) => prev.filter((asset) => asset.id !== id));
-    setSelectedLogos((prev) => prev.filter((logoId) => logoId !== id));
-  };
+  useEffect(() => {
+    return () => {
+      typingRunRef.current += 1;
+    };
+  }, []);
+
+  const runTypingAnimation = useCallback(
+    async (target: BrochureData, options?: { previewDelayMs?: number }) => {
+      const runId = typingRunRef.current + 1;
+      typingRunRef.current = runId;
+
+      const previewDelayMs = Math.max(0, options?.previewDelayMs ?? 0);
+      if (previewDelayMs > 0) {
+        setAnimationPhase("preview");
+        setTypingBrochureData(target);
+        setActiveTypingPath(null);
+        await waitFor(previewDelayMs);
+        if (runId !== typingRunRef.current) return;
+      }
+
+      setAnimationPhase("typing");
+      const seed = createTypingSeedData(target);
+      setTypingBrochureData(seed);
+      await waitFor(50);
+      if (runId !== typingRunRef.current) return;
+
+      const typingPlan = buildTypingPlan(target);
+      const source = target as unknown as Record<string, unknown>;
+
+      for (const stage of typingPlan) {
+        if (runId !== typingRunRef.current) return;
+
+        const stageStart = performance.now();
+        const stageEntries = stage.paths
+          .map((path) => {
+            const fullValue = getValueFromPath(source, path);
+            if (typeof fullValue !== "string") return null;
+            if (!fullValue.length) return null;
+            const weight = Math.max(6, Math.min(220, fullValue.length));
+            return { path, value: fullValue, weight };
+          })
+          .filter((entry): entry is { path: string; value: string; weight: number } => entry !== null);
+
+        if (!stageEntries.length) {
+          await waitFor(stage.durationMs);
+          continue;
+        }
+
+        let remainingWeight = stageEntries.reduce((sum, entry) => sum + entry.weight, 0);
+
+        for (let index = 0; index < stageEntries.length; index += 1) {
+          if (runId !== typingRunRef.current) return;
+
+          const entry = stageEntries[index];
+          setActiveTypingPath(entry.path);
+
+          const elapsed = performance.now() - stageStart;
+          const remainingStageMs = Math.max(0, stage.durationMs - elapsed);
+          const isLastEntry = index === stageEntries.length - 1;
+          const pathBudgetMs = isLastEntry
+            ? remainingStageMs
+            : Math.max(0, (remainingStageMs * entry.weight) / Math.max(1, remainingWeight));
+
+          const stepCount = Math.max(2, Math.min(10, Math.ceil(entry.value.length / 28)));
+          const stepDelayMs = Math.max(0, Math.floor(pathBudgetMs / stepCount));
+
+          for (let step = 1; step <= stepCount; step += 1) {
+            if (runId !== typingRunRef.current) return;
+
+            const cursor = Math.min(
+              entry.value.length,
+              Math.max(1, Math.round((entry.value.length * step) / stepCount)),
+            );
+
+            setTypingBrochureData((prev) => {
+              const base = (prev ?? seed) as unknown as Record<string, unknown>;
+              return setValueAtPath(base, entry.path, entry.value.slice(0, cursor)) as BrochureData;
+            });
+
+            if (stepDelayMs > 0) {
+              await waitFor(stepDelayMs);
+            }
+          }
+
+          remainingWeight = Math.max(0, remainingWeight - entry.weight);
+        }
+
+        const stageElapsed = performance.now() - stageStart;
+        const stageRemainder = stage.durationMs - stageElapsed;
+        if (stageRemainder > 0) {
+          await waitFor(stageRemainder);
+        }
+      }
+
+      if (runId !== typingRunRef.current) return;
+      setAnimationPhase("idle");
+      setTypingBrochureData(null);
+      setActiveTypingPath(null);
+    },
+    [],
+  );
 
   const handleCreateBrochure = () => {
     setLoadingTask("building");
-    setLoadingMessage("Building brochure from your guided inputs...");
+    setLoadingMessage("Building brochure with AI reveal animation...");
     setProjectReady(true);
+
+    void runTypingAnimation(brochureData, { previewDelayMs: 0 });
+
     window.setTimeout(() => {
       setLoadingTask("idle");
       setLoadingMessage("");
-    }, 850);
+    }, 420);
   };
 
   const handleEnhanceWithAI = async () => {
@@ -358,9 +1341,45 @@ export default function Dashboard() {
 
     try {
       const prompt = buildEnhancePrompt(brochureData);
-      const result = await generateBrochureData(prompt);
-      setBrochureData(normalizeBrochureData(result.data as Record<string, unknown>));
+      const firstPass = await generateBrochureData(prompt);
+      if (!firstPass?.data || typeof firstPass.data !== "object") {
+        console.warn("Enhance with AI received missing or invalid payload, using current brochure data as fallback.");
+      }
+
+      let enhanced = normalizeBrochureData(
+        (firstPass?.data && typeof firstPass.data === "object"
+          ? (firstPass.data as Record<string, unknown>)
+          : (brochureData as unknown as Record<string, unknown>)),
+      );
+
+      const underfilled = getUnderfilledSections(enhanced);
+      const assistantMessage = firstPass.rawMessage?.content;
+      if (underfilled.length > 0 && typeof assistantMessage === "string" && assistantMessage.trim()) {
+        const refinementPrompt = buildLengthRefinementPrompt(enhanced, underfilled);
+        const refinementHistory = [
+          { role: "user", content: prompt },
+          {
+            role: "assistant",
+            content: assistantMessage,
+            reasoning_details: firstPass.rawMessage?.reasoning_details,
+          },
+        ];
+
+        try {
+          const secondPass = await generateBrochureData(refinementPrompt, refinementHistory);
+          enhanced = normalizeBrochureData(secondPass.data as Record<string, unknown>);
+        } catch {
+          // Keep first pass content if refinement cannot be completed.
+        }
+      }
+
+      stopTypingAnimation();
+      setBrochureData(enhanced);
+      pushWith({ brochureData: enhanced });
       setProjectReady(true);
+      setLoadingTask("idle");
+      setLoadingMessage("");
+      void runTypingAnimation(enhanced, { previewDelayMs: 1200 });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Enhancement failed";
       alert(message);
@@ -370,28 +1389,52 @@ export default function Dashboard() {
     }
   };
 
-  const previewHeight = (PAGE_HEIGHT * 2 + PAGE_GAP) * previewScale;
-  const previewWidth = PAGE_WIDTH * previewScale;
+  const effectiveScale = Math.min(1.35, Math.max(0.4, previewScale * zoomFactor));
+  const previewHeight = (PAGE_HEIGHT * 2 + PAGE_GAP) * effectiveScale;
+  const previewWidth = PAGE_WIDTH * effectiveScale;
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex >= 0 && historyIndex < history.length - 1;
 
   if (!mounted) return null;
+
+  const scrollToPage = (page: 1 | 2) => {
+    setActivePage(page);
+    const target = page === 1 ? pageOneRef.current : pageTwoRef.current;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const adjustZoom = (delta: number) => {
+    setZoomFactor((prev) => Math.min(2, Math.max(0.5, Number((prev + delta).toFixed(2)))));
+  };
+
+  const handleCanvasInteractionStart = () => {
+    beginCanvasInteraction();
+    setEditingFormLineKey(null);
+  };
+
+  const handleCanvasInteractionEnd = () => {
+    endCanvasInteraction();
+  };
+
+  const handleBeginEditLine = (lineKey: string, segmentId: string | null) => {
+    setSelectedFormLineKey(lineKey);
+    setEditingFormLineKey(lineKey);
+
+    if (!segmentId) return;
+    const page = segmentId.startsWith("p2-") ? 2 : 1;
+    setSelectedElement({ kind: "segment", id: segmentId, page });
+  };
+
+  const handleEndEditLine = () => {
+    setEditingFormLineKey(null);
+  };
 
   return (
     <main className="h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
       <header className="h-20 bg-white border-b border-slate-200 px-8 lg:px-10 flex items-center justify-between shrink-0 z-[100] shadow-sm">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3 group cursor-pointer">
-            <div className="w-12 h-12 bg-primary rounded-[18px] flex items-center justify-center shadow-[0_8px_20px_-6px_rgba(0,71,171,0.5)] transition-transform group-hover:rotate-6">
-              <Layout className="text-white w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tighter italic">
-                BROCHIFY<span className="text-primary not-italic">.</span>
-              </h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                Guided Brochure Studio
-              </p>
-            </div>
-          </div>
+        <div className="flex items-center gap-3 group cursor-pointer">
+          <img src="/icon-logo.png" alt="Studio Icon" className="h-10 w-10 object-contain drop-shadow-sm" />
+          <img src="/text-logo.png" alt="Studio Wordmark" className="h-10 w-auto object-contain drop-shadow-sm" />
         </div>
 
         <div className="flex items-center gap-4">
@@ -411,7 +1454,7 @@ export default function Dashboard() {
           {projectReady && (
             <button
               onClick={handleDownload}
-              className="flex items-center gap-3 bg-slate-900 hover:bg-black text-white px-7 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all shadow-xl hover:shadow-2xl"
+              className="flex items-center gap-3 px-7 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all shadow-[0_14px_30px_-14px_rgba(111,82,255,0.6)] bg-gradient-to-r from-[#8b5cf6] via-[#a855f7] to-[#c084fc] text-white hover:brightness-105"
             >
               <Download className="w-4 h-4" />
               Export PDF
@@ -448,18 +1491,21 @@ export default function Dashboard() {
           )}
 
           <CanvasSidebar
-            assets={assets}
             logoOptions={logoOptions}
             selectedLogos={selectedLogos}
             onToggleLogo={toggleLogo}
+            onReorderLogos={reorderLogos}
             onUploadAssets={handleUploadAssets}
-            onDeleteAsset={handleDeleteAsset}
-            onInsertAssetAsOverlay={addImageOverlayFromAsset}
             isBusy={isLoading}
+            template={template}
+            onChangeTemplate={handleChangeTemplate}
           />
 
-          <div className="flex-1 bg-[#F0F4F8] p-4 overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
-            <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[radial-gradient(#0047AB_1px,transparent_1px)] [background-size:20px_20px]"></div>
+          <div className="flex-1 bg-[#F0F4F8] p-4 overflow-x-auto overflow-y-auto h-full flex flex-col items-center relative group scroll-smooth">
+            <div
+              className="absolute inset-0 opacity-[0.2] pointer-events-none [background-size:20px_20px]"
+              style={{ backgroundImage: `radial-gradient(${TEMPLATE_THEMES[template].palette.primary}_1px,transparent_1px)` }}
+            ></div>
 
             <div className="sticky top-0 z-30 w-full max-w-[1240px] px-2 pb-4 pt-1">
               <div className="flex flex-wrap items-center gap-3 rounded-[26px] border border-slate-200/80 bg-white/90 px-4 py-3 shadow-[0_20px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur-xl">
@@ -468,7 +1514,7 @@ export default function Dashboard() {
                     <button
                       key={pageNumber}
                       type="button"
-                      onClick={() => setActivePage(pageNumber as 1 | 2)}
+                      onClick={() => scrollToPage(pageNumber as 1 | 2)}
                       className={cn(
                         "rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all",
                         activePage === pageNumber
@@ -479,6 +1525,70 @@ export default function Dashboard() {
                       Page {pageNumber}
                     </button>
                   ))}
+                </div>
+
+                <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  <button
+                    type="button"
+                    onClick={() => adjustZoom(-0.05)}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold hover:border-slate-300"
+                    title="Zoom out"
+                  >
+                    -
+                  </button>
+                  <span className="min-w-[62px] text-center font-semibold">{Math.round(effectiveScale * 100)}%</span>
+                  <button
+                    type="button"
+                    onClick={() => adjustZoom(0.05)}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold hover:border-slate-300"
+                    title="Zoom in"
+                  >
+                    +
+                  </button>
+                  <input
+                    type="range"
+                    min={50}
+                    max={140}
+                    step={1}
+                    value={Math.round(effectiveScale * 100)}
+                    onChange={(event) => {
+                      const percent = Number(event.target.value) || 100;
+                      const base = previewScale || 1;
+                      const nextZoom = percent / (base * 100);
+                      setZoomFactor(Math.min(2, Math.max(0.5, nextZoom)));
+                    }}
+                    className="w-24"
+                    aria-label="Zoom"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={!canUndo}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full px-2 py-1 font-semibold transition-colors",
+                      canUndo ? "text-slate-700 hover:bg-slate-100" : "text-slate-300 cursor-not-allowed",
+                    )}
+                    title="Undo"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    Undo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={redo}
+                    disabled={!canRedo}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full px-2 py-1 font-semibold transition-colors",
+                      canRedo ? "text-slate-700 hover:bg-slate-100" : "text-slate-300 cursor-not-allowed",
+                    )}
+                    title="Redo"
+                  >
+                    <Redo2 className="h-4 w-4" />
+                    Redo
+                  </button>
                 </div>
 
                 <button
@@ -506,48 +1616,67 @@ export default function Dashboard() {
                   Circle
                 </button>
 
-                {selectedOverlay?.type === "text" && (
+                {animationPhase !== "idle" && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em]",
+                      animationPhase === "preview"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-sky-50 text-sky-700 border border-sky-200",
+                    )}
+                  >
+                    {animationPhase === "preview" ? "AI Preview Ready" : "AI Typing Animation"}
+                  </span>
+                )}
+
+                {selectedTextTarget && (
                   <>
-                    <select
-                      value={selectedOverlay.fontFamily}
-                      onChange={(event) =>
-                        updateOverlayItem(
-                          selectedOverlay.id,
-                          { fontFamily: event.target.value } as Partial<TextOverlayItem>,
-                        )
-                      }
-                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
-                    >
-                      {FONT_OPTIONS.map((font) => (
-                        <option key={font.value} value={font.value}>
-                          {font.label}
-                        </option>
-                      ))}
-                    </select>
+                    {selectedTextTarget.kind === "overlay" && (
+                      <select
+                        value={selectedTextTarget.fontFamily}
+                        onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
+                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
+                      >
+                        {FONT_OPTIONS.map((font) => (
+                          <option key={font.value} value={font.value}>
+                            {font.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <input
                       type="number"
                       min={12}
                       max={120}
-                      value={selectedOverlay.fontSize}
-                      onChange={(event) =>
-                        updateOverlayItem(
-                          selectedOverlay.id,
-                          { fontSize: Number(event.target.value) || 16 } as Partial<TextOverlayItem>,
-                        )
-                      }
+                      value={selectedTextTarget.fontSize}
+                      onChange={(event) => updateSelectedTextStyle({ fontSize: Number(event.target.value) || 16 })}
                       className="w-20 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
                     />
                     <input
                       type="color"
-                      value={selectedOverlay.color}
-                      onChange={(event) =>
-                        updateOverlayItem(
-                          selectedOverlay.id,
-                          { color: event.target.value } as Partial<TextOverlayItem>,
-                        )
-                      }
+                      value={selectedTextTarget.color}
+                      onChange={(event) => updateSelectedTextStyle({ color: event.target.value })}
                       className="h-10 w-12 rounded-full border border-slate-200 bg-white px-1"
                     />
+                    {selectedTextTarget.kind === "overlay" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSelectedTextStyle({
+                            fontWeight: selectedTextTarget.fontWeight >= 700 ? 500 : 700,
+                          })
+                        }
+                        className={cn(
+                          "rounded-full border border-slate-200 bg-white p-2 transition-colors",
+                          selectedTextTarget.fontWeight >= 700
+                            ? "bg-slate-900 text-white"
+                            : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                        )}
+                        title="Toggle bold"
+                      >
+                        <Bold className="h-4 w-4" />
+                      </button>
+                    )}
                     <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
                       {[
                         { value: "left", icon: AlignLeft },
@@ -559,17 +1688,10 @@ export default function Dashboard() {
                           <button
                             key={option.value}
                             type="button"
-                            onClick={() =>
-                              updateOverlayItem(
-                                selectedOverlay.id,
-                                {
-                                  align: option.value as TextOverlayItem["align"],
-                                } as Partial<TextOverlayItem>,
-                              )
-                            }
+                            onClick={() => updateSelectedTextStyle({ align: option.value as TextOverlayItem["align"] })}
                             className={cn(
                               "rounded-full p-2 transition-colors",
-                              selectedOverlay.align === option.value
+                              selectedTextTarget.align === option.value
                                 ? "bg-slate-900 text-white"
                                 : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
                             )}
@@ -603,18 +1725,18 @@ export default function Dashboard() {
                   </>
                 )}
 
-                {selectedOverlay && (
+                {selectedElement && (
                   <button
                     type="button"
-                    onClick={removeSelectedOverlay}
+                    onClick={removeSelectedElement}
                     className="ml-auto inline-flex items-center gap-2 rounded-full border border-red-300/60 bg-red-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-red-500 transition-colors hover:bg-red-100"
                   >
                     <Trash2 className="h-4 w-4" />
-                    Remove
+                    Delete Selected
                   </button>
                 )}
 
-                {!selectedOverlay && (
+                {!selectedElement && (
                   <p className="ml-auto flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
                     <Sparkles className="h-4 w-4 text-primary" />
                     Edit in place, free drag, and resize from corners
@@ -625,7 +1747,57 @@ export default function Dashboard() {
 
             <div
               ref={previewViewportRef}
-              className="w-full flex flex-col items-center gap-10 py-4 relative z-10"
+              className={cn(
+                "w-full flex flex-col items-center gap-10 py-4 relative z-10",
+                isTypingAnimationActive && "pointer-events-none select-none",
+              )}
+              onFocusCapture={(event) => {
+                const target = event.target as HTMLElement;
+                const lineNode = target.closest("[data-form-line-key]") as HTMLElement | null;
+                const lineKey = lineNode?.getAttribute("data-form-line-key");
+                if (!lineKey) return;
+
+                setSelectedFormLineKey(lineKey);
+
+                const segmentHost = target.closest(".segment-shell") as HTMLElement | null;
+                const segmentId = segmentHost?.dataset.segmentId;
+                if (!segmentId) return;
+
+                const page = segmentId.startsWith("p2-") ? 2 : 1;
+                setSelectedElement({ kind: "segment", id: segmentId, page });
+              }}
+              onPointerDownCapture={(event) => {
+                const target = event.target as HTMLElement;
+                const lineNode = target.closest("[data-form-line-key]") as HTMLElement | null;
+                const lineKey = lineNode?.getAttribute("data-form-line-key");
+                if (lineKey) {
+                  setSelectedFormLineKey(lineKey);
+
+                  const segmentHost = lineNode?.closest(".segment-shell") as HTMLElement | null;
+                  const segmentId = segmentHost?.dataset.segmentId;
+                  if (segmentId) {
+                    const page = segmentId.startsWith("p2-") ? 2 : 1;
+                    setSelectedElement({ kind: "segment", id: segmentId, page });
+                  }
+                  return;
+                }
+
+                if (target.closest(".overlay-item")) {
+                  setSelectedFormLineKey(null);
+                  setEditingFormLineKey(null);
+                  return;
+                }
+
+                if (target.closest(".segment-shell")) {
+                  setSelectedFormLineKey(null);
+                  setEditingFormLineKey(null);
+                  return;
+                }
+
+                setSelectedElement(null);
+                setSelectedFormLineKey(null);
+                setEditingFormLineKey(null);
+              }}
               onDragOver={(event) => {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
@@ -642,8 +1814,8 @@ export default function Dashboard() {
                 }
 
                 const rect = wrapper.getBoundingClientRect();
-                const localX = (event.clientX - rect.left) / previewScale;
-                const localY = (event.clientY - rect.top) / previewScale;
+                const localX = (event.clientX - rect.left) / effectiveScale;
+                const localY = (event.clientY - rect.top) / effectiveScale;
                 const page = localY > PAGE_HEIGHT + PAGE_GAP / 2 ? 2 : 1;
                 const yInPage = page === 2 ? localY - (PAGE_HEIGHT + PAGE_GAP) : localY;
 
@@ -659,34 +1831,82 @@ export default function Dashboard() {
                   <div
                     id="brochure-preview"
                     className="preview-stage"
-                    style={{ width: PAGE_WIDTH, transform: `scale(${previewScale})` }}
+                    style={{ width: PAGE_WIDTH, transform: `scale(${effectiveScale})`, transformOrigin: "top left" }}
                   >
-                    <PageOne
-                      data={brochureData}
-                      selectedLogos={selectedLogos}
-                      onEdit={(path, value) => handleFieldChange(path, value)}
-                      segmentPositions={segmentPositions}
-                      onSegmentMove={handleSegmentMove}
-                      overlayItems={overlayItems.filter((item) => item.page === 1)}
-                      selectedOverlayId={selectedOverlayId}
-                      onSelectOverlay={setSelectedOverlayId}
-                      onUpdateOverlay={updateOverlayItem}
-                      logoCatalog={logoCatalog}
-                      canvasScale={previewScale}
-                    />
+                    <div ref={pageOneRef}>
+                      <PageOne
+                        data={canvasBrochureData}
+                        selectedLogos={selectedLogos}
+                        onEdit={(path, value) => handleFieldChange(path, value)}
+                        activeTypingPath={activeTypingPath}
+                        segmentPositions={segmentPositions}
+                        onSegmentMove={handleSegmentMove}
+                        onSegmentInteractionStart={handleCanvasInteractionStart}
+                        onSegmentInteractionEnd={handleCanvasInteractionEnd}
+                        selectedSegmentId={selectedSegmentId}
+                        onSelectSegment={(id) => {
+                          setSelectedElement({ kind: "segment", id, page: 1 });
+                          setSelectedFormLineKey(null);
+                          setEditingFormLineKey(null);
+                        }}
+                        overlayItems={overlayItems.filter((item) => item.page === 1)}
+                        selectedOverlayId={selectedOverlayId}
+                        onSelectOverlay={(id) => {
+                          setSelectedElement(id ? { kind: "overlay", id, page: 1 } : null);
+                          setSelectedFormLineKey(null);
+                          setEditingFormLineKey(null);
+                        }}
+                        onUpdateOverlay={updateOverlayItem}
+                        onOverlayInteractionStart={handleCanvasInteractionStart}
+                        onOverlayInteractionEnd={handleCanvasInteractionEnd}
+                        logoCatalog={logoCatalog}
+                        canvasScale={effectiveScale}
+                        pageStyle={TEMPLATE_THEMES[template].pageStyle}
+                        palette={TEMPLATE_THEMES[template].palette}
+                        hiddenSegments={hiddenSegments}
+                        formLineStyles={formLineStyles}
+                        activeEditingLineKey={editingFormLineKey}
+                        onBeginEditLine={handleBeginEditLine}
+                        onEndEditLine={handleEndEditLine}
+                      />
+                    </div>
                     <div style={{ height: PAGE_GAP }} />
-                    <PageTwo
-                      data={brochureData}
-                      selectedLogos={selectedLogos}
-                      onEdit={(path, value) => handleFieldChange(path, value)}
-                      segmentPositions={segmentPositions}
-                      onSegmentMove={handleSegmentMove}
-                      overlayItems={overlayItems.filter((item) => item.page === 2)}
-                      selectedOverlayId={selectedOverlayId}
-                      onSelectOverlay={setSelectedOverlayId}
-                      onUpdateOverlay={updateOverlayItem}
-                      canvasScale={previewScale}
-                    />
+                    <div ref={pageTwoRef}>
+                      <PageTwo
+                        data={canvasBrochureData}
+                        selectedLogos={selectedLogos}
+                        onEdit={(path, value) => handleFieldChange(path, value)}
+                        activeTypingPath={activeTypingPath}
+                        segmentPositions={segmentPositions}
+                        onSegmentMove={handleSegmentMove}
+                        onSegmentInteractionStart={handleCanvasInteractionStart}
+                        onSegmentInteractionEnd={handleCanvasInteractionEnd}
+                        selectedSegmentId={selectedSegmentId}
+                        onSelectSegment={(id) => {
+                          setSelectedElement({ kind: "segment", id, page: 2 });
+                          setSelectedFormLineKey(null);
+                          setEditingFormLineKey(null);
+                        }}
+                        overlayItems={overlayItems.filter((item) => item.page === 2)}
+                        selectedOverlayId={selectedOverlayId}
+                        onSelectOverlay={(id) => {
+                          setSelectedElement(id ? { kind: "overlay", id, page: 2 } : null);
+                          setSelectedFormLineKey(null);
+                          setEditingFormLineKey(null);
+                        }}
+                        onUpdateOverlay={updateOverlayItem}
+                        onOverlayInteractionStart={handleCanvasInteractionStart}
+                        onOverlayInteractionEnd={handleCanvasInteractionEnd}
+                        canvasScale={effectiveScale}
+                        pageStyle={TEMPLATE_THEMES[template].pageStyle}
+                        palette={TEMPLATE_THEMES[template].palette}
+                        hiddenSegments={hiddenSegments}
+                        formLineStyles={formLineStyles}
+                        activeEditingLineKey={editingFormLineKey}
+                        onBeginEditLine={handleBeginEditLine}
+                        onEndEditLine={handleEndEditLine}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
