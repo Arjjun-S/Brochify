@@ -65,6 +65,7 @@ export type BrochureData = {
   aboutDepartment: string;
   aboutFdp: string;
   topics: Topic[];
+  programHighlightsText: string;
   speakers: Speaker[];
   contact: {
     name: string;
@@ -84,7 +85,7 @@ export type SegmentPosition = {
   align?: OverlayTextAlign;
 };
 
-export type OverlayTextAlign = "left" | "center" | "right";
+export type OverlayTextAlign = "left" | "center" | "right" | "justify";
 
 export type TextEntity = {
   id: string;
@@ -184,7 +185,7 @@ const DEFAULT_HEADINGS: BrochureHeadings = {
   organizedBy: "Organized by",
   aboutCollege: "About SRM",
   aboutSchool: "About the School",
-  aboutDepartment: "About Department",
+  aboutDepartment: "About the Computing Technology",
   aboutFdp: "About the FDP",
   programHighlights: "Program Highlights:",
   topics: "Topics to be covered",
@@ -218,12 +219,31 @@ export function createEmptyBrochureData(): BrochureData {
     templateText: { ...DEFAULT_TEMPLATE_TEXT },
     headings: DEFAULT_HEADINGS,
     committee: [
-      { name: "Dr. N. Raman", role: "Chief Patron" },
-      { name: "Dr. S. Meena", role: "Patron" },
-      { name: "Prof. K. Arjun", role: "Convener" },
-      { name: "Prof. T. Deepa", role: "Co-Convener" },
-      { name: "Prof. V. Karthik", role: "Advisory Committee Member" },
-      { name: "Prof. P. Harini", role: "Organizing Committee Member" },
+      { name: "Dr. P. Sakthivel", role: "Advisory Committee - Chair, IEEE Madras Section" },
+      { name: "Dr. S. Radha", role: "Advisory Committee - Secretary, IEEE Madras Section" },
+      { name: "Dr. S. Brindha", role: "Advisory Committee - Treasurer, IEEE Madras Section" },
+      { name: "Dr. S. Arumugaperumal", role: "Advisory Committee - Chair-Education Activities, IEEE Madras Section" },
+      { name: "Dr. T. R. Paarivendhar", role: "Chief Patron - Chancellor, SRMIST" },
+      { name: "Dr. Ravi Pachamoothoo", role: "Chief Patron - Pro-Chancellor-Admin, SRMIST" },
+      { name: "Dr. P. Sathyanarayanan", role: "Chief Patron - Pro-Chancellor-Academics, SRMIST" },
+      { name: "Dr. R. Shivakumar", role: "Chief Patron - Chairman, SRMIST" },
+      { name: "Dr. C. Muthamizhchelvan", role: "Patron - Vice Chancellor, SRMIST, KTR" },
+      { name: "Dr. S. Ponnusamy", role: "Patron - Registrar, SRMIST, KTR" },
+      { name: "Dr. Leenus Jesu Martin M", role: "Academic Advisory Committee - Dean-CET, SRMIST, KTR" },
+      { name: "Dr. Sridhar S S", role: "Academic Advisory Committee - Associate Dean-CET, SRMIST, KTR" },
+      { name: "Dr. Revathi Venkataraman", role: "Academic Advisory Committee - Chairperson, SoC, SRMIST, KTR" },
+      { name: "Dr. M. Pushpalatha", role: "Academic Advisory Committee - Associate Chairperson, SoC, SRMIST, KTR" },
+      { name: "Dr. C. Lakshmi", role: "Academic Advisory Committee - Associate Chairperson, SoC, SRMIST, KTR" },
+      { name: "Dr. G. Niranjana", role: "Academic Advisory Committee - Professor & Head, CTECH, SRMIST, KTR" },
+      { name: "Dr. Subalalitha C N", role: "Academic Advisory Committee - Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Gokulakrishnan D", role: "Convener - Associate Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. K. Kishore Anthuvan", role: "Convener - Assistant Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Muralidharan C", role: "Co-Convener - Assistant Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Arulalan V", role: "Co-Convener - Assistant Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Arunachalam N", role: "Co-ordinator - Associate Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Abirami G", role: "Co-ordinator - Associate Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Balamurugan G", role: "Co-ordinator - Associate Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Ajantha Lakshmanan", role: "Co-ordinator - Assistant Professor, CTECH, SRMIST, KTR" },
     ],
     registration: {
       ieeePrice: "750",
@@ -245,11 +265,11 @@ export function createEmptyBrochureData(): BrochureData {
       ifscCode: "IDIB000S181",
     },
     aboutCollege:
-      "SRM Institute of Science and Technology is a multidisciplinary university recognized for strong academics, active research, and industry collaboration. It offers modern labs, global partnerships, and practice-oriented learning pathways. The campus ecosystem encourages innovation, entrepreneurship, and interdisciplinary problem solving. Faculty and students work on applied projects that connect curriculum with real-world impact. Through continuous training programs and research culture, SRM supports professional growth and future-ready education.",
+      "SRM Institute of Science and Technology, Chennai, India is one of the top-ranking institutions in India with over 60,000 students and 6,000 faculty members, offering a wide range of undergraduate, postgraduate, and doctoral programs in Engineering, Management, Medicine, Health Sciences, Dental, Agriculture, Law studies, and Science and Humanities. It has established itself as a premier centre for teaching, research, and industrial consultancy in the Indian subcontinent. It has world-class infrastructure: smart classrooms, Hi-Tech labs, advanced research laboratories, a modern library, and Wi-Fi facility. SRM Institute of Science and Technology has been accredited by NAAC with the highest 'A++' grade in the year 2018, valid for the next five years. SRM IST is placed in Category 1 with 12(B) status by MHRD-UGC. It is one of the top Indian universities in terms of the quantity and quality of courses offered and has been rated highly by various reputable sources like the National Institutional Ranking Framework and world ranking agencies like QS (UK) and Times Higher Education (UK). The Times of India has ranked SRM Institute of Science and Technology as No. 1 in the top 75 private engineering institutes. During January 2011, the institution conducted the 98th Indian Science Congress wherein six Nobel laureates interacted with our students and faculty.",
     aboutSchool:
-      "The School of Computing offers focused programs in software engineering, artificial intelligence, and data science. It promotes collaborative learning, research-driven teaching, and strong industry engagement through practice-oriented curriculum and project experience.",
+      "The School of Computing is the largest in the SRM family, with over 10,000 students and 300 faculty members. The School hosts four departments, namely: Computing Technologies, Networking and Communications, Computational Intelligence, and Data Science and Business Systems. Various programmes are offered at the undergraduate level with specializations in Artificial Intelligence and Machine Learning, Big Data Analytics, Computer Networking, the Internet of Things, Cloud Computing, Cyber Security, Information Technology, Business Systems, and Software Engineering, apart from the core Computer Science and Engineering. The B.Tech in Computer Science and Engineering and Information Technology programmes are accredited by the Institution of Engineering and Technology (IET), UK, and ABET, USA, respectively.",
     aboutDepartment:
-      "The Department of Computational Design focuses on intelligent systems, interface engineering, and modern digital workflows. It emphasizes project-based learning, design thinking, and practical technical problem solving through research-informed instruction.",
+      "The Department of Computing Technologies (CTECH) fosters the future of the computing world. The department's mission is to advance, evolve, and enhance Computer Science and Engineering fundamentals to build the intellectual capital of society. The CTECH Department endeavors to be an important regional, national, and international resource centre for the development of computing and its applications. The department is excelling by keeping pace with recent trends, as evidenced by its exponential and exhilarating growth. CTECH boasts a vibrant student fraternity, including undergraduates, postgraduate students, and research scholars, as well as a stellar faculty of professors.",
     aboutFdp:
       "This FDP strengthens faculty capability in AI-enabled design, modern interface systems, and classroom adoption strategies. It combines expert talks, demonstrations, and guided hands-on sessions for immediate academic application.",
     topics: [
@@ -279,6 +299,13 @@ export function createEmptyBrochureData(): BrochureData {
         afternoon: "Open Clinic and Faculty Showcase",
       },
     ],
+    programHighlightsText: [
+      "Day 1 - Foundations of AI Product Systems",
+      "Day 2 - Designing Modern Educational Interfaces",
+      "Day 3 - Visual Communication for Technical Programs",
+      "Day 4 - AI-Assisted Content Pipelines",
+      "Day 5 - Deployment, Evaluation, and Adoption",
+    ].join("\n"),
     speakers: [
       { name: "Dr. A. Suresh", role: "Professor", org: "SRM IST" },
       { name: "Dr. R. Kavya", role: "Lead Researcher", org: "AI Systems Lab" },
@@ -297,6 +324,20 @@ export function normalizeBrochureData(
 ): BrochureData {
   const defaults = createEmptyBrochureData();
   const source = (input ?? {}) as Partial<BrochureData>;
+
+  const normalizedTopics =
+    Array.isArray(source.topics) ?
+      source.topics.map((topic) => ({
+        date: `${topic?.date ?? ""}`,
+        forenoon: `${topic?.forenoon ?? ""}`,
+        afternoon: `${topic?.afternoon ?? ""}`,
+      }))
+    : defaults.topics;
+
+  const normalizedProgramHighlights =
+    typeof source.programHighlightsText === "string" && source.programHighlightsText.trim().length > 0 ?
+      source.programHighlightsText
+    : normalizedTopics.map((topic, index) => `Day ${index + 1} - ${topic.forenoon}`).join("\n");
 
   return {
     ...defaults,
@@ -332,14 +373,8 @@ export function normalizeBrochureData(
           role: `${member?.role ?? ""}`,
         }))
       : defaults.committee,
-    topics:
-      Array.isArray(source.topics) ?
-        source.topics.map((topic) => ({
-          date: `${topic?.date ?? ""}`,
-          forenoon: `${topic?.forenoon ?? ""}`,
-          afternoon: `${topic?.afternoon ?? ""}`,
-        }))
-      : defaults.topics,
+    topics: normalizedTopics,
+    programHighlightsText: normalizedProgramHighlights,
     speakers:
       Array.isArray(source.speakers) ?
         source.speakers.map((speaker) => ({

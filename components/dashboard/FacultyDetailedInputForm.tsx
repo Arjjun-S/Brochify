@@ -76,7 +76,13 @@ export default function FacultyDetailedInputForm({ brochureId }: FacultyDetailed
               .split(/\r?\n/)
               .map((line) => line.replace(/^\s*(?:•|-|\*)\s?/, "").trim())
               .filter((line) => line.length > 0)
-          : value;
+          : path === "programHighlightsText" && typeof value === "string"
+            ? value
+                .split(/\r?\n/)
+                .map((line) => line.replace(/^\s*(?:•|-|\*)\s?/, "").trim())
+                .filter((line) => line.length > 0)
+                .join("\n")
+            : value;
 
       return setValueAtPath(prev as unknown as Record<string, unknown>, path, normalizedValue) as BrochureData;
     });

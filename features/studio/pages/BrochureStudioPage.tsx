@@ -14,6 +14,7 @@ import { cn } from "@/lib/ui/cn";
 import {
   Activity,
   AlignCenter,
+  AlignJustify,
   AlignLeft,
   AlignRight,
   Bold,
@@ -195,7 +196,6 @@ type FormLineStyle = {
 };
 
 const DEFAULT_FORM_LINE_STYLES: Record<string, FormLineStyle> = {
-  "aboutCollege::0": { align: "center" },
   "registration.notes": { fontSize: 13 },
 };
 
@@ -487,12 +487,8 @@ function buildTypingPlan(data: BrochureData): TypingStage[] {
     "headings.aboutFdp",
     "aboutFdp",
     "headings.programHighlights",
-    "templateText.p2_dayLabel",
+    "programHighlightsText",
   ];
-
-  for (let index = 0; index < data.topics.length; index += 1) {
-    pageTwoColumnTwo.push(`topics.${index}.forenoon`);
-  }
 
   const pageTwoColumnThree: string[] = [
     "headings.topics",
@@ -1074,7 +1070,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
         body: JSON.stringify({
           html,
           css: styles,
-          watermarkText: reviewStatus === "approved" ? null : "Brochify generated              NOT Approved",
+          watermarkText: reviewStatus === "approved" ? null : "Made with Brochify - Not Approved",
         }),
       });
 
@@ -1113,6 +1109,12 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
               .split(/\r?\n/)
               .map((line) => line.replace(/^\s*(?:•|-|\*)\s?/, "").trim())
               .filter((line) => line.length > 0)
+          : path === "programHighlightsText" && typeof value === "string"
+            ? value
+                .split(/\r?\n/)
+                .map((line) => line.replace(/^\s*(?:•|-|\*)\s?/, "").trim())
+                .filter((line) => line.length > 0)
+                .join("\n")
           : value;
 
       const currentValue = getValueFromPath(prev as unknown as Record<string, unknown>, path);
@@ -1967,6 +1969,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
                         { value: "left", icon: AlignLeft },
                         { value: "center", icon: AlignCenter },
                         { value: "right", icon: AlignRight },
+                        { value: "justify", icon: AlignJustify },
                       ].map((option) => {
                         const Icon = option.icon;
                         return (

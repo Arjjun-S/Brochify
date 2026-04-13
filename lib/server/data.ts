@@ -7,7 +7,6 @@ import type { BrochureRecord, BrochureStatus, EditorFormLineStyle, EditorState, 
 const TEMPLATE_IDS = ["whiteBlue", "beigeDust", "softBlue", "tealGloss", "yellowDust"] as const;
 
 const DEFAULT_FORM_LINE_STYLES: Record<string, EditorFormLineStyle> = {
-	"aboutCollege::0": { align: "center" },
 	"registration.notes": { fontSize: 13 },
 };
 
@@ -97,7 +96,7 @@ function normalizeEditorState(raw: unknown): EditorState {
 				acc[key] = {
 					...(typeof value.fontSize === "number" ? { fontSize: value.fontSize } : {}),
 					...(typeof value.color === "string" ? { color: value.color } : {}),
-					...(value.align === "left" || value.align === "center" || value.align === "right"
+					...(value.align === "left" || value.align === "center" || value.align === "right" || value.align === "justify"
 						? { align: value.align }
 						: {}),
 				};
@@ -403,6 +402,24 @@ export async function updateBrochureContent(
 	);
 
 	return getBrochureByIdForUser(id, user);
+}
+
+export async function deleteBrochureForFaculty(id: number, user: SessionUser): Promise<boolean> {
+	await ensureSchema();
+
+	if (user.role !== "faculty") {
+		return false;
+	}
+
+	const [result] = await pool.query<ResultSetHeader>(
+		`
+			DELETE FROM brochures
+			WHERE id = ? AND created_by = ?
+		`,
+		[id, user.userId],
+	);
+
+	return result.affectedRows > 0;
 }
 
 export async function submitBrochureForReview(

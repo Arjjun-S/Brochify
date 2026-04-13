@@ -15,6 +15,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
 	const [brochures, setBrochures] = useState<BrochureRecord[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [deletingBrochureId, setDeletingBrochureId] = useState<number | null>(null);
 
 	const pendingCount = useMemo(
 		() => brochures.filter((brochure) => brochure.status === "pending").length,
@@ -52,6 +53,30 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
 	const handleLogout = async () => {
 		await fetch("/api/auth/logout", { method: "POST" });
 		router.replace("/login");
+	};
+
+	const handleDeleteBrochure = async (brochureId: number) => {
+		if (user.role !== "faculty") return;
+		const shouldDelete = window.confirm("Delete this brochure permanently?");
+		if (!shouldDelete) return;
+
+		setDeletingBrochureId(brochureId);
+		setError(null);
+
+		try {
+			const response = await fetch(`/api/brochure/${brochureId}`, { method: "DELETE" });
+			const data = (await response.json()) as { error?: string };
+			if (!response.ok) {
+				throw new Error(data.error || "Failed to delete brochure.");
+			}
+
+			setBrochures((prev) => prev.filter((brochure) => brochure.id !== brochureId));
+		} catch (deleteError) {
+			const message = deleteError instanceof Error ? deleteError.message : "Failed to delete brochure.";
+			setError(message);
+		} finally {
+			setDeletingBrochureId(null);
+		}
 	};
 
 	return (
@@ -161,6 +186,16 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
 											>
 												Open Editor
 											</Link>
+														{user.role === "faculty" && (
+															<button
+																type="button"
+																onClick={() => void handleDeleteBrochure(brochure.id)}
+																disabled={deletingBrochureId === brochure.id}
+																className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+															>
+																{deletingBrochureId === brochure.id ? "Deleting..." : "Delete Brochure"}
+															</button>
+														)}
 										</div>
 									</div>
 								</li>

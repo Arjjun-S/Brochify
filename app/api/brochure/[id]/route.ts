@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSessionFromRequest } from "@/lib/server/auth";
-import { getBrochureByIdForUser, updateBrochureContent } from "@/lib/server/data";
+import { deleteBrochureForFaculty, getBrochureByIdForUser, updateBrochureContent } from "@/lib/server/data";
 
 function parseBrochureId(rawId: string): number | null {
   const id = Number.parseInt(rawId, 10);
@@ -56,5 +56,33 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ brochure });
   } catch {
     return NextResponse.json({ error: "Failed to save brochure." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const session = readSessionFromRequest(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (session.role !== "faculty") {
+    return NextResponse.json({ error: "Only faculty can delete brochures." }, { status: 403 });
+  }
+
+  const params = await context.params;
+  const brochureId = parseBrochureId(params.id);
+  if (!brochureId) {
+    return NextResponse.json({ error: "Invalid brochure id." }, { status: 400 });
+  }
+
+  try {
+    const deleted = await deleteBrochureForFaculty(brochureId, session);
+    if (!deleted) {
+      return NextResponse.json({ error: "Brochure not found." }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Failed to delete brochure." }, { status: 500 });
   }
 }

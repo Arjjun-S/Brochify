@@ -160,7 +160,7 @@ export default function CanvasSidebar({
         </div>
 
         <div className="space-y-2 pt-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Logo Order (Left to Right)</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Selected Logos</p>
           <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
             {selectedLogoCards.length === 0 && (
               <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-[11px] text-slate-500">

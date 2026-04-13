@@ -89,7 +89,7 @@ export async function handleGeneratePdf(req: NextRequest) {
                       font-size: 34px;
                       letter-spacing: 0.12em;
                       font-weight: 800;
-                      color: rgba(220, 38, 38, 0.1);
+                      color: rgba(220, 38, 38, 0.28);
                       text-transform: uppercase;
                       white-space: nowrap;
                     }

@@ -228,6 +228,60 @@ export default function GuidedFlowPanel({
 
   const sessionWindow = `${startTime} - ${endTime}`;
 
+  const formatCommitteeLine = (name: string, role: string) => {
+    return [name.trim(), role.trim()].filter(Boolean).join(", ");
+  };
+
+  const updateCommitteeLine = (index: number, value: string) => {
+    const [namePart, ...roleParts] = value.split(",");
+    onFieldChange(`committee.${index}.name`, namePart?.trim() ?? "");
+    onFieldChange(`committee.${index}.role`, roleParts.join(",").trim());
+  };
+
+  const addCommitteeMember = (role: string) => {
+    onFieldChange("committee", [...data.committee, { name: "", role }]);
+  };
+
+  const removeCommitteeMember = (index: number) => {
+    onFieldChange(
+      "committee",
+      data.committee.filter((_, currentIndex) => currentIndex !== index),
+    );
+  };
+
+  const addDay = () => {
+    const nextDay = data.topics.length + 1;
+    onFieldChange("topics", [
+      ...data.topics,
+      { date: `Day ${nextDay}`, forenoon: "", afternoon: "" },
+    ]);
+  };
+
+  const removeDay = (index: number) => {
+    onFieldChange(
+      "topics",
+      data.topics.filter((_, currentIndex) => currentIndex !== index),
+    );
+  };
+
+  const addSpeaker = () => {
+    onFieldChange("speakers", [...data.speakers, { name: "", role: "", org: "" }]);
+  };
+
+  const removeSpeaker = (index: number) => {
+    onFieldChange(
+      "speakers",
+      data.speakers.filter((_, currentIndex) => currentIndex !== index),
+    );
+  };
+
+  const syncProgramHighlightsFromDays = () => {
+    const next = data.topics
+      .map((topic, index) => `Day ${index + 1} - ${topic.forenoon}`)
+      .join("\n");
+    onFieldChange("programHighlightsText", next);
+  };
+
   const applySessionPreset = (value: string) => {
     setSessionPreset(value);
     const [from, to] = value.split("-").map((part) => part.trim());
@@ -370,15 +424,57 @@ export default function GuidedFlowPanel({
       subtitle: "Capture patron, advisory and organizing teams.",
       content: (
         <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => addCommitteeMember("Chief Patron")}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 hover:border-primary/40"
+            >
+              Add Chief Patron
+            </button>
+            <button
+              type="button"
+              onClick={() => addCommitteeMember("Patron")}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 hover:border-primary/40"
+            >
+              Add Patron
+            </button>
+            <button
+              type="button"
+              onClick={() => addCommitteeMember("Academic Adviser")}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 hover:border-primary/40"
+            >
+              Add Academic Adviser
+            </button>
+            <button
+              type="button"
+              onClick={() => addCommitteeMember("Organizing Committee Member")}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 hover:border-primary/40"
+            >
+              Add Organizing Member
+            </button>
+          </div>
+
           {data.committee.map((member, index) => (
             <div key={index} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Member {index + 1}</p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Name">
-                  <input className={inputClassName} value={member.name} onChange={(e) => onFieldChange(`committee.${index}.name`, e.target.value)} />
-                </Field>
-                <Field label="Role">
-                  <input className={inputClassName} value={member.role} onChange={(e) => onFieldChange(`committee.${index}.role`, e.target.value)} />
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Member {index + 1}</p>
+                <button
+                  type="button"
+                  onClick={() => removeCommitteeMember(index)}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-rose-600"
+                >
+                  Delete
+                </button>
+              </div>
+              <div className="grid gap-4">
+                <Field label="Name, Designation">
+                  <input
+                    className={inputClassName}
+                    value={formatCommitteeLine(member.name, member.role)}
+                    onChange={(e) => updateCommitteeLine(index, e.target.value)}
+                    placeholder="Prof. A. Kumar, Organizing Committee Member"
+                  />
                 </Field>
               </div>
             </div>
@@ -412,11 +508,51 @@ export default function GuidedFlowPanel({
       content: (
         <div className="space-y-5">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Daily Topics</p>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Program Highlights</p>
+              <button
+                type="button"
+                onClick={syncProgramHighlightsFromDays}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 hover:border-primary/40"
+              >
+                Sync From Days
+              </button>
+            </div>
+            <Field label="One bullet line per day">
+              <textarea
+                className={areaClassName}
+                value={data.programHighlightsText}
+                onChange={(e) => onFieldChange("programHighlightsText", e.target.value)}
+                placeholder={"Day 1 - Topic\nDay 2 - Topic"}
+              />
+            </Field>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Daily Topics</p>
+              <button
+                type="button"
+                onClick={addDay}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 hover:border-primary/40"
+              >
+                Add Day
+              </button>
+            </div>
             <div className="space-y-3">
               {data.topics.map((topic, index) => (
                 <div key={index} className="rounded-xl border border-slate-200 bg-white p-3">
-                  <p className="mb-2 text-xs font-black text-slate-500">Day {index + 1}</p>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-black text-slate-500">Day {index + 1}</p>
+                    <button
+                      type="button"
+                      onClick={() => removeDay(index)}
+                      disabled={data.topics.length <= 1}
+                      className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-rose-600 disabled:opacity-40"
+                    >
+                      Delete
+                    </button>
+                  </div>
                   <div className="grid gap-3 md:grid-cols-3">
                     <Field label="Date">
                       <input className={inputClassName} value={topic.date} onChange={(e) => onFieldChange(`topics.${index}.date`, e.target.value)} />
@@ -434,11 +570,30 @@ export default function GuidedFlowPanel({
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="mb-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Speakers</p>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Speakers</p>
+              <button
+                type="button"
+                onClick={addSpeaker}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-600 hover:border-primary/40"
+              >
+                Add Speaker
+              </button>
+            </div>
             <div className="space-y-3">
               {data.speakers.map((speaker, index) => (
                 <div key={index} className="rounded-xl border border-slate-200 bg-white p-3">
-                  <p className="mb-2 text-xs font-black text-slate-500">Speaker {index + 1}</p>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-black text-slate-500">Speaker {index + 1}</p>
+                    <button
+                      type="button"
+                      onClick={() => removeSpeaker(index)}
+                      disabled={data.speakers.length <= 1}
+                      className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-rose-600 disabled:opacity-40"
+                    >
+                      Delete
+                    </button>
+                  </div>
                   <div className="grid gap-3 md:grid-cols-3">
                     <Field label="Name">
                       <input className={inputClassName} value={speaker.name} onChange={(e) => onFieldChange(`speakers.${index}.name`, e.target.value)} />
