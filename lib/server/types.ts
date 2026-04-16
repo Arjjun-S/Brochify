@@ -12,6 +12,7 @@ export type SessionUser = {
 export type BrochureTemplateId = "whiteBlue" | "beigeDust" | "softBlue" | "tealGloss" | "yellowDust";
 
 export type EditorFormLineStyle = {
+	fontFamily?: string;
 	fontSize?: number;
 	color?: string;
 	align?: OverlayTextAlign;

@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
-import { createEmptyBrochureData, normalizeBrochureData } from "@/lib/domains/brochure";
+import { createEmptyBrochureData, normalizeBrochureData, normalizeFontFamilyValue } from "@/lib/domains/brochure";
 import { pool } from "@/lib/server/db";
 import type { BrochureRecord, BrochureStatus, EditorFormLineStyle, EditorState, SessionUser, UserRole } from "@/lib/server/types";
 
@@ -94,6 +94,7 @@ function normalizeEditorState(raw: unknown): EditorState {
 				}
 
 				acc[key] = {
+					...(typeof value.fontFamily === "string" ? { fontFamily: normalizeFontFamilyValue(value.fontFamily) } : {}),
 					...(typeof value.fontSize === "number" ? { fontSize: value.fontSize } : {}),
 					...(typeof value.color === "string" ? { color: value.color } : {}),
 					...(value.align === "left" || value.align === "center" || value.align === "right" || value.align === "justify"

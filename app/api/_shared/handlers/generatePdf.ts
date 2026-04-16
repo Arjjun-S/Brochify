@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import puppeteer from "puppeteer";
+import { FONT_PDF_STYLESHEET_HREF } from "@/lib/domains/brochure";
 
 function escapeHtml(text: string): string {
   return text
@@ -53,6 +54,9 @@ export async function handleGeneratePdf(req: NextRequest) {
             <!DOCTYPE html>
             <html>
             <head>
+              <link rel="preconnect" href="https://fonts.googleapis.com" />
+              <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+              <link rel="stylesheet" href="${FONT_PDF_STYLESHEET_HREF}" />
                 <style>
                     ${css}
                     @page {

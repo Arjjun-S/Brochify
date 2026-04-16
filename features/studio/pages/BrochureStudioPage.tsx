@@ -38,7 +38,10 @@ import {
   createShapeOverlay,
   createTextOverlay,
   FONT_OPTIONS,
+  FONT_PRELOAD_STYLESHEET_HREF,
+  getFontStylesheetHref,
   normalizeBrochureData,
+  normalizeFontFamilyValue,
   OverlayItem,
   parseTagInput,
   SegmentPosition,
@@ -58,6 +61,39 @@ const PAGE_TYPING_TARGET_MS = 5000;
 const COLUMN_TYPING_TARGET_MS = Math.round(PAGE_TYPING_TARGET_MS / 3);
 
 const NON_TEXT_SEGMENT_IDS = new Set(["p1-image", "p1-logos", "p1-qr-code", "p1-qr-link"]);
+const loadedFontStylesheetHrefs = new Set<string>();
+
+function ensureFontStylesheet(href: string): void {
+  if (!href || typeof document === "undefined") {
+    return;
+  }
+
+  if (loadedFontStylesheetHrefs.has(href)) {
+    return;
+  }
+
+  const existing = document.querySelector(`link[data-font-href="${href}"]`) as HTMLLinkElement | null;
+  if (existing) {
+    loadedFontStylesheetHrefs.add(href);
+    return;
+  }
+
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  link.dataset.fontHref = href;
+  document.head.appendChild(link);
+  loadedFontStylesheetHrefs.add(href);
+}
+
+function ensureFontFamilyLoaded(fontFamily: string): void {
+  const href = getFontStylesheetHref(fontFamily);
+  if (!href) {
+    return;
+  }
+
+  ensureFontStylesheet(href);
+}
 
 const builtinLogos: Array<{ id: string; name: string; src: string }> = [
   { id: "ieeetems", name: "IEEE (TEMS)", src: "/logos/ieeetems.png" },
@@ -190,6 +226,7 @@ type CanvasTextStylePatch = {
 };
 
 type FormLineStyle = {
+  fontFamily?: string;
   fontSize?: number;
   color?: string;
   align?: TextOverlayItem["align"];
@@ -235,7 +272,16 @@ function normalizeSnapshotFromContent(content: BrochureRecord["content"]): Edito
     : fallback.segmentPositions;
 
   const overlayItems = Array.isArray(content.overlayItems)
-    ? (content.overlayItems as OverlayItem[])
+    ? (content.overlayItems as OverlayItem[]).map((item) => {
+        if (item.type !== "text") {
+          return item;
+        }
+
+        return {
+          ...item,
+          fontFamily: normalizeFontFamilyValue(item.fontFamily),
+        };
+      })
     : fallback.overlayItems;
 
   const selectedLogos = Array.isArray(content.selectedLogos)
@@ -247,10 +293,22 @@ function normalizeSnapshotFromContent(content: BrochureRecord["content"]): Edito
     : fallback.hiddenSegments;
 
   const formLineStyles = isRecord(content.formLineStyles)
-    ? {
-        ...DEFAULT_FORM_LINE_STYLES,
-        ...(content.formLineStyles as Record<string, FormLineStyle>),
-      }
+    ? Object.entries(content.formLineStyles).reduce<Record<string, FormLineStyle>>((acc, [key, value]) => {
+        if (!isRecord(value)) {
+          return acc;
+        }
+
+        acc[key] = {
+          ...(typeof value.fontFamily === "string" ? { fontFamily: normalizeFontFamilyValue(value.fontFamily) } : {}),
+          ...(typeof value.fontSize === "number" ? { fontSize: value.fontSize } : {}),
+          ...(typeof value.color === "string" ? { color: value.color } : {}),
+          ...(value.align === "left" || value.align === "center" || value.align === "right" || value.align === "justify"
+            ? { align: value.align }
+            : {}),
+        };
+
+        return acc;
+      }, { ...DEFAULT_FORM_LINE_STYLES })
     : fallback.formLineStyles;
 
   return {
@@ -277,6 +335,7 @@ type SelectedTextTarget =
   | {
       kind: "form-line";
       key: string;
+      fontFamily: string;
       fontSize: number;
       color: string;
       align: TextOverlayItem["align"];
@@ -814,7 +873,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
       return {
         kind: "overlay" as const,
         id: selectedOverlay.id,
-        fontFamily: selectedOverlay.fontFamily,
+        fontFamily: normalizeFontFamilyValue(selectedOverlay.fontFamily),
         fontSize: selectedOverlay.fontSize,
         color: selectedOverlay.color,
         align: selectedOverlay.align,
@@ -827,6 +886,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
       return {
         kind: "form-line" as const,
         key: selectedFormLineKey,
+        fontFamily: normalizeFontFamilyValue(lineStyle.fontFamily),
         fontSize: lineStyle.fontSize ?? 16,
         color: lineStyle.color ?? "#0f172a",
         align: lineStyle.align ?? "left",
@@ -835,6 +895,32 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
 
     return null;
   }, [selectedOverlay, selectedSegmentId, selectedFormLineKey, formLineStyles]);
+
+  useEffect(() => {
+    ensureFontStylesheet(FONT_PRELOAD_STYLESHEET_HREF);
+  }, []);
+
+  useEffect(() => {
+    const usedFonts = new Set<string>();
+
+    for (const item of overlayItems) {
+      if (item.type === "text") {
+        usedFonts.add(normalizeFontFamilyValue(item.fontFamily));
+      }
+    }
+
+    for (const style of Object.values(formLineStyles)) {
+      if (style.fontFamily) {
+        usedFonts.add(normalizeFontFamilyValue(style.fontFamily));
+      }
+    }
+
+    if (selectedTextTarget) {
+      usedFonts.add(normalizeFontFamilyValue(selectedTextTarget.fontFamily));
+    }
+
+    usedFonts.forEach((fontFamily) => ensureFontFamilyLoaded(fontFamily));
+  }, [overlayItems, formLineStyles, selectedTextTarget]);
 
   const logoOptions = useMemo(() => builtinLogos, []);
 
@@ -1310,12 +1396,23 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
   const updateSelectedTextStyle = (patch: CanvasTextStylePatch) => {
     if (!selectedTextTarget) return;
 
+    if (typeof patch.fontFamily === "string") {
+      ensureFontFamilyLoaded(normalizeFontFamilyValue(patch.fontFamily));
+    }
+
     if (selectedTextTarget.kind === "overlay") {
-      updateOverlayItem(selectedTextTarget.id, patch as Partial<TextOverlayItem>);
+      const normalizedOverlayPatch: Partial<TextOverlayItem> = {
+        ...patch,
+        ...(typeof patch.fontFamily === "string"
+          ? { fontFamily: normalizeFontFamilyValue(patch.fontFamily) }
+          : {}),
+      };
+      updateOverlayItem(selectedTextTarget.id, normalizedOverlayPatch);
       return;
     }
 
     const nextPatch: FormLineStyle = {
+      ...(typeof patch.fontFamily === "string" ? { fontFamily: normalizeFontFamilyValue(patch.fontFamily) } : {}),
       ...(typeof patch.fontSize === "number" ? { fontSize: patch.fontSize } : {}),
       ...(typeof patch.color === "string" ? { color: patch.color } : {}),
       ...(patch.align ? { align: patch.align } : {}),
@@ -1918,19 +2015,17 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
 
                 {selectedTextTarget && (
                   <>
-                    {selectedTextTarget.kind === "overlay" && (
-                      <select
-                        value={selectedTextTarget.fontFamily}
-                        onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
-                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
-                      >
-                        {FONT_OPTIONS.map((font) => (
-                          <option key={font.value} value={font.value}>
-                            {font.label}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    <select
+                      value={selectedTextTarget.fontFamily}
+                      onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
+                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
+                    >
+                      {FONT_OPTIONS.map((font) => (
+                        <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                          {font.label}
+                        </option>
+                      ))}
+                    </select>
                     <input
                       type="number"
                       min={12}

@@ -17,6 +17,7 @@ type Palette = {
 };
 
 type FormLineStyle = {
+    fontFamily?: string;
     align?: 'left' | 'center' | 'right' | 'justify';
     fontSize?: number;
     color?: string;
@@ -81,6 +82,7 @@ const toLineStyle = (lineStyle?: FormLineStyle): React.CSSProperties => {
     if (!lineStyle) return {};
 
     return {
+        ...(lineStyle.fontFamily ? { fontFamily: lineStyle.fontFamily } : {}),
         ...(lineStyle.align ? { textAlign: lineStyle.align } : {}),
         ...(lineStyle.fontSize ? { fontSize: `${lineStyle.fontSize}px` } : {}),
         ...(lineStyle.color ? { color: lineStyle.color } : {}),
@@ -292,6 +294,7 @@ const EditableText = ({
                 y: position?.y ?? 0,
             },
             style: {
+                fontFamily: lineStyles?.[lineKey]?.fontFamily ?? 'Inter, sans-serif',
                 fontSize: lineStyles?.[lineKey]?.fontSize ?? 16,
                 color: lineStyles?.[lineKey]?.color ?? '#0f172a',
                 align: lineStyles?.[lineKey]?.align ?? 'left',

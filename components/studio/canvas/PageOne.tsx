@@ -19,6 +19,7 @@ type Palette = {
 };
 
 type FormLineStyle = {
+    fontFamily?: string;
     align?: 'left' | 'center' | 'right' | 'justify';
     fontSize?: number;
     color?: string;
@@ -85,6 +86,7 @@ const toLineStyle = (lineStyle?: FormLineStyle): React.CSSProperties => {
     if (!lineStyle) return {};
 
     return {
+        ...(lineStyle.fontFamily ? { fontFamily: lineStyle.fontFamily } : {}),
         ...(lineStyle.align ? { textAlign: lineStyle.align } : {}),
         ...(lineStyle.fontSize ? { fontSize: `${lineStyle.fontSize}px` } : {}),
         ...(lineStyle.color ? { color: lineStyle.color } : {}),
@@ -292,6 +294,7 @@ const EditableText = ({
         const position = textEntityPositions?.[entityId];
         const inlineFontSize = typeof style?.fontSize === 'number' ? style.fontSize : 16;
         const inlineColor = typeof style?.color === 'string' ? style.color : '#0f172a';
+        const inlineFontFamily = typeof style?.fontFamily === 'string' ? style.fontFamily : 'Inter, sans-serif';
         const inlineAlign =
             style?.textAlign === 'left' || style?.textAlign === 'center' || style?.textAlign === 'right' || style?.textAlign === 'justify'
                 ? style.textAlign
@@ -305,6 +308,7 @@ const EditableText = ({
                 y: position?.y ?? 0,
             },
             style: {
+                fontFamily: lineStyles?.[lineKey]?.fontFamily ?? inlineFontFamily,
                 fontSize: lineStyles?.[lineKey]?.fontSize ?? inlineFontSize,
                 color: lineStyles?.[lineKey]?.color ?? inlineColor,
                 align: lineStyles?.[lineKey]?.align ?? inlineAlign,
@@ -769,7 +773,7 @@ export default function PageOne({
                                         <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.chiefPatrons" value={headings.chiefPatrons} onEdit={onEdit} />
                                         </h4>
-                    <ul className="text-[11.5px] leading-tight" style={{ color: '#1e293b' }}>
+                    <ul className="text-[10px] leading-tight" style={{ color: '#1e293b' }}>
                         {chiefPatrons.map(({ member, index: memberIndex }) => (
                             <li key={memberIndex}>
                               <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
@@ -788,7 +792,7 @@ export default function PageOne({
                                         <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.patrons" value={headings.patrons} onEdit={onEdit} />
                                         </h4>
-                    <ul className="text-[11.5px] leading-tight" style={{ color: '#1e293b' }}>
+                    <ul className="text-[10px] leading-tight" style={{ color: '#1e293b' }}>
                         {patrons.map(({ member, index: memberIndex }) => (
                             <li key={memberIndex}>
                               <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
@@ -812,7 +816,7 @@ export default function PageOne({
                             <ul className="space-y-1">
                                 {conveners.map(({ member, index: memberIndex }) => (
                                     <li key={memberIndex}>
-                                        <p className="text-[11px] leading-tight font-bold" style={{ color: '#1e293b' }}>
+                                        <p className="text-[10px] leading-tight font-bold" style={{ color: '#1e293b' }}>
                                             <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} />
                                         </p>
                                         <p className="text-[10px] leading-tight opacity-70" style={{ color: '#1e293b' }}>
@@ -831,7 +835,7 @@ export default function PageOne({
                             <ul className="space-y-1">
                                 {coConveners.map(({ member, index: memberIndex }) => (
                                     <li key={memberIndex}>
-                                        <p className="text-[11px] leading-tight font-bold" style={{ color: '#1e293b' }}>
+                                        <p className="text-[10px] leading-tight font-bold" style={{ color: '#1e293b' }}>
                                             <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} />
                                         </p>
                                         <p className="text-[10px] leading-tight opacity-70" style={{ color: '#1e293b' }}>
@@ -852,7 +856,7 @@ export default function PageOne({
                                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.advisoryCommittee" value={headings.advisoryCommittee} onEdit={onEdit} />
                                 </h4>
-                <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
+                <ul className="text-[10px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
                     {advisory.slice(0, 20).map(({ member, index: memberIndex }) => (
                                                 <li key={memberIndex} className="break-words whitespace-normal">
                           <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
@@ -871,7 +875,7 @@ export default function PageOne({
                                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.organizingCommittee" value={headings.organizingCommittee} onEdit={onEdit} />
                                 </h4>
-                <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
+                <ul className="text-[10px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
                     {organizing.slice(0, 15).map(({ member, index: memberIndex }) => (
                         <li key={memberIndex} className="break-words whitespace-normal">
                           <EditableText
