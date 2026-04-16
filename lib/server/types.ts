@@ -40,6 +40,7 @@ export type BrochureRecord = {
 	status: BrochureStatus;
 	rejectionReason: string | null;
 	createdAt: string;
+	updatedAt: string;
 };
 
 export type LoginInput = {

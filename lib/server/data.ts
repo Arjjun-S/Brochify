@@ -34,6 +34,7 @@ type BrochureRow = RowDataPacket & {
 	status: BrochureStatus;
 	rejectionReason: string | null;
 	createdAt: Date | string;
+	updatedAt: Date | string;
 };
 
 let schemaReadyPromise: Promise<void> | null = null;
@@ -138,6 +139,7 @@ function mapBrochureRow(row: BrochureRow): BrochureRecord {
 		status: row.status,
 		rejectionReason: row.rejectionReason,
 		createdAt: new Date(row.createdAt).toISOString(),
+		updatedAt: new Date(row.updatedAt ?? row.createdAt).toISOString(),
 	};
 }
 
@@ -194,6 +196,7 @@ async function initSchema(): Promise<void> {
 			status ENUM('draft', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'draft',
 			rejection_reason TEXT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			CONSTRAINT fk_brochure_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
 			CONSTRAINT fk_brochure_assigned_admin FOREIGN KEY (assigned_admin) REFERENCES users(id) ON DELETE CASCADE,
 			INDEX idx_brochure_status (status),
@@ -203,6 +206,11 @@ async function initSchema(): Promise<void> {
 	`);
 
 	await addColumnIfMissing("brochures", "rejection_reason", "TEXT NULL AFTER status");
+	await addColumnIfMissing(
+		"brochures",
+		"updated_at",
+		"TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+	);
 
 	await seedUsersIfMissing();
 }
@@ -316,12 +324,13 @@ export async function listBrochuresForUser(user: SessionUser, options?: ListBroc
 				admin.username AS assignedAdminUsername,
 				b.status,
 				b.rejection_reason AS rejectionReason,
-				b.created_at AS createdAt
+				b.created_at AS createdAt,
+				b.updated_at AS updatedAt
 			FROM brochures b
 			INNER JOIN users creator ON creator.id = b.created_by
 			LEFT JOIN users admin ON admin.id = b.assigned_admin
 			WHERE ${whereClauses.join(" AND ")}
-			ORDER BY b.created_at DESC
+			ORDER BY b.updated_at DESC
 		`,
 		values,
 	);
@@ -345,7 +354,8 @@ export async function getBrochureByIdForUser(id: number, user: SessionUser): Pro
 				admin.username AS assignedAdminUsername,
 				b.status,
 				b.rejection_reason AS rejectionReason,
-				b.created_at AS createdAt
+				b.created_at AS createdAt,
+				b.updated_at AS updatedAt
 			FROM brochures b
 			INNER JOIN users creator ON creator.id = b.created_by
 			LEFT JOIN users admin ON admin.id = b.assigned_admin

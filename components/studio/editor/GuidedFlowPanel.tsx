@@ -216,7 +216,6 @@ export default function GuidedFlowPanel({
   fullPage = false,
   createActionLabel = "Build Brochure",
 }: GuidedFlowPanelProps) {
-  const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -613,31 +612,6 @@ export default function GuidedFlowPanel({
       ),
     },
   ] as const;
-
-  if (!started) {
-    return (
-      <div className={cn("flex h-full flex-col justify-center px-8 py-10", fullPage ? "text-slate-900" : "bg-slate-950 text-white") }>
-        <div className={cn(
-          "rounded-[34px] p-8 shadow-[0_28px_60px_-32px_rgba(0,0,0,0.25)]",
-          fullPage ? "border border-slate-200 bg-white" : "border border-white/10 bg-white/[0.03]",
-        )}>
-          <p className="text-[11px] font-black uppercase tracking-[0.34em] text-primary">Modern Guided Builder</p>
-          <h2 className="mt-3 text-3xl font-black tracking-tight">Create A Brochure In A Focused Flow</h2>
-          <p className={cn("mt-4 text-sm leading-relaxed", fullPage ? "text-slate-600" : "text-slate-400")}>
-            We will collect details step-by-step, let you optionally enhance with AI, then generate the final brochure using your chosen template.
-          </p>
-          <button
-            type="button"
-            onClick={() => setStarted(true)}
-            className="mt-8 inline-flex items-center gap-3 rounded-full bg-primary px-6 py-3 text-[11px] font-black uppercase tracking-[0.22em] text-white shadow-[0_20px_36px_-16px_rgba(0,71,171,0.9)] transition-transform hover:-translate-y-0.5"
-          >
-            <Wand2 className="h-4 w-4" />
-            Get Started
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={cn(

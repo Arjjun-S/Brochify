@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS brochures (
 	status ENUM('draft', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'draft',
 	rejection_reason TEXT NULL,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 	CONSTRAINT fk_brochures_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
 	CONSTRAINT fk_brochures_assigned_admin FOREIGN KEY (assigned_admin) REFERENCES users(id) ON DELETE CASCADE,
 	INDEX idx_brochures_status (status),
@@ -69,6 +70,16 @@ SET @sql_rejection_reason := IF(@has_rejection_reason = 0, 'ALTER TABLE brochure
 PREPARE stmt_rejection_reason FROM @sql_rejection_reason;
 EXECUTE stmt_rejection_reason;
 DEALLOCATE PREPARE stmt_rejection_reason;
+
+SET @has_updated_at := (
+	SELECT COUNT(*)
+	FROM information_schema.COLUMNS
+	WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'brochures' AND COLUMN_NAME = 'updated_at'
+);
+SET @sql_updated_at := IF(@has_updated_at = 0, 'ALTER TABLE brochures ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at', 'SELECT 1');
+PREPARE stmt_updated_at FROM @sql_updated_at;
+EXECUTE stmt_updated_at;
+DEALLOCATE PREPARE stmt_updated_at;
 
 INSERT INTO users (username, password, password_hash, role)
 VALUES
