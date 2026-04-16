@@ -14,6 +14,7 @@ import {
   Sora,
   Space_Grotesk,
 } from "next/font/google";
+import { FONT_PRELOAD_STYLESHEET_HREF } from "@/lib/domains/brochure";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -50,6 +51,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={FONT_PRELOAD_STYLESHEET_HREF} />
+      </head>
       <body
         className={`${inter.variable} ${manrope.variable} ${dmSans.variable} ${spaceGrotesk.variable} ${plusJakartaSans.variable} ${sora.variable} ${poppins.variable} ${ibmPlexSans.variable} ${bebasNeue.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${fraunces.variable} ${libreBaskerville.variable} font-sans antialiased`}
       >

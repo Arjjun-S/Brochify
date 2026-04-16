@@ -17,7 +17,8 @@ type Palette = {
 };
 
 type FormLineStyle = {
-    align?: 'left' | 'center' | 'right';
+    fontFamily?: string;
+    align?: 'left' | 'center' | 'right' | 'justify';
     fontSize?: number;
     color?: string;
 };
@@ -55,6 +56,8 @@ type EditableTextProps = {
     onEdit?: (path: string, value: string) => void;
     className?: string;
     multiline?: boolean;
+    groupAsSingleEntity?: boolean;
+    listMode?: 'plain' | 'bullets';
 };
 
 type EditableTextContextValue = {
@@ -79,13 +82,22 @@ const toLineStyle = (lineStyle?: FormLineStyle): React.CSSProperties => {
     if (!lineStyle) return {};
 
     return {
+        ...(lineStyle.fontFamily ? { fontFamily: lineStyle.fontFamily } : {}),
         ...(lineStyle.align ? { textAlign: lineStyle.align } : {}),
         ...(lineStyle.fontSize ? { fontSize: `${lineStyle.fontSize}px` } : {}),
         ...(lineStyle.color ? { color: lineStyle.color } : {}),
     };
 };
 
-const EditableText = ({ path, value, onEdit, className, multiline = false }: EditableTextProps) => {
+const EditableText = ({
+    path,
+    value,
+    onEdit,
+    className,
+    multiline = false,
+    groupAsSingleEntity = false,
+    listMode = 'plain',
+}: EditableTextProps) => {
     const safeValue = value ?? '';
     const {
         lineStyles,
@@ -184,6 +196,93 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
         return candidatePath === basePath || candidatePath.startsWith(`${basePath}.`);
     };
 
+    const normalizeBulletLine = (line: string): string => line.replace(/^\s*(?:•|-|\*)\s?/, '');
+
+    const extractListLines = (root: HTMLElement): string[] => {
+        const listItems = Array.from(root.querySelectorAll('li'));
+        const rawLines =
+            listItems.length > 0
+                ? listItems.map((item) => (item.textContent ?? '').replace(/\u00a0/g, ' ').trim())
+                : (root.innerText ?? '')
+                      .split('\n')
+                      .map((line) => line.replace(/\u00a0/g, ' ').trim());
+
+        return rawLines.map(normalizeBulletLine).filter((line) => line.length > 0);
+    };
+
+    const createEmptyBulletItem = (): HTMLLIElement => {
+        const item = document.createElement('li');
+        item.className = 'whitespace-pre-wrap break-words';
+        item.textContent = '\u00a0';
+        return item;
+    };
+
+    const insertBulletAfterSelection = (root: HTMLElement) => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) {
+            root.appendChild(createEmptyBulletItem());
+            return;
+        }
+
+        const anchorElement =
+            selection.anchorNode instanceof Element
+                ? selection.anchorNode
+                : selection.anchorNode?.parentElement ?? null;
+
+        const currentItem = anchorElement?.closest('li');
+        const nextItem = createEmptyBulletItem();
+
+        if (currentItem && currentItem.parentElement === root) {
+            if (currentItem.nextSibling) {
+                root.insertBefore(nextItem, currentItem.nextSibling);
+            } else {
+                root.appendChild(nextItem);
+            }
+        } else {
+            root.appendChild(nextItem);
+        }
+
+        const range = document.createRange();
+        range.selectNodeContents(nextItem);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    };
+
+    const removeCurrentEmptyBullet = (root: HTMLElement): boolean => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return false;
+
+        const anchorElement =
+            selection.anchorNode instanceof Element
+                ? selection.anchorNode
+                : selection.anchorNode?.parentElement ?? null;
+
+        const currentItem = anchorElement?.closest('li') as HTMLLIElement | null;
+        if (!currentItem || currentItem.parentElement !== root) return false;
+
+        const normalizedText = (currentItem.textContent ?? '').replace(/\u00a0/g, '').trim();
+        if (normalizedText.length > 0) return false;
+
+        const previous = currentItem.previousElementSibling as HTMLElement | null;
+        const next = currentItem.nextElementSibling as HTMLElement | null;
+        currentItem.remove();
+
+        let focusTarget = previous ?? next;
+        if (!focusTarget) {
+            const replacement = createEmptyBulletItem();
+            root.appendChild(replacement);
+            focusTarget = replacement;
+        }
+
+        const range = document.createRange();
+        range.selectNodeContents(focusTarget);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return true;
+    };
+
     const toEntity = (lineKey: string, text: string, isEditing: boolean): TextEntity => {
         const entityId = `${textEntityPrefix}${lineKey}`;
         const position = textEntityPositions?.[entityId];
@@ -195,6 +294,7 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
                 y: position?.y ?? 0,
             },
             style: {
+                fontFamily: lineStyles?.[lineKey]?.fontFamily ?? 'Inter, sans-serif',
                 fontSize: lineStyles?.[lineKey]?.fontSize ?? 16,
                 color: lineStyles?.[lineKey]?.color ?? '#0f172a',
                 align: lineStyles?.[lineKey]?.align ?? 'left',
@@ -237,6 +337,133 @@ const EditableText = ({ path, value, onEdit, className, multiline = false }: Edi
             >
                 {safeValue}
             </span>
+        );
+    }
+
+    if (multiline && groupAsSingleEntity) {
+        const lineKey = path;
+        const isEditing = activeEditingLineKey === lineKey;
+        const isTypingActive = isPathTypingActive(activeTypingPath, path);
+        const rawLines = safeValue.split('\n');
+        const lines = listMode === 'bullets' ? rawLines.map(normalizeBulletLine) : rawLines;
+        const textEntity = toEntity(lineKey, safeValue, isEditing);
+
+        const groupedNode = listMode === 'bullets' ? (
+            <ul
+                className={`editable-block ${isEditing ? 'editable-line-editing' : ''} ${isTypingActive ? 'ai-typing-active' : ''} list-disc pl-5 ${className ?? ''}`.trim()}
+                contentEditable={isEditing}
+                suppressContentEditableWarning
+                spellCheck={false}
+                tabIndex={-1}
+                data-editable-path={path}
+                data-form-line-key={lineKey}
+                onPointerDown={(event) => {
+                    if (event.detail >= 2) {
+                        event.stopPropagation();
+                        beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                            x: event.clientX,
+                            y: event.clientY,
+                        });
+                    }
+                }}
+                onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    beginEdit(lineKey, event.currentTarget as HTMLElement, {
+                        x: event.clientX,
+                        y: event.clientY,
+                    });
+                }}
+                onBlur={(event) => {
+                    if (!isEditing) return;
+                    const nextLines = extractListLines(event.currentTarget as HTMLElement);
+                    onEdit(path, nextLines.join('\n'));
+                    onEndEditLine?.();
+                }}
+                onKeyDown={(event) => {
+                    if (!isEditing) return;
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        insertBulletAfterSelection(event.currentTarget as HTMLElement);
+                        return;
+                    }
+                    if (event.key === 'Backspace' && removeCurrentEmptyBullet(event.currentTarget as HTMLElement)) {
+                        event.preventDefault();
+                        return;
+                    }
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        onEndEditLine?.();
+                        (event.currentTarget as HTMLElement).blur();
+                    }
+                }}
+            >
+                {(lines.length > 0 ? lines : ['']).map((line, lineIndex) => (
+                    <li key={`${lineKey}::${lineIndex}`} className="whitespace-pre-wrap break-words">
+                        {line || '\u00a0'}
+                    </li>
+                ))}
+            </ul>
+        ) : (
+            <div
+                className={`editable-block ${isEditing ? 'editable-line-editing' : ''} ${isTypingActive ? 'ai-typing-active' : ''} ${className ?? ''}`.trim()}
+                contentEditable={isEditing}
+                suppressContentEditableWarning
+                spellCheck={false}
+                tabIndex={-1}
+                data-editable-path={path}
+                data-form-line-key={lineKey}
+                onPointerDown={(event) => {
+                    if (event.detail >= 2) {
+                        event.stopPropagation();
+                        beginEdit(lineKey, event.currentTarget as HTMLElement);
+                    }
+                }}
+                onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    beginEdit(lineKey, event.currentTarget as HTMLElement);
+                }}
+                onBlur={(event) => {
+                    if (!isEditing) return;
+                    onEdit(path, event.currentTarget.innerText ?? '');
+                    onEndEditLine?.();
+                }}
+                onKeyDown={(event) => {
+                    if (!isEditing) return;
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        onEndEditLine?.();
+                        (event.currentTarget as HTMLElement).blur();
+                    }
+                }}
+            >
+                {lines.map((line, lineIndex) => (
+                    <div key={`${lineKey}::${lineIndex}`} className="whitespace-pre-wrap break-words">
+                        {line}
+                    </div>
+                ))}
+            </div>
+        );
+
+        if (!onMoveTextEntity || !onSelectTextEntity) {
+            return groupedNode;
+        }
+
+        return (
+            <MovableSegment
+                id={textEntity.id}
+                position={textEntityPositions?.[textEntity.id]}
+                onMove={isEditing ? undefined : onMoveTextEntity}
+                onInteractionStart={isEditing ? undefined : onTextEntityInteractionStart}
+                onInteractionEnd={isEditing ? undefined : onTextEntityInteractionEnd}
+                selectedId={selectedTextEntityId}
+                onSelect={onSelectTextEntity}
+                canvasScale={textEntityCanvasScale}
+                className="w-full"
+                minWidth={140}
+                minHeight={72}
+            >
+                {groupedNode}
+            </MovableSegment>
         );
     }
 
@@ -472,24 +699,25 @@ export default function PageTwo({
             }}
         >
         <div id="brochure-page-2" className="brochure-page border border-gray-200" style={pageBackgroundStyle}>
+
             <div className="column flex-[0.8] !p-5 flex flex-col gap-5" style={{ backgroundColor: paletteStrongSurface, color: palettePrimaryText, fontSize: '11.5px' }}>
                                 {!isHidden('p2-about-srm') && (
                                 <MovableSegment id="p2-about-srm" position={segmentPositions?.['p2-about-srm']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={0}>
                 <div className="text-center">
-                    <h3 className="text-base font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
+                                        <h3 className="text-[13px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
                       <EditableText path="headings.aboutCollege" value={headings.aboutCollege} onEdit={onEdit} className="inline" />
                     </h3>
-                                        <EditableText path="aboutCollege" value={data.aboutCollege} onEdit={onEdit} multiline className="block text-center leading-[1.34] whitespace-pre-wrap break-words" />
+                                                                                <EditableText path="aboutCollege" value={data.aboutCollege} onEdit={onEdit} multiline className="block text-[9.5px] text-justify leading-[1.34] whitespace-normal break-words" />
                 </div>
                 </MovableSegment>
                                 )}
                                 {!isHidden('p2-about-school') && (
                                 <MovableSegment id="p2-about-school" position={segmentPositions?.['p2-about-school']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={1}>
                 <div className="text-center">
-                    <h3 className="text-[14px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
+                                        <h3 className="text-[11px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
                       <EditableText path="headings.aboutSchool" value={headings.aboutSchool} onEdit={onEdit} className="inline" />
                     </h3>
-                                        <EditableText path="aboutSchool" value={data.aboutSchool} onEdit={onEdit} multiline className="block text-left leading-[1.34] whitespace-pre-wrap break-words" />
+                                                                                <EditableText path="aboutSchool" value={data.aboutSchool} onEdit={onEdit} multiline className="block text-[10px] text-justify leading-[1.34] whitespace-normal break-words" />
                 </div>
                 </MovableSegment>
                                 )}
@@ -500,10 +728,10 @@ export default function PageTwo({
                 {!isHidden('p2-about-dept') && (
                 <MovableSegment id="p2-about-dept" position={segmentPositions?.['p2-about-dept']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={2}>
                 <div className="text-center">
-                                        <h3 className="text-[13px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ color: palettePrimary, backgroundColor: `${palettePrimary}14`, borderBottom: `1px solid ${palettePrimary}26` }}>
+                                        <h3 className="text-[11px] font-black mb-3 uppercase tracking-tighter inline-block px-4 py-1 rounded-full" style={{ color: palettePrimary, backgroundColor: `${palettePrimary}14`, borderBottom: `1px solid ${palettePrimary}26` }}>
                                             <EditableText path="headings.aboutDepartment" value={headings.aboutDepartment} onEdit={onEdit} className="inline" />
                                         </h3>
-                    <EditableText path="aboutDepartment" value={data.aboutDepartment} onEdit={onEdit} multiline className="block text-left leading-[1.34] whitespace-pre-wrap break-words" />
+                    <EditableText path="aboutDepartment" value={data.aboutDepartment} onEdit={onEdit} multiline className="block text-[10px] text-justify leading-[1.34] whitespace-normal break-words" />
                 </div>
                 </MovableSegment>
                 )}
@@ -524,11 +752,15 @@ export default function PageTwo({
                                         <p className="text-[10px] font-black uppercase mb-1 underline" style={{ color: palettePrimary }}>
                                             <EditableText path="headings.programHighlights" value={headings.programHighlights} onEdit={onEdit} className="inline" />
                                         </p>
-                    <ul className="text-[10px] space-y-1" style={{ color: '#475569' }}>
-                        {data.topics?.slice(0, 5).map((t, i: number) => (
-                            <li key={i} className="break-words whitespace-normal">• <EditableText path="templateText.p2_dayLabel" value={data.templateText?.p2_dayLabel} onEdit={onEdit} className="inline" /> {i + 1}: <EditableText path={`topics.${i}.forenoon`} value={t.forenoon} onEdit={onEdit} className="inline whitespace-pre-wrap break-words" /></li>
-                        ))}
-                    </ul>
+                    <EditableText
+                        path="programHighlightsText"
+                        value={data.programHighlightsText}
+                        onEdit={onEdit}
+                        multiline
+                        groupAsSingleEntity
+                        listMode="bullets"
+                        className="block text-[10px] space-y-1"
+                    />
                 </div>
                 </MovableSegment>
                 )}

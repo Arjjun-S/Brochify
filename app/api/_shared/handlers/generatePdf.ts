@@ -1,9 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import puppeteer from "puppeteer";
+import { FONT_PDF_STYLESHEET_HREF } from "@/lib/domains/brochure";
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export async function handleGeneratePdf(req: NextRequest) {
   try {
-    const { html, css } = await req.json();
+    const body = await req.json();
+    const html = typeof body?.html === "string" ? body.html : "";
+    const css = typeof body?.css === "string" ? body.css : "";
+    const watermarkText = typeof body?.watermarkText === "string" ? body.watermarkText.trim() : "";
+
+    if (!html.trim()) {
+      return NextResponse.json({ error: "html is required." }, { status: 400 });
+    }
+
+    const safeWatermark = watermarkText ? escapeHtml(watermarkText.slice(0, 160)) : "";
+    const watermarkMarkup = safeWatermark
+      ? `
+          <div class="pdf-watermark-layer">
+            <div class="pdf-watermark-stack">
+              <p class="pdf-watermark-text">${safeWatermark}</p>
+              <p class="pdf-watermark-text">${safeWatermark}</p>
+              <p class="pdf-watermark-text">${safeWatermark}</p>
+            </div>
+          </div>
+        `
+      : "";
 
     console.log("Launching browser...");
     const browser = await puppeteer.launch({
@@ -24,6 +54,9 @@ export async function handleGeneratePdf(req: NextRequest) {
             <!DOCTYPE html>
             <html>
             <head>
+              <link rel="preconnect" href="https://fonts.googleapis.com" />
+              <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+              <link rel="stylesheet" href="${FONT_PDF_STYLESHEET_HREF}" />
                 <style>
                     ${css}
                     @page {
@@ -33,14 +66,41 @@ export async function handleGeneratePdf(req: NextRequest) {
                     body {
                         margin: 0;
                         padding: 0;
+                      position: relative;
                     }
                     * {
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                     }
+                    .pdf-watermark-layer {
+                      position: fixed;
+                      inset: 0;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      pointer-events: none;
+                      z-index: 99999;
+                    }
+                    .pdf-watermark-stack {
+                      transform: rotate(-30deg);
+                      display: flex;
+                      flex-direction: column;
+                      gap: 78px;
+                      align-items: center;
+                    }
+                    .pdf-watermark-text {
+                      font-family: Arial, sans-serif;
+                      font-size: 34px;
+                      letter-spacing: 0.12em;
+                      font-weight: 800;
+                      color: rgba(220, 38, 38, 0.28);
+                      text-transform: uppercase;
+                      white-space: nowrap;
+                    }
                 </style>
             </head>
             <body>
+                  ${watermarkMarkup}
                 ${html}
             </body>
             </html>

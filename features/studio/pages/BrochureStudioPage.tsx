@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import Image from "next/image";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import PageOne from "@/components/studio/canvas/PageOne";
@@ -12,6 +14,7 @@ import { cn } from "@/lib/ui/cn";
 import {
   Activity,
   AlignCenter,
+  AlignJustify,
   AlignLeft,
   AlignRight,
   Bold,
@@ -35,7 +38,10 @@ import {
   createShapeOverlay,
   createTextOverlay,
   FONT_OPTIONS,
+  FONT_PRELOAD_STYLESHEET_HREF,
+  getFontStylesheetHref,
   normalizeBrochureData,
+  normalizeFontFamilyValue,
   OverlayItem,
   parseTagInput,
   SegmentPosition,
@@ -46,6 +52,7 @@ import { generateBrochureData } from "@/lib/services/ai/openrouterClient";
 import { LoadingTask } from "@/lib/system/loading/loadingTaskManager";
 import { LIMITS } from "@/lib/system/content/limits";
 import type { BrochureTemplate } from "@/components/studio/editor/CanvasSidebar";
+import type { BrochureRecord, BrochureStatus, SessionUser } from "@/lib/server/types";
 
 const PAGE_WIDTH = 983;
 const PAGE_HEIGHT = 680;
@@ -54,6 +61,39 @@ const PAGE_TYPING_TARGET_MS = 5000;
 const COLUMN_TYPING_TARGET_MS = Math.round(PAGE_TYPING_TARGET_MS / 3);
 
 const NON_TEXT_SEGMENT_IDS = new Set(["p1-image", "p1-logos", "p1-qr-code", "p1-qr-link"]);
+const loadedFontStylesheetHrefs = new Set<string>();
+
+function ensureFontStylesheet(href: string): void {
+  if (!href || typeof document === "undefined") {
+    return;
+  }
+
+  if (loadedFontStylesheetHrefs.has(href)) {
+    return;
+  }
+
+  const existing = document.querySelector(`link[data-font-href="${href}"]`) as HTMLLinkElement | null;
+  if (existing) {
+    loadedFontStylesheetHrefs.add(href);
+    return;
+  }
+
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  link.dataset.fontHref = href;
+  document.head.appendChild(link);
+  loadedFontStylesheetHrefs.add(href);
+}
+
+function ensureFontFamilyLoaded(fontFamily: string): void {
+  const href = getFontStylesheetHref(fontFamily);
+  if (!href) {
+    return;
+  }
+
+  ensureFontStylesheet(href);
+}
 
 const builtinLogos: Array<{ id: string; name: string; src: string }> = [
   { id: "ieeetems", name: "IEEE (TEMS)", src: "/logos/ieeetems.png" },
@@ -186,15 +226,101 @@ type CanvasTextStylePatch = {
 };
 
 type FormLineStyle = {
+  fontFamily?: string;
   fontSize?: number;
   color?: string;
   align?: TextOverlayItem["align"];
 };
 
 const DEFAULT_FORM_LINE_STYLES: Record<string, FormLineStyle> = {
-  "aboutCollege::0": { align: "center" },
   "registration.notes": { fontSize: 13 },
 };
+
+type BrochureStudioPageProps = {
+  brochure: BrochureRecord;
+  session: SessionUser;
+  autoAnimate?: boolean;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function createDefaultSnapshot(): EditorSnapshot {
+  return {
+    brochureData: createEmptyBrochureData(),
+    selectedLogos: ["srm", "ieee", "ctech"],
+    segmentPositions: {},
+    overlayItems: [],
+    template: "whiteBlue",
+    hiddenSegments: [],
+    formLineStyles: { ...DEFAULT_FORM_LINE_STYLES },
+  };
+}
+
+function normalizeSnapshotFromContent(content: BrochureRecord["content"]): EditorSnapshot {
+  const fallback = createDefaultSnapshot();
+  if (!content) {
+    return fallback;
+  }
+
+  const template =
+    typeof content.template === "string" && content.template in TEMPLATE_THEMES ? content.template : fallback.template;
+
+  const segmentPositions = isRecord(content.segmentPositions)
+    ? (content.segmentPositions as Record<string, SegmentPosition>)
+    : fallback.segmentPositions;
+
+  const overlayItems = Array.isArray(content.overlayItems)
+    ? (content.overlayItems as OverlayItem[]).map((item) => {
+        if (item.type !== "text") {
+          return item;
+        }
+
+        return {
+          ...item,
+          fontFamily: normalizeFontFamilyValue(item.fontFamily),
+        };
+      })
+    : fallback.overlayItems;
+
+  const selectedLogos = Array.isArray(content.selectedLogos)
+    ? content.selectedLogos.filter((item): item is string => typeof item === "string")
+    : fallback.selectedLogos;
+
+  const hiddenSegments = Array.isArray(content.hiddenSegments)
+    ? content.hiddenSegments.filter((item): item is string => typeof item === "string")
+    : fallback.hiddenSegments;
+
+  const formLineStyles = isRecord(content.formLineStyles)
+    ? Object.entries(content.formLineStyles).reduce<Record<string, FormLineStyle>>((acc, [key, value]) => {
+        if (!isRecord(value)) {
+          return acc;
+        }
+
+        acc[key] = {
+          ...(typeof value.fontFamily === "string" ? { fontFamily: normalizeFontFamilyValue(value.fontFamily) } : {}),
+          ...(typeof value.fontSize === "number" ? { fontSize: value.fontSize } : {}),
+          ...(typeof value.color === "string" ? { color: value.color } : {}),
+          ...(value.align === "left" || value.align === "center" || value.align === "right" || value.align === "justify"
+            ? { align: value.align }
+            : {}),
+        };
+
+        return acc;
+      }, { ...DEFAULT_FORM_LINE_STYLES })
+    : fallback.formLineStyles;
+
+  return {
+    brochureData: normalizeBrochureData(content.brochureData as unknown as Record<string, unknown>),
+    selectedLogos: selectedLogos.length > 0 ? selectedLogos : fallback.selectedLogos,
+    segmentPositions,
+    overlayItems,
+    template,
+    hiddenSegments,
+    formLineStyles,
+  };
+}
 
 type SelectedTextTarget =
   | {
@@ -209,6 +335,7 @@ type SelectedTextTarget =
   | {
       kind: "form-line";
       key: string;
+      fontFamily: string;
       fontSize: number;
       color: string;
       align: TextOverlayItem["align"];
@@ -419,12 +546,8 @@ function buildTypingPlan(data: BrochureData): TypingStage[] {
     "headings.aboutFdp",
     "aboutFdp",
     "headings.programHighlights",
-    "templateText.p2_dayLabel",
+    "programHighlightsText",
   ];
-
-  for (let index = 0; index < data.topics.length; index += 1) {
-    pageTwoColumnTwo.push(`topics.${index}.forenoon`);
-  }
 
   const pageTwoColumnThree: string[] = [
     "headings.topics",
@@ -454,33 +577,38 @@ function buildTypingPlan(data: BrochureData): TypingStage[] {
   ];
 }
 
-export default function Dashboard() {
-  const [brochureData, setBrochureData] = useState<BrochureData>(createEmptyBrochureData());
-  const [selectedLogos, setSelectedLogos] = useState<string[]>(["srm", "ieee", "ctech"]);
+export default function BrochureStudioPage({ brochure, session, autoAnimate = false }: BrochureStudioPageProps) {
+  const initialSnapshot = useMemo(() => normalizeSnapshotFromContent(brochure.content), [brochure.content]);
+
+  const [brochureData, setBrochureData] = useState<BrochureData>(() => initialSnapshot.brochureData);
+  const [selectedLogos, setSelectedLogos] = useState<string[]>(() => initialSnapshot.selectedLogos);
   const [loadingTask, setLoadingTask] = useState<LoadingTask>("idle");
   const [loadingMessage, setLoadingMessage] = useState("");
   const [mounted, setMounted] = useState(false);
   const [showDevLogs, setShowDevLogs] = useState(false);
-  const [segmentPositions, setSegmentPositions] = useState<Record<string, SegmentPosition>>({});
-  const [overlayItems, setOverlayItems] = useState<OverlayItem[]>([]);
+  const [segmentPositions, setSegmentPositions] = useState<Record<string, SegmentPosition>>(() => initialSnapshot.segmentPositions);
+  const [overlayItems, setOverlayItems] = useState<OverlayItem[]>(() => initialSnapshot.overlayItems);
   const [selectedElement, setSelectedElement] = useState<SelectedCanvasElement>(null);
   const [activePage, setActivePage] = useState<1 | 2>(1);
   const [previewScale, setPreviewScale] = useState(1); // auto scale from viewport
   const [zoomFactor, setZoomFactor] = useState(0.9); // user-controlled multiplier (start at 90%)
-  const [projectReady, setProjectReady] = useState(false);
+  const [projectReady, setProjectReady] = useState(true);
   const [assets, setAssets] = useState<BrandAsset[]>([]);
-  const [template, setTemplate] = useState<BrochureTemplate>("whiteBlue");
+  const [template, setTemplate] = useState<BrochureTemplate>(() => initialSnapshot.template);
   const [history, setHistory] = useState<EditorSnapshot[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [hiddenSegments, setHiddenSegments] = useState<string[]>([]);
-  const [formLineStyles, setFormLineStyles] = useState<Record<string, FormLineStyle>>({
-    ...DEFAULT_FORM_LINE_STYLES,
-  });
+  const [hiddenSegments, setHiddenSegments] = useState<string[]>(() => initialSnapshot.hiddenSegments);
+  const [formLineStyles, setFormLineStyles] = useState<Record<string, FormLineStyle>>(() => initialSnapshot.formLineStyles);
   const [selectedFormLineKey, setSelectedFormLineKey] = useState<string | null>(null);
   const [editingFormLineKey, setEditingFormLineKey] = useState<string | null>(null);
   const [typingBrochureData, setTypingBrochureData] = useState<BrochureData | null>(null);
   const [animationPhase, setAnimationPhase] = useState<"idle" | "preview" | "typing">("idle");
   const [activeTypingPath, setActiveTypingPath] = useState<string | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<BrochureStatus>(brochure.status);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(brochure.rejectionReason);
+  const [workflowBusyState, setWorkflowBusyState] = useState<"idle" | "saving" | "submitting" | "approving" | "rejecting">("idle");
+  const [workflowMessage, setWorkflowMessage] = useState<string | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
   const previewViewportRef = useRef<HTMLDivElement | null>(null);
   const pageOneRef = useRef<HTMLDivElement | null>(null);
   const pageTwoRef = useRef<HTMLDivElement | null>(null);
@@ -498,10 +626,13 @@ export default function Dashboard() {
   const historyInteractionRef = useRef<{ active: boolean; changed: boolean }>({ active: false, changed: false });
   const historyInitializedRef = useRef(false);
   const typingRunRef = useRef(0);
+  const autoAnimateRef = useRef(false);
   const animationPhaseRef = useRef<"idle" | "preview" | "typing">(animationPhase);
 
   const isLoading = loadingTask !== "idle";
   const isTypingAnimationActive = animationPhase === "typing";
+  const isWorkflowBusy = workflowBusyState !== "idle";
+  const dashboardHref = session.role === "admin" ? "/admin/dashboard" : "/faculty/dashboard";
   const canvasBrochureData = typingBrochureData ?? brochureData;
 
   const stopTypingAnimation = useCallback(() => {
@@ -742,7 +873,7 @@ export default function Dashboard() {
       return {
         kind: "overlay" as const,
         id: selectedOverlay.id,
-        fontFamily: selectedOverlay.fontFamily,
+        fontFamily: normalizeFontFamilyValue(selectedOverlay.fontFamily),
         fontSize: selectedOverlay.fontSize,
         color: selectedOverlay.color,
         align: selectedOverlay.align,
@@ -755,6 +886,7 @@ export default function Dashboard() {
       return {
         kind: "form-line" as const,
         key: selectedFormLineKey,
+        fontFamily: normalizeFontFamilyValue(lineStyle.fontFamily),
         fontSize: lineStyle.fontSize ?? 16,
         color: lineStyle.color ?? "#0f172a",
         align: lineStyle.align ?? "left",
@@ -763,6 +895,32 @@ export default function Dashboard() {
 
     return null;
   }, [selectedOverlay, selectedSegmentId, selectedFormLineKey, formLineStyles]);
+
+  useEffect(() => {
+    ensureFontStylesheet(FONT_PRELOAD_STYLESHEET_HREF);
+  }, []);
+
+  useEffect(() => {
+    const usedFonts = new Set<string>();
+
+    for (const item of overlayItems) {
+      if (item.type === "text") {
+        usedFonts.add(normalizeFontFamilyValue(item.fontFamily));
+      }
+    }
+
+    for (const style of Object.values(formLineStyles)) {
+      if (style.fontFamily) {
+        usedFonts.add(normalizeFontFamilyValue(style.fontFamily));
+      }
+    }
+
+    if (selectedTextTarget) {
+      usedFonts.add(normalizeFontFamilyValue(selectedTextTarget.fontFamily));
+    }
+
+    usedFonts.forEach((fontFamily) => ensureFontFamilyLoaded(fontFamily));
+  }, [overlayItems, formLineStyles, selectedTextTarget]);
 
   const logoOptions = useMemo(() => builtinLogos, []);
 
@@ -776,6 +934,135 @@ export default function Dashboard() {
       setActivePage(selectedElement.page);
     }
   }, [selectedElement]);
+
+  const buildEditorStatePayload = useCallback((): EditorSnapshot => {
+    return {
+      brochureData,
+      selectedLogos,
+      segmentPositions,
+      overlayItems,
+      template,
+      hiddenSegments,
+      formLineStyles,
+    };
+  }, [brochureData, selectedLogos, segmentPositions, overlayItems, template, hiddenSegments, formLineStyles]);
+
+  const saveEditorState = useCallback(
+    async (snapshot: EditorSnapshot) => {
+      const response = await fetch(`/api/brochure/${brochure.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: snapshot }),
+      });
+
+      const data = (await response.json()) as { brochure?: BrochureRecord; error?: string };
+      if (!response.ok || !data.brochure) {
+        throw new Error(data.error || "Failed to save brochure state.");
+      }
+
+      setReviewStatus(data.brochure.status);
+      setRejectionReason(data.brochure.rejectionReason);
+      return data.brochure;
+    },
+    [brochure.id],
+  );
+
+  const handleSaveDraft = async () => {
+    const snapshot = buildEditorStatePayload();
+    setWorkflowBusyState("saving");
+    setWorkflowError(null);
+    setWorkflowMessage(null);
+
+    try {
+      await saveEditorState(snapshot);
+      setWorkflowMessage("Latest editor state saved.");
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : "Failed to save brochure state.";
+      setWorkflowError(message);
+    } finally {
+      setWorkflowBusyState("idle");
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    const snapshot = buildEditorStatePayload();
+    setWorkflowBusyState("submitting");
+    setWorkflowError(null);
+    setWorkflowMessage(null);
+
+    try {
+      // Requirement: always persist the latest canvas state before submit.
+      await saveEditorState(snapshot);
+
+      const response = await fetch(`/api/brochure/${brochure.id}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: snapshot }),
+      });
+
+      const data = (await response.json()) as { brochure?: BrochureRecord; error?: string };
+      if (!response.ok || !data.brochure) {
+        throw new Error(data.error || "Failed to submit brochure for review.");
+      }
+
+      setReviewStatus(data.brochure.status);
+      setRejectionReason(data.brochure.rejectionReason);
+      setWorkflowMessage("Brochure submitted for admin review.");
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : "Failed to submit brochure for review.";
+      setWorkflowError(message);
+    } finally {
+      setWorkflowBusyState("idle");
+    }
+  };
+
+  const handleAdminDecision = async (decision: "approved" | "rejected") => {
+    const rejectionReasonValue =
+      decision === "rejected"
+        ? window.prompt("Enter rejection reason")?.trim() || ""
+        : "";
+
+    if (decision === "rejected" && !rejectionReasonValue) {
+      setWorkflowError("Rejection reason is required.");
+      return;
+    }
+
+    const snapshot = buildEditorStatePayload();
+    setWorkflowBusyState(decision === "approved" ? "approving" : "rejecting");
+    setWorkflowError(null);
+    setWorkflowMessage(null);
+
+    try {
+      await saveEditorState(snapshot);
+
+      const endpoint = decision === "approved"
+        ? `/api/brochure/${brochure.id}/approve`
+        : `/api/brochure/${brochure.id}/reject`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: snapshot,
+          rejectionReason: decision === "rejected" ? rejectionReasonValue : null,
+        }),
+      });
+
+      const data = (await response.json()) as { brochure?: BrochureRecord; error?: string };
+      if (!response.ok || !data.brochure) {
+        throw new Error(data.error || "Failed to update review decision.");
+      }
+
+      setReviewStatus(data.brochure.status);
+      setRejectionReason(data.brochure.rejectionReason);
+      setWorkflowMessage(decision === "approved" ? "Brochure approved." : "Brochure rejected.");
+    } catch (decisionError) {
+      const message = decisionError instanceof Error ? decisionError.message : "Failed to update review decision.";
+      setWorkflowError(message);
+    } finally {
+      setWorkflowBusyState("idle");
+    }
+  };
 
   const handleDownload = async () => {
     const element = document.getElementById("brochure-preview");
@@ -866,7 +1153,11 @@ export default function Dashboard() {
       const response = await fetch("/api/v1/brochure/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html, css: styles }),
+        body: JSON.stringify({
+          html,
+          css: styles,
+          watermarkText: reviewStatus === "approved" ? null : "Made with Brochify - Not Approved",
+        }),
       });
 
       if (!response.ok) {
@@ -904,6 +1195,12 @@ export default function Dashboard() {
               .split(/\r?\n/)
               .map((line) => line.replace(/^\s*(?:•|-|\*)\s?/, "").trim())
               .filter((line) => line.length > 0)
+          : path === "programHighlightsText" && typeof value === "string"
+            ? value
+                .split(/\r?\n/)
+                .map((line) => line.replace(/^\s*(?:•|-|\*)\s?/, "").trim())
+                .filter((line) => line.length > 0)
+                .join("\n")
           : value;
 
       const currentValue = getValueFromPath(prev as unknown as Record<string, unknown>, path);
@@ -1099,12 +1396,23 @@ export default function Dashboard() {
   const updateSelectedTextStyle = (patch: CanvasTextStylePatch) => {
     if (!selectedTextTarget) return;
 
+    if (typeof patch.fontFamily === "string") {
+      ensureFontFamilyLoaded(normalizeFontFamilyValue(patch.fontFamily));
+    }
+
     if (selectedTextTarget.kind === "overlay") {
-      updateOverlayItem(selectedTextTarget.id, patch as Partial<TextOverlayItem>);
+      const normalizedOverlayPatch: Partial<TextOverlayItem> = {
+        ...patch,
+        ...(typeof patch.fontFamily === "string"
+          ? { fontFamily: normalizeFontFamilyValue(patch.fontFamily) }
+          : {}),
+      };
+      updateOverlayItem(selectedTextTarget.id, normalizedOverlayPatch);
       return;
     }
 
     const nextPatch: FormLineStyle = {
+      ...(typeof patch.fontFamily === "string" ? { fontFamily: normalizeFontFamilyValue(patch.fontFamily) } : {}),
       ...(typeof patch.fontSize === "number" ? { fontSize: patch.fontSize } : {}),
       ...(typeof patch.color === "string" ? { color: patch.color } : {}),
       ...(patch.align ? { align: patch.align } : {}),
@@ -1322,6 +1630,15 @@ export default function Dashboard() {
     [],
   );
 
+  useEffect(() => {
+    if (!autoAnimate || !mounted || autoAnimateRef.current) {
+      return;
+    }
+
+    autoAnimateRef.current = true;
+    void runTypingAnimation(brochureData, { previewDelayMs: 120 });
+  }, [autoAnimate, brochureData, mounted, runTypingAnimation]);
+
   const handleCreateBrochure = () => {
     setLoadingTask("building");
     setLoadingMessage("Building brochure with AI reveal animation...");
@@ -1432,12 +1749,64 @@ export default function Dashboard() {
   return (
     <main className="h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
       <header className="h-20 bg-white border-b border-slate-200 px-8 lg:px-10 flex items-center justify-between shrink-0 z-[100] shadow-sm">
-        <div className="flex items-center gap-3 group cursor-pointer">
-          <img src="/icon-logo.png" alt="Studio Icon" className="h-10 w-10 object-contain drop-shadow-sm" />
-          <img src="/text-logo.png" alt="Studio Wordmark" className="h-10 w-auto object-contain drop-shadow-sm" />
-        </div>
+        <Link href={dashboardHref} className="flex items-center gap-3 group">
+          <Image src="/icon-logo.png" alt="Studio Icon" width={40} height={40} className="h-10 w-10 object-contain drop-shadow-sm" />
+          <Image src="/text-logo.png" alt="Studio Wordmark" width={176} height={40} className="h-10 w-auto object-contain drop-shadow-sm" />
+        </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
+              reviewStatus === "approved"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : reviewStatus === "rejected"
+                  ? "border-rose-300 bg-rose-50 text-rose-700"
+                  : reviewStatus === "pending"
+                    ? "border-amber-300 bg-amber-50 text-amber-700"
+                    : "border-slate-300 bg-slate-100 text-slate-700",
+            )}
+          >
+            {reviewStatus}
+          </span>
+
+          <button
+            onClick={() => void handleSaveDraft()}
+            disabled={isWorkflowBusy}
+            className="rounded-[14px] border border-slate-300 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.15em] text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {workflowBusyState === "saving" ? "Saving..." : "Save"}
+          </button>
+
+          {session.role === "faculty" && (
+            <button
+              onClick={() => void handleSubmitForReview()}
+              disabled={isWorkflowBusy}
+              className="rounded-[14px] border border-sky-300 bg-sky-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.15em] text-sky-700 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {workflowBusyState === "submitting" ? "Submitting..." : "Submit for Review"}
+            </button>
+          )}
+
+          {session.role === "admin" && (
+            <>
+              <button
+                onClick={() => void handleAdminDecision("approved")}
+                disabled={isWorkflowBusy}
+                className="rounded-[14px] border border-emerald-300 bg-emerald-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.15em] text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {workflowBusyState === "approving" ? "Approving..." : "Approve"}
+              </button>
+              <button
+                onClick={() => void handleAdminDecision("rejected")}
+                disabled={isWorkflowBusy}
+                className="rounded-[14px] border border-rose-300 bg-rose-50 px-4 py-2 text-[11px] font-black uppercase tracking-[0.15em] text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {workflowBusyState === "rejecting" ? "Rejecting..." : "Reject"}
+              </button>
+            </>
+          )}
+
           <button
             onClick={() => setShowDevLogs(!showDevLogs)}
             className={cn(
@@ -1454,6 +1823,7 @@ export default function Dashboard() {
           {projectReady && (
             <button
               onClick={handleDownload}
+              disabled={isWorkflowBusy}
               className="flex items-center gap-3 px-7 py-3 rounded-[18px] font-black text-xs uppercase tracking-widest transition-all shadow-[0_14px_30px_-14px_rgba(111,82,255,0.6)] bg-gradient-to-r from-[#8b5cf6] via-[#a855f7] to-[#c084fc] text-white hover:brightness-105"
             >
               <Download className="w-4 h-4" />
@@ -1462,6 +1832,20 @@ export default function Dashboard() {
           )}
         </div>
       </header>
+
+      {(workflowError || workflowMessage) && (
+        <div className="border-b border-slate-200 bg-white px-8 py-2 text-sm">
+          {workflowError && <p className="text-rose-700">{workflowError}</p>}
+          {!workflowError && workflowMessage && <p className="text-emerald-700">{workflowMessage}</p>}
+        </div>
+      )}
+
+      {session.role === "faculty" && reviewStatus === "rejected" && rejectionReason && (
+        <div className="border-b border-rose-200 bg-rose-50 px-8 py-3 text-sm text-rose-800">
+          <p className="font-semibold uppercase tracking-[0.12em]">Rejection Reason</p>
+          <p className="mt-1">{rejectionReason}</p>
+        </div>
+      )}
 
       {!projectReady ? (
         <section className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#e0edff_0%,#f7fbff_48%,#ecf3fa_100%)] p-6 sm:p-10">
@@ -1479,7 +1863,7 @@ export default function Dashboard() {
       ) : (
         <div className="flex-1 flex overflow-hidden relative">
           {showDevLogs && (
-            <div className="absolute right-0 top-0 bottom-0 w-1/3 z-[200] animate-in slide-in-from-right duration-500 shadow-[-20px_0_50px_rgba(0,0,0,0.1)]">
+            <div className="absolute right-0 top-0 bottom-0 w-1/3 z-[200] overflow-hidden animate-in slide-in-from-right duration-500 shadow-[-20px_0_50px_rgba(0,0,0,0.1)]">
               <DevLogs />
               <button
                 onClick={() => setShowDevLogs(false)}
@@ -1631,19 +2015,17 @@ export default function Dashboard() {
 
                 {selectedTextTarget && (
                   <>
-                    {selectedTextTarget.kind === "overlay" && (
-                      <select
-                        value={selectedTextTarget.fontFamily}
-                        onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
-                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
-                      >
-                        {FONT_OPTIONS.map((font) => (
-                          <option key={font.value} value={font.value}>
-                            {font.label}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    <select
+                      value={selectedTextTarget.fontFamily}
+                      onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
+                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
+                    >
+                      {FONT_OPTIONS.map((font) => (
+                        <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
+                          {font.label}
+                        </option>
+                      ))}
+                    </select>
                     <input
                       type="number"
                       min={12}
@@ -1682,6 +2064,7 @@ export default function Dashboard() {
                         { value: "left", icon: AlignLeft },
                         { value: "center", icon: AlignCenter },
                         { value: "right", icon: AlignRight },
+                        { value: "justify", icon: AlignJustify },
                       ].map((option) => {
                         const Icon = option.icon;
                         return (

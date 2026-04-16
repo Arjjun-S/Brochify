@@ -65,6 +65,7 @@ export type BrochureData = {
   aboutDepartment: string;
   aboutFdp: string;
   topics: Topic[];
+  programHighlightsText: string;
   speakers: Speaker[];
   contact: {
     name: string;
@@ -84,13 +85,14 @@ export type SegmentPosition = {
   align?: OverlayTextAlign;
 };
 
-export type OverlayTextAlign = "left" | "center" | "right";
+export type OverlayTextAlign = "left" | "center" | "right" | "justify";
 
 export type TextEntity = {
   id: string;
   text: string;
   position: { x: number; y: number };
   style: {
+    fontFamily: string;
     fontSize: number;
     color: string;
     align: OverlayTextAlign;
@@ -150,21 +152,111 @@ export type BrandAsset = {
   createdAt: string;
 };
 
+export type FontOption = {
+  label: string;
+  value: string;
+  googleFamilyQuery?: string;
+};
+
+const GOOGLE_FONT_BASE_URL = "https://fonts.googleapis.com/css2";
+
+const legacyFontValueMap: Record<string, string> = {
+  "var(--font-inter)": "Inter, sans-serif",
+  "var(--font-manrope)": "Roboto, sans-serif",
+  "var(--font-dm-sans)": '"Open Sans", sans-serif',
+  "var(--font-space-grotesk)": "Montserrat, sans-serif",
+  "var(--font-plus-jakarta)": "Lato, sans-serif",
+  "var(--font-sora)": "Raleway, sans-serif",
+  "var(--font-poppins)": "Poppins, sans-serif",
+  "var(--font-ibm-plex-sans)": "Roboto, sans-serif",
+  "var(--font-bebas-neue)": '"Bebas Neue", sans-serif',
+  "var(--font-playfair-display)": '"Playfair Display", serif',
+  "var(--font-cormorant-garamond)": "Merriweather, serif",
+  "var(--font-fraunces)": "Merriweather, serif",
+  "var(--font-libre-baskerville)": '"Libre Baskerville", serif',
+};
+
 export const FONT_OPTIONS = [
-  { label: "Inter", value: "var(--font-inter)" },
-  { label: "Manrope", value: "var(--font-manrope)" },
-  { label: "DM Sans", value: "var(--font-dm-sans)" },
-  { label: "Space Grotesk", value: "var(--font-space-grotesk)" },
-  { label: "Plus Jakarta Sans", value: "var(--font-plus-jakarta)" },
-  { label: "Sora", value: "var(--font-sora)" },
-  { label: "Poppins", value: "var(--font-poppins)" },
-  { label: "IBM Plex Sans", value: "var(--font-ibm-plex-sans)" },
-  { label: "Bebas Neue", value: "var(--font-bebas-neue)" },
-  { label: "Playfair Display", value: "var(--font-playfair-display)" },
-  { label: "Cormorant Garamond", value: "var(--font-cormorant-garamond)" },
-  { label: "Fraunces", value: "var(--font-fraunces)" },
-  { label: "Libre Baskerville", value: "var(--font-libre-baskerville)" },
+  { label: "Inter", value: "Inter, sans-serif", googleFamilyQuery: "Inter:wght@400;500;600;700;800" },
+  { label: "Roboto", value: "Roboto, sans-serif", googleFamilyQuery: "Roboto:wght@400;500;700" },
+  { label: "Open Sans", value: '"Open Sans", sans-serif', googleFamilyQuery: "Open+Sans:wght@400;500;600;700" },
+  { label: "Lato", value: "Lato, sans-serif", googleFamilyQuery: "Lato:wght@400;700" },
+  { label: "Montserrat", value: "Montserrat, sans-serif", googleFamilyQuery: "Montserrat:wght@400;500;600;700" },
+  { label: "Playfair Display", value: '"Playfair Display", serif', googleFamilyQuery: "Playfair+Display:wght@400;500;600;700" },
+  { label: "Merriweather", value: "Merriweather, serif", googleFamilyQuery: "Merriweather:wght@400;700" },
+  { label: "Libre Baskerville", value: '"Libre Baskerville", serif', googleFamilyQuery: "Libre+Baskerville:wght@400;700" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Times New Roman", value: '"Times New Roman", Times, serif' },
+  { label: "Poppins", value: "Poppins, sans-serif", googleFamilyQuery: "Poppins:wght@400;500;600;700" },
+  { label: "Raleway", value: "Raleway, sans-serif", googleFamilyQuery: "Raleway:wght@400;500;600;700" },
+  { label: "Oswald", value: "Oswald, sans-serif", googleFamilyQuery: "Oswald:wght@400;500;600;700" },
+  { label: "Bebas Neue", value: '"Bebas Neue", sans-serif', googleFamilyQuery: "Bebas+Neue" },
+  { label: "Anton", value: "Anton, sans-serif", googleFamilyQuery: "Anton" },
+  { label: "Pacifico", value: "Pacifico, cursive", googleFamilyQuery: "Pacifico" },
+  { label: "Dancing Script", value: '"Dancing Script", cursive', googleFamilyQuery: "Dancing+Script:wght@400;500;600;700" },
+  { label: "Lobster", value: "Lobster, cursive", googleFamilyQuery: "Lobster" },
+  { label: "Satisfy", value: "Satisfy, cursive", googleFamilyQuery: "Satisfy" },
+  { label: "Caveat", value: "Caveat, cursive", googleFamilyQuery: "Caveat:wght@400;500;600;700" },
+] as const satisfies readonly FontOption[];
+
+const FONT_VALUE_SET = new Set(FONT_OPTIONS.map((font) => font.value));
+const FONT_LABEL_TO_VALUE = new Map(
+  FONT_OPTIONS.map((font) => [font.label.toLowerCase(), font.value]),
+);
+
+const COMMON_PRELOAD_FONT_QUERIES = [
+  "Inter:wght@400;500;600;700",
+  "Roboto:wght@400;500;700",
+  "Poppins:wght@400;500;600;700",
 ] as const;
+
+const ALL_GOOGLE_FONT_QUERIES = FONT_OPTIONS.flatMap((font) =>
+  font.googleFamilyQuery ? [font.googleFamilyQuery] : [],
+);
+
+function buildGoogleFontStylesheetHref(fontQueries: readonly string[]): string {
+  const query = fontQueries.map((font) => `family=${font}`).join("&");
+  return `${GOOGLE_FONT_BASE_URL}?${query}&display=swap`;
+}
+
+export const FONT_PRELOAD_STYLESHEET_HREF =
+  buildGoogleFontStylesheetHref(COMMON_PRELOAD_FONT_QUERIES);
+
+export const FONT_PDF_STYLESHEET_HREF =
+  buildGoogleFontStylesheetHref(ALL_GOOGLE_FONT_QUERIES);
+
+export function normalizeFontFamilyValue(fontFamily?: string | null): string {
+  const normalized = `${fontFamily ?? ""}`.trim();
+  if (!normalized) {
+    return FONT_OPTIONS[0].value;
+  }
+
+  if (FONT_VALUE_SET.has(normalized)) {
+    return normalized;
+  }
+
+  const legacyMapped = legacyFontValueMap[normalized];
+  if (legacyMapped) {
+    return legacyMapped;
+  }
+
+  const fromLabel = FONT_LABEL_TO_VALUE.get(normalized.toLowerCase());
+  if (fromLabel) {
+    return fromLabel;
+  }
+
+  return FONT_OPTIONS[0].value;
+}
+
+export function getFontStylesheetHref(fontFamily: string): string | null {
+  const normalized = normalizeFontFamilyValue(fontFamily);
+  const option = FONT_OPTIONS.find((font) => font.value === normalized);
+  if (!option?.googleFamilyQuery) {
+    return null;
+  }
+
+  return buildGoogleFontStylesheetHref([option.googleFamilyQuery]);
+}
 
 const makeId = (prefix: string) =>
   `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -184,7 +276,7 @@ const DEFAULT_HEADINGS: BrochureHeadings = {
   organizedBy: "Organized by",
   aboutCollege: "About SRM",
   aboutSchool: "About the School",
-  aboutDepartment: "About Department",
+  aboutDepartment: "About the Computing Technology",
   aboutFdp: "About the FDP",
   programHighlights: "Program Highlights:",
   topics: "Topics to be covered",
@@ -218,12 +310,31 @@ export function createEmptyBrochureData(): BrochureData {
     templateText: { ...DEFAULT_TEMPLATE_TEXT },
     headings: DEFAULT_HEADINGS,
     committee: [
-      { name: "Dr. N. Raman", role: "Chief Patron" },
-      { name: "Dr. S. Meena", role: "Patron" },
-      { name: "Prof. K. Arjun", role: "Convener" },
-      { name: "Prof. T. Deepa", role: "Co-Convener" },
-      { name: "Prof. V. Karthik", role: "Advisory Committee Member" },
-      { name: "Prof. P. Harini", role: "Organizing Committee Member" },
+      { name: "Dr. P. Sakthivel", role: "Advisory Committee - Chair, IEEE Madras Section" },
+      { name: "Dr. S. Radha", role: "Advisory Committee - Secretary, IEEE Madras Section" },
+      { name: "Dr. S. Brindha", role: "Advisory Committee - Treasurer, IEEE Madras Section" },
+      { name: "Dr. S. Arumugaperumal", role: "Advisory Committee - Chair-Education Activities, IEEE Madras Section" },
+      { name: "Dr. T. R. Paarivendhar", role: "Chief Patron - Chancellor, SRMIST" },
+      { name: "Dr. Ravi Pachamoothoo", role: "Chief Patron - Pro-Chancellor-Admin, SRMIST" },
+      { name: "Dr. P. Sathyanarayanan", role: "Chief Patron - Pro-Chancellor-Academics, SRMIST" },
+      { name: "Dr. R. Shivakumar", role: "Chief Patron - Chairman, SRMIST" },
+      { name: "Dr. C. Muthamizhchelvan", role: "Patron - Vice Chancellor, SRMIST, KTR" },
+      { name: "Dr. S. Ponnusamy", role: "Patron - Registrar, SRMIST, KTR" },
+      { name: "Dr. Leenus Jesu Martin M", role: "Academic Advisory Committee - Dean-CET, SRMIST, KTR" },
+      { name: "Dr. Sridhar S S", role: "Academic Advisory Committee - Associate Dean-CET, SRMIST, KTR" },
+      { name: "Dr. Revathi Venkataraman", role: "Academic Advisory Committee - Chairperson, SoC, SRMIST, KTR" },
+      { name: "Dr. M. Pushpalatha", role: "Academic Advisory Committee - Associate Chairperson, SoC, SRMIST, KTR" },
+      { name: "Dr. C. Lakshmi", role: "Academic Advisory Committee - Associate Chairperson, SoC, SRMIST, KTR" },
+      { name: "Dr. G. Niranjana", role: "Academic Advisory Committee - Professor & Head, CTECH, SRMIST, KTR" },
+      { name: "Dr. Subalalitha C N", role: "Academic Advisory Committee - Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Gokulakrishnan D", role: "Convener - Associate Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. K. Kishore Anthuvan", role: "Convener - Assistant Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Muralidharan C", role: "Co-Convener - Assistant Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Arulalan V", role: "Co-Convener - Assistant Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Arunachalam N", role: "Co-ordinator - Associate Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Abirami G", role: "Co-ordinator - Associate Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Balamurugan G", role: "Co-ordinator - Associate Professor, CTECH, SRMIST, KTR" },
+      { name: "Dr. Ajantha Lakshmanan", role: "Co-ordinator - Assistant Professor, CTECH, SRMIST, KTR" },
     ],
     registration: {
       ieeePrice: "750",
@@ -245,11 +356,11 @@ export function createEmptyBrochureData(): BrochureData {
       ifscCode: "IDIB000S181",
     },
     aboutCollege:
-      "SRM Institute of Science and Technology is a multidisciplinary university recognized for strong academics, active research, and industry collaboration. It offers modern labs, global partnerships, and practice-oriented learning pathways. The campus ecosystem encourages innovation, entrepreneurship, and interdisciplinary problem solving. Faculty and students work on applied projects that connect curriculum with real-world impact. Through continuous training programs and research culture, SRM supports professional growth and future-ready education.",
+      "SRM Institute of Science and Technology, Chennai, India is one of the top-ranking institutions in India with over 60,000 students and 6,000 faculty members, offering a wide range of undergraduate, postgraduate, and doctoral programs in Engineering, Management, Medicine, Health Sciences, Dental, Agriculture, Law studies, and Science and Humanities. It has established itself as a premier centre for teaching, research, and industrial consultancy in the Indian subcontinent. It has world-class infrastructure: smart classrooms, Hi-Tech labs, advanced research laboratories, a modern library, and Wi-Fi facility. SRM Institute of Science and Technology has been accredited by NAAC with the highest 'A++' grade in the year 2018, valid for the next five years. SRM IST is placed in Category 1 with 12(B) status by MHRD-UGC. It is one of the top Indian universities in terms of the quantity and quality of courses offered and has been rated highly by various reputable sources like the National Institutional Ranking Framework and world ranking agencies like QS (UK) and Times Higher Education (UK). The Times of India has ranked SRM Institute of Science and Technology as No. 1 in the top 75 private engineering institutes. During January 2011, the institution conducted the 98th Indian Science Congress wherein six Nobel laureates interacted with our students and faculty.",
     aboutSchool:
-      "The School of Computing offers focused programs in software engineering, artificial intelligence, and data science. It promotes collaborative learning, research-driven teaching, and strong industry engagement through practice-oriented curriculum and project experience.",
+      "The School of Computing is the largest in the SRM family, with over 10,000 students and 300 faculty members. The School hosts four departments, namely: Computing Technologies, Networking and Communications, Computational Intelligence, and Data Science and Business Systems. Various programmes are offered at the undergraduate level with specializations in Artificial Intelligence and Machine Learning, Big Data Analytics, Computer Networking, the Internet of Things, Cloud Computing, Cyber Security, Information Technology, Business Systems, and Software Engineering, apart from the core Computer Science and Engineering. The B.Tech in Computer Science and Engineering and Information Technology programmes are accredited by the Institution of Engineering and Technology (IET), UK, and ABET, USA, respectively.",
     aboutDepartment:
-      "The Department of Computational Design focuses on intelligent systems, interface engineering, and modern digital workflows. It emphasizes project-based learning, design thinking, and practical technical problem solving through research-informed instruction.",
+      "The Department of Computing Technologies (CTECH) fosters the future of the computing world. The department's mission is to advance, evolve, and enhance Computer Science and Engineering fundamentals to build the intellectual capital of society. The CTECH Department endeavors to be an important regional, national, and international resource centre for the development of computing and its applications. The department is excelling by keeping pace with recent trends, as evidenced by its exponential and exhilarating growth. CTECH boasts a vibrant student fraternity, including undergraduates, postgraduate students, and research scholars, as well as a stellar faculty of professors.",
     aboutFdp:
       "This FDP strengthens faculty capability in AI-enabled design, modern interface systems, and classroom adoption strategies. It combines expert talks, demonstrations, and guided hands-on sessions for immediate academic application.",
     topics: [
@@ -279,6 +390,13 @@ export function createEmptyBrochureData(): BrochureData {
         afternoon: "Open Clinic and Faculty Showcase",
       },
     ],
+    programHighlightsText: [
+      "Day 1 - Foundations of AI Product Systems",
+      "Day 2 - Designing Modern Educational Interfaces",
+      "Day 3 - Visual Communication for Technical Programs",
+      "Day 4 - AI-Assisted Content Pipelines",
+      "Day 5 - Deployment, Evaluation, and Adoption",
+    ].join("\n"),
     speakers: [
       { name: "Dr. A. Suresh", role: "Professor", org: "SRM IST" },
       { name: "Dr. R. Kavya", role: "Lead Researcher", org: "AI Systems Lab" },
@@ -297,6 +415,20 @@ export function normalizeBrochureData(
 ): BrochureData {
   const defaults = createEmptyBrochureData();
   const source = (input ?? {}) as Partial<BrochureData>;
+
+  const normalizedTopics =
+    Array.isArray(source.topics) ?
+      source.topics.map((topic) => ({
+        date: `${topic?.date ?? ""}`,
+        forenoon: `${topic?.forenoon ?? ""}`,
+        afternoon: `${topic?.afternoon ?? ""}`,
+      }))
+    : defaults.topics;
+
+  const normalizedProgramHighlights =
+    typeof source.programHighlightsText === "string" && source.programHighlightsText.trim().length > 0 ?
+      source.programHighlightsText
+    : normalizedTopics.map((topic, index) => `Day ${index + 1} - ${topic.forenoon}`).join("\n");
 
   return {
     ...defaults,
@@ -332,14 +464,8 @@ export function normalizeBrochureData(
           role: `${member?.role ?? ""}`,
         }))
       : defaults.committee,
-    topics:
-      Array.isArray(source.topics) ?
-        source.topics.map((topic) => ({
-          date: `${topic?.date ?? ""}`,
-          forenoon: `${topic?.forenoon ?? ""}`,
-          afternoon: `${topic?.afternoon ?? ""}`,
-        }))
-      : defaults.topics,
+    topics: normalizedTopics,
+    programHighlightsText: normalizedProgramHighlights,
     speakers:
       Array.isArray(source.speakers) ?
         source.speakers.map((speaker) => ({
@@ -423,7 +549,7 @@ export function createTextOverlay(page: 1 | 2): TextOverlayItem {
     height: 88,
     rotation: 0,
     text: "Double-click to edit text",
-    fontFamily: FONT_OPTIONS[3].value,
+    fontFamily: FONT_OPTIONS[0].value,
     fontSize: 26,
     fontWeight: 700,
     color: "#0f172a",

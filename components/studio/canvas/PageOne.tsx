@@ -19,7 +19,8 @@ type Palette = {
 };
 
 type FormLineStyle = {
-    align?: 'left' | 'center' | 'right';
+    fontFamily?: string;
+    align?: 'left' | 'center' | 'right' | 'justify';
     fontSize?: number;
     color?: string;
 };
@@ -85,6 +86,7 @@ const toLineStyle = (lineStyle?: FormLineStyle): React.CSSProperties => {
     if (!lineStyle) return {};
 
     return {
+        ...(lineStyle.fontFamily ? { fontFamily: lineStyle.fontFamily } : {}),
         ...(lineStyle.align ? { textAlign: lineStyle.align } : {}),
         ...(lineStyle.fontSize ? { fontSize: `${lineStyle.fontSize}px` } : {}),
         ...(lineStyle.color ? { color: lineStyle.color } : {}),
@@ -292,8 +294,9 @@ const EditableText = ({
         const position = textEntityPositions?.[entityId];
         const inlineFontSize = typeof style?.fontSize === 'number' ? style.fontSize : 16;
         const inlineColor = typeof style?.color === 'string' ? style.color : '#0f172a';
+        const inlineFontFamily = typeof style?.fontFamily === 'string' ? style.fontFamily : 'Inter, sans-serif';
         const inlineAlign =
-            style?.textAlign === 'left' || style?.textAlign === 'center' || style?.textAlign === 'right'
+            style?.textAlign === 'left' || style?.textAlign === 'center' || style?.textAlign === 'right' || style?.textAlign === 'justify'
                 ? style.textAlign
                 : 'left';
 
@@ -305,6 +308,7 @@ const EditableText = ({
                 y: position?.y ?? 0,
             },
             style: {
+                fontFamily: lineStyles?.[lineKey]?.fontFamily ?? inlineFontFamily,
                 fontSize: lineStyles?.[lineKey]?.fontSize ?? inlineFontSize,
                 color: lineStyles?.[lineKey]?.color ?? inlineColor,
                 align: lineStyles?.[lineKey]?.align ?? inlineAlign,
@@ -699,10 +703,10 @@ export default function PageOne({
     const patrons = committeeWithIndex.filter(
         ({ member }) => member.role?.toLowerCase().includes('patron') && !member.role?.toLowerCase().includes('chief'),
     );
-    const convener = committeeWithIndex.find(
+    const conveners = committeeWithIndex.filter(
         ({ member }) => member.role?.toLowerCase().includes('convener') && !member.role?.toLowerCase().includes('co-'),
     );
-    const coConvener = committeeWithIndex.find(({ member }) => member.role?.toLowerCase().includes('co-convener'));
+    const coConveners = committeeWithIndex.filter(({ member }) => member.role?.toLowerCase().includes('co-convener'));
     const advisory = committeeWithIndex.filter(({ member }) => member.role?.toLowerCase().includes('advisory'));
     const organizing = committeeWithIndex.filter(
         ({ member }) =>
@@ -715,6 +719,26 @@ export default function PageOne({
         if (logoCatalog?.[id]) return logoCatalog[id];
         return availableLogos.find((logo) => logo.id === id)?.src;
     };
+
+    const formatCommitteeLine = (member: { name: string; role: string }) => {
+        return [member.name.trim(), member.role.trim()].filter(Boolean).join(', ');
+    };
+
+    const commitCommitteeLine = (memberIndex: number, value: string) => {
+        if (!onEdit) return;
+        const [namePart, ...roleParts] = value.split(',');
+        onEdit(`committee.${memberIndex}.name`, namePart?.trim() ?? '');
+        onEdit(`committee.${memberIndex}.role`, roleParts.join(',').trim());
+    };
+
+    const qrPosition = segmentPositions?.['p1-qr-code'] ?? segmentPositions?.['p1-qr'];
+    const qrVisualSize = Math.max(
+        72,
+        Math.min(
+            260,
+            Math.round(Math.min((qrPosition?.width ?? 116) - 20, (qrPosition?.height ?? 116) - 20)),
+        ),
+    );
 
     const pageBackgroundStyle = { backgroundColor: paletteSurface, ...pageStyle };
     const isHidden = (id: string) =>
@@ -749,12 +773,12 @@ export default function PageOne({
                                         <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.chiefPatrons" value={headings.chiefPatrons} onEdit={onEdit} />
                                         </h4>
-                    <ul className="text-[11.5px] leading-tight" style={{ color: '#1e293b' }}>
-                        {chiefPatrons.map(({ member, index }) => (
-                            <li key={index}>
-                              <EditableText path={`committee.${index}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
+                    <ul className="text-[10px] leading-tight" style={{ color: '#1e293b' }}>
+                        {chiefPatrons.map(({ member, index: memberIndex }) => (
+                            <li key={memberIndex}>
+                              <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
                               {', '}
-                                                            <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
+                                                            <EditableText path={`committee.${memberIndex}.role`} value={member.role} onEdit={onEdit} className="inline" />
                             </li>
                         ))}
                     </ul>
@@ -768,12 +792,12 @@ export default function PageOne({
                                         <h4 className="text-white text-[12px] font-black px-2 py-0.5 rounded-sm inline-block mb-1 uppercase tracking-wider" style={{ backgroundColor: palettePrimary }}>
                                             <EditableText path="headings.patrons" value={headings.patrons} onEdit={onEdit} />
                                         </h4>
-                    <ul className="text-[11.5px] leading-tight" style={{ color: '#1e293b' }}>
-                        {patrons.map(({ member, index }) => (
-                            <li key={index}>
-                              <EditableText path={`committee.${index}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
+                    <ul className="text-[10px] leading-tight" style={{ color: '#1e293b' }}>
+                        {patrons.map(({ member, index: memberIndex }) => (
+                            <li key={memberIndex}>
+                              <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
                               {', '}
-                                                            <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
+                                                            <EditableText path={`committee.${memberIndex}.role`} value={member.role} onEdit={onEdit} className="inline" />
                             </li>
                         ))}
                     </ul>
@@ -781,33 +805,45 @@ export default function PageOne({
                 </MovableSegment>
             )}
 
-            {(convener || coConvener) && !isHidden('p1-conveners') && (
+            {(conveners.length > 0 || coConveners.length > 0) && !isHidden('p1-conveners') && (
                 <MovableSegment id="p1-conveners" position={segmentPositions?.['p1-conveners']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={2}>
                 <div className="flex gap-4">
-                    {convener && (
+                    {conveners.length > 0 && (
                         <div className="flex-1">
                                                         <h4 className="text-[11px] font-black uppercase tracking-wider border-b mb-1" style={{ color: palettePrimary, borderColor: `${palettePrimary}33` }}>
                                                             <EditableText path="headings.convener" value={headings.convener} onEdit={onEdit} />
                                                         </h4>
-                                                        <p className="text-[11px] leading-tight font-bold" style={{ color: '#1e293b' }}>
-                                                            <EditableText path={`committee.${convener.index}.name`} value={convener.member.name} onEdit={onEdit} />
-                                                        </p>
-                                                        <p className="text-[10px] leading-tight opacity-70" style={{ color: '#1e293b' }}>
-                                                            <EditableText path={`committee.${convener.index}.role`} value={convener.member.role} onEdit={onEdit} />
-                                                        </p>
+                            <ul className="space-y-1">
+                                {conveners.map(({ member, index: memberIndex }) => (
+                                    <li key={memberIndex}>
+                                        <p className="text-[10px] leading-tight font-bold" style={{ color: '#1e293b' }}>
+                                            <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} />
+                                        </p>
+                                        <p className="text-[10px] leading-tight opacity-70" style={{ color: '#1e293b' }}>
+                                            <EditableText path={`committee.${memberIndex}.role`} value={member.role} onEdit={onEdit} />
+                                        </p>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     )}
-                    {coConvener && (
+                    {coConveners.length > 0 && (
                         <div className="flex-1">
                                                         <h4 className="text-[11px] font-black uppercase tracking-wider border-b mb-1" style={{ color: palettePrimary, borderColor: `${palettePrimary}33` }}>
                                                             <EditableText path="headings.coConvener" value={headings.coConvener} onEdit={onEdit} />
                                                         </h4>
-                                                        <p className="text-[11px] leading-tight font-bold" style={{ color: '#1e293b' }}>
-                                                            <EditableText path={`committee.${coConvener.index}.name`} value={coConvener.member.name} onEdit={onEdit} />
-                                                        </p>
-                                                        <p className="text-[10px] leading-tight opacity-70" style={{ color: '#1e293b' }}>
-                                                            <EditableText path={`committee.${coConvener.index}.role`} value={coConvener.member.role} onEdit={onEdit} />
-                                                        </p>
+                            <ul className="space-y-1">
+                                {coConveners.map(({ member, index: memberIndex }) => (
+                                    <li key={memberIndex}>
+                                        <p className="text-[10px] leading-tight font-bold" style={{ color: '#1e293b' }}>
+                                            <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} />
+                                        </p>
+                                        <p className="text-[10px] leading-tight opacity-70" style={{ color: '#1e293b' }}>
+                                            <EditableText path={`committee.${memberIndex}.role`} value={member.role} onEdit={onEdit} />
+                                        </p>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     )}
                 </div>
@@ -820,12 +856,12 @@ export default function PageOne({
                                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.advisoryCommittee" value={headings.advisoryCommittee} onEdit={onEdit} />
                                 </h4>
-                <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
-                    {advisory.slice(0, 10).map(({ member, index }) => (
-                                                <li key={index} className="break-words whitespace-normal">
-                          <EditableText path={`committee.${index}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
+                <ul className="text-[10px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
+                    {advisory.slice(0, 20).map(({ member, index: memberIndex }) => (
+                                                <li key={memberIndex} className="break-words whitespace-normal">
+                          <EditableText path={`committee.${memberIndex}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
                           {', '}
-                                                    <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
+                                                    <EditableText path={`committee.${memberIndex}.role`} value={member.role} onEdit={onEdit} className="inline" />
                         </li>
                     ))}
                 </ul>
@@ -839,12 +875,15 @@ export default function PageOne({
                                 <h4 className="text-[12px] font-black mb-1 uppercase tracking-wider" style={{ color: palettePrimary, borderBottom: `2px solid ${palettePrimary}` }}>
                                     <EditableText path="headings.organizingCommittee" value={headings.organizingCommittee} onEdit={onEdit} />
                                 </h4>
-                <ul className="text-[11px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
-                    {organizing.slice(0, 15).map(({ member, index }) => (
-                                                <li key={index} className="break-words whitespace-normal">
-                          <EditableText path={`committee.${index}.name`} value={member.name} onEdit={onEdit} className="font-bold inline" />
-                          {', '}
-                                                    <EditableText path={`committee.${index}.role`} value={member.role} onEdit={onEdit} className="inline" />
+                <ul className="text-[10px] leading-[1.1] space-y-0.5" style={{ color: '#334155' }}>
+                    {organizing.slice(0, 15).map(({ member, index: memberIndex }) => (
+                        <li key={memberIndex} className="break-words whitespace-normal">
+                          <EditableText
+                            path={`committeeLine.organizing.${memberIndex}`}
+                            value={formatCommitteeLine(member)}
+                            onEdit={(_path, nextValue) => commitCommitteeLine(memberIndex, nextValue)}
+                            className="font-bold inline"
+                          />
                         </li>
                     ))}
                 </ul>
@@ -925,7 +964,7 @@ export default function PageOne({
                                         minHeight={116}
                                     >
                                         <div className="bg-white p-2 rounded-lg mb-2 shadow-inner flex items-center justify-center">
-                                            <QRCodeSVG value={data.googleForm || ""} size={96} marginSize={1} />
+                                            <QRCodeSVG value={data.googleForm || ""} size={qrVisualSize} marginSize={1} />
                                         </div>
                                     </MovableSegment>
                                 )}
@@ -1015,13 +1054,13 @@ export default function PageOne({
 
         {!isHidden('p1-title') && (
         <MovableSegment id="p1-title" position={segmentPositions?.['p1-title']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={11} className="w-full flex flex-col items-center" style={{ backgroundColor: paletteSurface }}>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: palettePrimary }}>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: palettePrimary }}>
                     <EditableText path="headings.sponsoredBy" value={headings.sponsoredBy} onEdit={onEdit} className="inline" />
                 </p>
-        <h1 className="text-2xl font-black text-center leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: palettePrimary }}>
+        <h1 className="text-[25px] font-black text-center leading-[1.1] mb-2 uppercase tracking-tighter" style={{ color: palettePrimary }}>
             <EditableText path="eventTitle" value={data.eventTitle} onEdit={onEdit} className="whitespace-pre-wrap break-words" />
         </h1>
-        <p className="text-[12px] font-bold mb-4" style={{ color: palettePrimary }}><EditableText path="dates" value={data.dates} onEdit={onEdit} /></p>
+        <p className="text-[13px] font-bold mb-4" style={{ color: palettePrimary }}><EditableText path="dates" value={data.dates} onEdit={onEdit} /></p>
         </MovableSegment>
         )}
 
@@ -1044,10 +1083,10 @@ export default function PageOne({
         {!isHidden('p1-footer') && (
         <MovableSegment id="p1-footer" position={segmentPositions?.['p1-footer']} onMove={onSegmentMove} selectedId={selectedSegmentId} onSelect={onSelectSegment} canvasScale={canvasScale} onInteractionStart={onSegmentInteractionStart} onInteractionEnd={onSegmentInteractionEnd} index={13} className="w-full">
             <div className="text-center mt-auto pt-3 flex flex-col items-center w-full" style={{ borderTop: `1px solid ${paletteSurfaceBorder}` }}>
-                        <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: paletteMuted }}>
+                        <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: paletteMuted }}>
                             <EditableText path="headings.organizedBy" value={headings.organizedBy} onEdit={onEdit} className="inline" />
                         </p>
-            <p className="text-[12px] font-black uppercase leading-tight max-w-[180px] mb-4" style={{ color: palettePrimary }}><EditableText path="department" value={data.department} onEdit={onEdit} /></p>
+            <p className="text-[13px] font-black uppercase leading-tight max-w-[180px] mb-4" style={{ color: palettePrimary }}><EditableText path="department" value={data.department} onEdit={onEdit} /></p>
             
             {selectedLogos.length > 1 && (
                 <div className="mt-2 mb-4 w-full flex justify-center">
