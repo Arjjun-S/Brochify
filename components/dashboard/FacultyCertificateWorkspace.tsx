@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
@@ -21,13 +21,17 @@ import {
   X,
 } from "lucide-react";
 import {
+  type CertificateType,
   createCertificateOverlayLayout,
   createDefaultCertificateTemplateInput,
+  getCertificateBodyTextForType,
   normalizeCertificateTemplateInput,
   type CertificateTemplateInput,
 } from "@/lib/domains/certificate";
 import { cn } from "@/lib/ui/cn";
+import { resolveLogoBackNavigation } from "@/lib/ui/logoBackNavigation";
 import type { CertificateRecord, CertificateStatus, SessionUser } from "@/lib/server/types";
+import { useThemePreference } from "./useThemePreference";
 
 type FacultyCertificateWorkspaceProps = {
   user: SessionUser;
@@ -36,6 +40,12 @@ type FacultyCertificateWorkspaceProps = {
 type AdminOption = {
   id: number;
   username: string;
+};
+
+type LogoAsset = {
+  id: string;
+  name: string;
+  src: string;
 };
 
 type DateFilter = "all" | "7" | "30" | "90";
@@ -114,6 +124,8 @@ function getUiStatus(record: CertificateRecord): UiStatus {
 
 export default function FacultyCertificateWorkspace({ user }: FacultyCertificateWorkspaceProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { isDark } = useThemePreference();
 
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +142,9 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
 
   const [eventName, setEventName] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [certificateType, setCertificateType] = useState<CertificateType>("workshop");
+  const [availableLogos, setAvailableLogos] = useState<LogoAsset[]>([]);
+  const [logoSearch, setLogoSearch] = useState("");
   const [logoDataUrls, setLogoDataUrls] = useState<string[]>([]);
   const [signatureImageDataUrl, setSignatureImageDataUrl] = useState<string | null>(null);
   const [assignedAdminId, setAssignedAdminId] = useState("");
@@ -138,6 +153,7 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
 
   const dashboardHomeHref = "/faculty/dashboard";
   const settingsHref = "/faculty/settings";
+  const logoBackHref = resolveLogoBackNavigation(pathname || "/faculty/certificates", user.role);
   const modulesHref = "/faculty/modules";
 
   const loadCertificates = useCallback(async () => {
@@ -193,9 +209,38 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
     }
   }, [activeModal, admins.length, loadAdmins, loadingAdmins]);
 
+  useEffect(() => {
+    if (activeModal !== "create") {
+      return;
+    }
+
+    let mounted = true;
+    const loadLogos = async () => {
+      try {
+        const response = await fetch("/api/logos", { cache: "no-store" });
+        const data = (await response.json()) as { logos?: LogoAsset[] };
+        if (!mounted || !response.ok) {
+          return;
+        }
+        setAvailableLogos(Array.isArray(data.logos) ? data.logos : []);
+      } catch {
+        if (mounted) {
+          setAvailableLogos([]);
+        }
+      }
+    };
+
+    void loadLogos();
+    return () => {
+      mounted = false;
+    };
+  }, [activeModal]);
+
   const resetCreateForm = () => {
     setEventName("");
     setIssueDate(new Date().toISOString().slice(0, 10));
+    setCertificateType("workshop");
+    setLogoSearch("");
     setLogoDataUrls([]);
     setSignatureImageDataUrl(null);
     setCreateError(null);
@@ -227,8 +272,10 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
       const hiddenTemplateInput = createDefaultCertificateTemplateInput();
       const templateInput: CertificateTemplateInput = normalizeCertificateTemplateInput({
         ...hiddenTemplateInput,
+        certificateType,
         eventName,
         issueDate,
+        bodyText: getCertificateBodyTextForType(certificateType),
         logos: logoDataUrls,
         signatureImage: signatureImageDataUrl,
       });
@@ -328,10 +375,56 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
       });
   }, [certificates, dateFilter, searchText, typeFilter]);
 
+  const filteredLogoOptions = useMemo(() => {
+    const query = logoSearch.trim().toLowerCase();
+    if (!query) {
+      return availableLogos;
+    }
+
+    return availableLogos.filter((logo) => logo.name.toLowerCase().includes(query));
+  }, [availableLogos, logoSearch]);
+
+  const toggleLogoSelection = useCallback((logoSrc: string) => {
+    setLogoDataUrls((prev) => {
+      if (prev.includes(logoSrc)) {
+        return prev.filter((src) => src !== logoSrc);
+      }
+
+      if (prev.length >= 6) {
+        return prev;
+      }
+
+      return [...prev, logoSrc];
+    });
+  }, []);
+
+  const moveSelectedLogo = useCallback((index: number, direction: -1 | 1) => {
+    setLogoDataUrls((prev) => {
+      const nextIndex = index + direction;
+      if (index < 0 || index >= prev.length || nextIndex < 0 || nextIndex >= prev.length) {
+        return prev;
+      }
+
+      const copy = [...prev];
+      const current = copy[index];
+      copy[index] = copy[nextIndex];
+      copy[nextIndex] = current;
+      return copy;
+    });
+  }, []);
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-indigo-100 text-slate-900">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-slate-200 bg-white/85 p-6 backdrop-blur-lg lg:flex">
-        <Link href={dashboardHomeHref} className="mb-8 flex items-center gap-3">
+    <main className={cn(
+      "min-h-screen transition-colors duration-300",
+      isDark
+        ? "bg-gradient-to-br from-[#0B0F1A] via-[#0f172a] to-[#111827] text-[#E5E7EB]"
+        : "bg-gradient-to-br from-slate-100 via-slate-50 to-indigo-100 text-slate-900",
+    )}>
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r p-6 backdrop-blur-lg transition-colors duration-300 lg:flex",
+        isDark ? "border-slate-700 bg-[#111827]/85" : "border-slate-200 bg-white/85",
+      )}>
+        <Link href={logoBackHref} className="mb-8 flex items-center gap-3">
           <Image src="/icon-logo.png" alt="Brochify Icon" width={38} height={38} className="h-9 w-9 object-contain" priority />
           <Image src="/text-logo.png" alt="Brochify Wordmark" width={158} height={34} className="h-8 w-auto object-contain" priority />
         </Link>
@@ -346,19 +439,34 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
             Create
           </button>
 
-          <Link href={dashboardHomeHref} className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+          <Link href={dashboardHomeHref} className={cn(
+            "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+            isDark
+              ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+          )}>
             <Home className="h-4 w-4" />
             Home
           </Link>
 
-          <Link href={dashboardHomeHref} className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+          <Link href={dashboardHomeHref} className={cn(
+            "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+            isDark
+              ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+          )}>
             <FolderKanban className="h-4 w-4" />
             My Brochures
           </Link>
 
-          <Link href="/faculty/certificates" className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+          <Link href="/faculty/dashboard" className={cn(
+            "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+            isDark
+              ? "bg-slate-800 text-white"
+              : "bg-slate-100 text-slate-900",
+          )}>
             <FileBadge2 className="h-4 w-4" />
-            Certificates
+            Brochures
           </Link>
 
           <button type="button" disabled className="flex w-full cursor-not-allowed items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-slate-400">
@@ -366,20 +474,33 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
             Templates
           </button>
 
-          <Link href={settingsHref} className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+          <Link href={settingsHref} className={cn(
+            "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+            isDark
+              ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+          )}>
             <Settings2 className="h-4 w-4" />
             Settings
           </Link>
         </nav>
 
-        <button type="button" onClick={() => void fetch("/api/auth/logout", { method: "POST" }).then(() => router.replace("/login"))} className="mt-auto flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+        <button type="button" onClick={() => void fetch("/api/auth/logout", { method: "POST" }).then(() => router.replace("/login"))} className={cn(
+          "mt-auto flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+          isDark
+            ? "border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+            : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+        )}>
           <LogOut className="h-4 w-4" />
           Logout
         </button>
       </aside>
 
       <div className="flex-1 lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 px-6 py-5 backdrop-blur-lg md:px-10">
+        <header className={cn(
+          "sticky top-0 z-30 border-b px-6 py-5 backdrop-blur-lg transition-colors duration-300 md:px-10",
+          isDark ? "border-slate-700 bg-[#111827]/80" : "border-slate-200 bg-white/80",
+        )}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-700">
@@ -535,10 +656,27 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
                 </label>
               </div>
 
+              <label className="block space-y-1">
+                <span className="text-sm font-semibold text-slate-700">Certificate Type</span>
+                <select
+                  value={certificateType}
+                  onChange={(event) => setCertificateType(event.target.value as CertificateType)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                >
+                  <option value="workshop">Workshop</option>
+                  <option value="hackathon">Hackathon</option>
+                  <option value="symposium">Symposium</option>
+                  <option value="custom">Custom</option>
+                </select>
+                <p className="text-xs text-slate-500">
+                  Template sentence will auto-adapt based on the selected type.
+                </p>
+              </label>
+
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block space-y-1">
                   <span className="text-sm font-semibold text-slate-700">Upload Logo(s) (PNG only)</span>
-                  <input type="file" accept="image/png,.png" multiple onChange={async (event) => { const nextUrls = await filesToDataUrls(event.currentTarget.files, 6); setLogoDataUrls(nextUrls); }} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm" />
+                  <input type="file" accept="image/png,.png" multiple onChange={async (event) => { const nextUrls = await filesToDataUrls(event.currentTarget.files, 6); setLogoDataUrls((prev) => [...prev, ...nextUrls].slice(0, 6)); }} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm" />
                   <p className="text-xs text-slate-500">Selected logos: {logoDataUrls.length}</p>
                 </label>
 
@@ -547,6 +685,62 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
                   <input type="file" accept="image/png,.png" multiple onChange={async (event) => { const urls = await filesToDataUrls(event.currentTarget.files, 3); setSignatureImageDataUrl(urls[0] || null); }} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm" />
                   <p className="text-xs text-slate-500">{signatureImageDataUrl ? "Signature image uploaded" : "Optional PNG signature upload"}</p>
                 </label>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-semibold text-slate-700">Select from existing logos</p>
+                <input
+                  value={logoSearch}
+                  onChange={(event) => setLogoSearch(event.target.value)}
+                  placeholder="Search available logos"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                />
+                <div className="mt-3 grid max-h-44 grid-cols-2 gap-2 overflow-y-auto">
+                  {filteredLogoOptions.map((logo) => {
+                    const selected = logoDataUrls.includes(logo.src);
+                    return (
+                      <button
+                        key={logo.id}
+                        type="button"
+                        onClick={() => toggleLogoSelection(logo.src)}
+                        className={cn(
+                          "rounded-xl border p-2 text-left transition",
+                          selected
+                            ? "border-indigo-300 bg-indigo-50"
+                            : "border-slate-200 bg-white hover:border-slate-300",
+                        )}
+                      >
+                        <div className="relative h-10 w-full overflow-hidden rounded-md border border-slate-100 bg-white">
+                          <Image src={logo.src} alt={logo.name} fill className="object-contain p-1" unoptimized />
+                        </div>
+                        <p className="mt-1 truncate text-xs font-semibold text-slate-700">{logo.name}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {logoDataUrls.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Selected order (top row)</p>
+                    {logoDataUrls.map((src, index) => (
+                      <div key={`${src}-${index}`} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 py-2">
+                        <div className="relative h-8 w-16 overflow-hidden rounded border border-slate-100 bg-slate-50">
+                          <Image src={src} alt={`Selected logo ${index + 1}`} fill className="object-contain p-1" unoptimized />
+                        </div>
+                        <p className="flex-1 truncate text-xs text-slate-600">Logo {index + 1}</p>
+                        <button type="button" onClick={() => moveSelectedLogo(index, -1)} className="rounded border border-slate-200 px-2 py-1 text-xs">Up</button>
+                        <button type="button" onClick={() => moveSelectedLogo(index, 1)} className="rounded border border-slate-200 px-2 py-1 text-xs">Down</button>
+                        <button
+                          type="button"
+                          onClick={() => setLogoDataUrls((prev) => prev.filter((_, currentIndex) => currentIndex !== index))}
+                          className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <label className="block space-y-1">

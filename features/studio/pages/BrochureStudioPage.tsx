@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import PageOne from "@/components/studio/canvas/PageOne";
@@ -11,6 +12,7 @@ import CanvasSidebar from "@/components/studio/editor/CanvasSidebar";
 import LoadingOverlay from "@/components/shared/feedback/LoadingOverlay";
 import DevLogs from "@/components/studio/editor/DevLogs";
 import { cn } from "@/lib/ui/cn";
+import { resolveLogoBackNavigation } from "@/lib/ui/logoBackNavigation";
 import {
   Activity,
   AlignCenter,
@@ -578,6 +580,7 @@ function buildTypingPlan(data: BrochureData): TypingStage[] {
 }
 
 export default function BrochureStudioPage({ brochure, session, autoAnimate = false }: BrochureStudioPageProps) {
+  const pathname = usePathname();
   const initialSnapshot = useMemo(() => normalizeSnapshotFromContent(brochure.content), [brochure.content]);
 
   const [brochureData, setBrochureData] = useState<BrochureData>(() => initialSnapshot.brochureData);
@@ -632,7 +635,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
   const isLoading = loadingTask !== "idle";
   const isTypingAnimationActive = animationPhase === "typing";
   const isWorkflowBusy = workflowBusyState !== "idle";
-  const dashboardHref = session.role === "admin" ? "/admin/dashboard" : "/faculty/dashboard";
+  const dashboardHref = resolveLogoBackNavigation(pathname || "/studio", session.role);
   const canvasBrochureData = typingBrochureData ?? brochureData;
 
   const stopTypingAnimation = useCallback(() => {

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   AlignCenter,
   AlignLeft,
@@ -22,6 +23,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import BrochureOverlay from "@/components/studio/canvas/BrochureOverlay";
 import {
   FONT_OPTIONS,
@@ -35,11 +38,15 @@ import {
   CERTIFICATE_PAGE_HEIGHT,
   CERTIFICATE_PAGE_WIDTH,
   createCertificateOverlayLayout,
+  getCertificateBodyTextForType,
+  normalizeCertificateStudentRows,
+  type CertificateType,
   type CertificateTemplateName,
   type CertificateEditorState,
   type CertificateTemplateInput,
 } from "@/lib/domains/certificate";
 import { cn } from "@/lib/ui/cn";
+import { resolveLogoBackNavigation } from "@/lib/ui/logoBackNavigation";
 import type { CertificateRecord, CertificateStatus, SessionUser } from "@/lib/server/types";
 
 type CertificateStudioPageProps = {
@@ -48,18 +55,18 @@ type CertificateStudioPageProps = {
 };
 
 type WorkflowBusyState = "idle" | "saving" | "submitting" | "approving" | "rejecting";
-type CertificateType = "workshop" | "hackathon" | "event";
-
-type CustomField = {
-  id: string;
-  label: string;
-  value: string;
-};
-
 type LogoAsset = {
   id: string;
   name: string;
   src: string;
+};
+
+type BulkRowRecord = Record<string, unknown>;
+
+type BulkValidationIssue = {
+  row: number;
+  field: string;
+  message: string;
 };
 
 type Snapshot = {
@@ -102,6 +109,7 @@ function getTemplateBackground(template: CertificateTemplateName): CertificateEd
 }
 
 export default function CertificateStudioPage({ session, certificate }: CertificateStudioPageProps) {
+  const pathname = usePathname();
   const [overlayItems, setOverlayItems] = useState<OverlayItem[]>(certificate.content.overlayItems);
   const [templateInput, setTemplateInput] = useState<CertificateTemplateInput>(certificate.content.templateInput);
   const [template, setTemplate] = useState<CertificateTemplateName>(certificate.content.template || "srm");
@@ -115,32 +123,35 @@ export default function CertificateStudioPage({ session, certificate }: Certific
   const [workflowError, setWorkflowError] = useState<string | null>(null);
 
   const [logoAssets, setLogoAssets] = useState<LogoAsset[]>([]);
-  const [logoSearch, setLogoSearch] = useState("");
 
-  const [canvasScale, setCanvasScale] = useState(1);
+  const [canvasScale, setCanvasScale] = useState(0.9);
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
 
-  const [certificateType, setCertificateType] = useState<CertificateType>("workshop");
-  const [formValues, setFormValues] = useState({
-    instructorName: "",
-    duration: "",
-    topic: "",
-    teamName: "",
-    position: "Winner",
-    problemStatement: "",
-  });
-  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [showSetupForm, setShowSetupForm] = useState(session.role === "faculty");
+  const [certificateType, setCertificateType] = useState<CertificateType>(
+    certificate.content.templateInput.certificateType || "workshop",
+  );
+  const [setupLogoSearch, setSetupLogoSearch] = useState("");
+  const [selectedLogoUrls, setSelectedLogoUrls] = useState<string[]>(
+    certificate.content.templateInput.logos || [],
+  );
 
   const [templatesOpen, setTemplatesOpen] = useState(true);
-  const [logosOpen, setLogosOpen] = useState(true);
   const [elementsOpen, setElementsOpen] = useState(true);
+  const [bulkOpen, setBulkOpen] = useState(true);
+
+  const [bulkRows, setBulkRows] = useState<BulkRowRecord[]>([]);
+  const [bulkIssues, setBulkIssues] = useState<BulkValidationIssue[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkProgressMessage, setBulkProgressMessage] = useState<string | null>(null);
+  const [previewStudentIndex, setPreviewStudentIndex] = useState<number | null>(null);
 
   const panStateRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
 
   const undoStackRef = useRef<Snapshot[]>([]);
   const redoStackRef = useRef<Snapshot[]>([]);
 
-  const dashboardHref = session.role === "admin" ? "/admin/certificates" : "/faculty/certificates";
+  const dashboardHref = resolveLogoBackNavigation(pathname || "/certificate", session.role);
   const moduleHref = session.role === "admin" ? "/admin/modules" : "/faculty/modules";
 
   const selectedOverlay = useMemo(() => {
@@ -148,17 +159,49 @@ export default function CertificateStudioPage({ session, certificate }: Certific
   }, [overlayItems, selectedOverlayId]);
 
   const selectedTextOverlay = selectedOverlay?.type === "text" ? selectedOverlay : null;
+  const isAdminReadOnly = session.role === "admin";
 
-  const filteredLogos = useMemo(() => {
-    const query = logoSearch.trim().toLowerCase();
+  const isWorkflowBusy = workflowBusyState !== "idle";
+
+  const setupLogoOptions = useMemo(() => {
+    const query = setupLogoSearch.trim().toLowerCase();
     if (!query) {
       return logoAssets;
     }
-
     return logoAssets.filter((logo) => logo.name.toLowerCase().includes(query));
-  }, [logoAssets, logoSearch]);
+  }, [logoAssets, setupLogoSearch]);
 
-  const isWorkflowBusy = workflowBusyState !== "idle";
+  const normalizedBulkStudents = useMemo(
+    () =>
+      normalizeCertificateStudentRows(bulkRows as Array<Record<string, unknown>>, {
+        eventName: templateInput.eventName,
+        issueDate: templateInput.issueDate,
+      }),
+    [bulkRows, templateInput.eventName, templateInput.issueDate],
+  );
+
+  const previewOverlayItems = useMemo(() => {
+    if (previewStudentIndex === null || normalizedBulkStudents.length === 0) {
+      return overlayItems;
+    }
+
+    const student = normalizedBulkStudents[Math.min(previewStudentIndex, normalizedBulkStudents.length - 1)];
+    return overlayItems.map((item) => {
+      if (item.type !== "text") {
+        return item;
+      }
+
+      return {
+        ...item,
+        text: item.text
+          .replace(/\{\{\s*name\s*\}\}/gi, student.name)
+          .replace(/\{\{\s*gender\s*\}\}/gi, student.gender)
+          .replace(/\{\{\s*prize\s*\}\}/gi, student.prize)
+          .replace(/\{\{\s*event\s*\}\}/gi, student.event)
+          .replace(/\{\{\s*date\s*\}\}/gi, student.date),
+      } as OverlayItem;
+    });
+  }, [normalizedBulkStudents, overlayItems, previewStudentIndex]);
 
   useEffect(() => {
     let isMounted = true;
@@ -190,6 +233,135 @@ export default function CertificateStudioPage({ session, certificate }: Certific
     };
   }, []);
 
+  const toggleSetupLogo = useCallback((logoSrc: string) => {
+    setSelectedLogoUrls((prev) => {
+      if (prev.includes(logoSrc)) {
+        return prev.filter((src) => src !== logoSrc);
+      }
+      if (prev.length >= 6) {
+        return prev;
+      }
+      return [...prev, logoSrc];
+    });
+  }, []);
+
+  const reorderSetupLogo = useCallback((index: number, direction: -1 | 1) => {
+    setSelectedLogoUrls((prev) => {
+      const nextIndex = index + direction;
+      if (index < 0 || index >= prev.length || nextIndex < 0 || nextIndex >= prev.length) {
+        return prev;
+      }
+      const next = [...prev];
+      const current = next[index];
+      next[index] = next[nextIndex];
+      next[nextIndex] = current;
+      return next;
+    });
+  }, []);
+
+  const validateBulkRows = useCallback((rows: BulkRowRecord[]) => {
+    const issues: BulkValidationIssue[] = [];
+
+    rows.forEach((row, index) => {
+      const name = `${row.name ?? row.studentName ?? ""}`.trim();
+      const gender = `${row.gender ?? ""}`.trim();
+      const prize = `${row.prize ?? ""}`.trim();
+
+      if (!name) {
+        issues.push({ row: index + 1, field: "name", message: "Name is required" });
+      }
+
+      if (gender && gender !== "Mr" && gender !== "Ms") {
+        issues.push({ row: index + 1, field: "gender", message: "Gender must be Mr or Ms" });
+      }
+
+      if (prize && prize !== "1" && prize !== "2" && prize !== "3" && prize.toLowerCase() !== "null") {
+        issues.push({ row: index + 1, field: "prize", message: "Prize must be 1, 2, 3, or null" });
+      }
+    });
+
+    setBulkIssues(issues);
+  }, []);
+
+  const parseBulkFile = useCallback(async (file: File) => {
+    const lowerName = file.name.toLowerCase();
+
+    if (lowerName.endsWith(".json")) {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw) as unknown;
+      const rows = Array.isArray(parsed) ? (parsed.filter((entry) => typeof entry === "object" && entry !== null) as BulkRowRecord[]) : [];
+      setBulkRows(rows);
+      validateBulkRows(rows);
+      return;
+    }
+
+    if (lowerName.endsWith(".csv")) {
+      const raw = await file.text();
+      const result = Papa.parse<BulkRowRecord>(raw, { header: true, skipEmptyLines: true });
+      const rows = (result.data || []) as BulkRowRecord[];
+      setBulkRows(rows);
+      validateBulkRows(rows);
+      return;
+    }
+
+    if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const firstSheet = workbook.SheetNames[0];
+      const rows = (XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" }) || []) as BulkRowRecord[];
+      setBulkRows(rows);
+      validateBulkRows(rows);
+      return;
+    }
+
+    throw new Error("Unsupported file format. Use CSV, XLSX, or JSON.");
+  }, [validateBulkRows]);
+
+  const triggerBulkGeneration = useCallback(async () => {
+    if (bulkRows.length === 0) {
+      setWorkflowError("Upload certificate data before generating ZIP.");
+      return;
+    }
+
+    if (bulkIssues.length > 0) {
+      setWorkflowError("Fix highlighted bulk data issues before generation.");
+      return;
+    }
+
+    setBulkLoading(true);
+    setBulkProgressMessage("Generating certificates...");
+    setWorkflowError(null);
+
+    try {
+      const response = await fetch(`/api/certificate/${certificate.id}/bulk-generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: "pdf", rows: bulkRows }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        throw new Error(data.error || "Bulk generation failed.");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `certificate-batch-${certificate.id}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setWorkflowMessage("Bulk ZIP generated successfully.");
+    } catch (error) {
+      setWorkflowError(error instanceof Error ? error.message : "Bulk generation failed.");
+    } finally {
+      setBulkLoading(false);
+      setBulkProgressMessage(null);
+    }
+  }, [bulkIssues.length, bulkRows, certificate.id]);
+
   const captureSnapshot = useCallback((): Snapshot => {
     return {
       overlayItems: cloneSnapshotValue(overlayItems),
@@ -218,6 +390,21 @@ export default function CertificateStudioPage({ session, certificate }: Certific
     [captureSnapshot],
   );
 
+  const applySetupForm = useCallback(() => {
+    runWithUndo(() => {
+      const nextTemplateInput: CertificateTemplateInput = {
+        ...templateInput,
+        certificateType,
+        bodyText: getCertificateBodyTextForType(certificateType),
+        logos: selectedLogoUrls.slice(0, 6),
+      };
+      setTemplateInput(nextTemplateInput);
+      setOverlayItems(createCertificateOverlayLayout(nextTemplateInput, template));
+      setSelectedOverlayId(null);
+    });
+    setShowSetupForm(false);
+  }, [certificateType, selectedLogoUrls, runWithUndo, template, templateInput]);
+
   const undo = useCallback(() => {
     const previous = undoStackRef.current.pop();
     if (!previous) {
@@ -238,8 +425,36 @@ export default function CertificateStudioPage({ session, certificate }: Certific
     restoreSnapshot(next);
   }, [captureSnapshot, restoreSnapshot]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMeta = event.metaKey || event.ctrlKey;
+      if (!isMeta || isAdminReadOnly) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "z") {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      if (key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isAdminReadOnly, redo, undo]);
+
   const updateOverlay = useCallback(
     (id: string, patch: Partial<OverlayItem>) => {
+      if (isAdminReadOnly) {
+        return;
+      }
+
       runWithUndo(() => {
         setOverlayItems((prev) =>
           prev.map((item) => {
@@ -255,11 +470,15 @@ export default function CertificateStudioPage({ session, certificate }: Certific
         );
       });
     },
-    [runWithUndo],
+    [isAdminReadOnly, runWithUndo],
   );
 
   const applyTemplate = useCallback(
     (nextTemplate: CertificateTemplateName) => {
+      if (isAdminReadOnly) {
+        return;
+      }
+
       runWithUndo(() => {
         setTemplate(nextTemplate);
         setBackground(getTemplateBackground(nextTemplate));
@@ -267,10 +486,14 @@ export default function CertificateStudioPage({ session, certificate }: Certific
         setSelectedOverlayId(null);
       });
     },
-    [runWithUndo, templateInput],
+    [isAdminReadOnly, runWithUndo, templateInput],
   );
 
   const addTextOverlay = () => {
+    if (isAdminReadOnly) {
+      return;
+    }
+
     runWithUndo(() => {
       const next = {
         ...createTextOverlay(1),
@@ -290,6 +513,10 @@ export default function CertificateStudioPage({ session, certificate }: Certific
   };
 
   const addImageOverlayFromFile = async (files: FileList | null) => {
+    if (isAdminReadOnly) {
+      return;
+    }
+
     if (!files || files.length === 0) {
       return;
     }
@@ -313,15 +540,11 @@ export default function CertificateStudioPage({ session, certificate }: Certific
     });
   };
 
-  const addLogoToCanvas = (logo: LogoAsset) => {
-    runWithUndo(() => {
-      const next = createImageOverlay(1, { name: logo.name, dataUrl: logo.src }, { x: 90, y: 90 });
-      setOverlayItems((prev) => [...prev, next]);
-      setSelectedOverlayId(next.id);
-    });
-  };
-
   const removeSelectedOverlay = () => {
+    if (isAdminReadOnly) {
+      return;
+    }
+
     if (!selectedOverlayId) {
       return;
     }
@@ -492,79 +715,94 @@ export default function CertificateStudioPage({ session, certificate }: Certific
     panStateRef.current = null;
   };
 
+  const showEditorSidebar = !isAdminReadOnly;
+
   return (
     <main className="h-screen overflow-hidden bg-[radial-gradient(circle_at_12%_12%,#e0edff_0%,#f8fbff_46%,#edf4fb_100%)] text-slate-900">
-      <header className="flex h-20 items-center justify-between border-b border-white/70 bg-white/60 px-6 backdrop-blur-xl md:px-8">
-        <div className="flex items-center gap-3">
-          <Link href={dashboardHref} className="flex items-center gap-3">
-            <Image src="/icon-logo.png" alt="Brochify" width={34} height={34} className="h-8 w-8" />
-            <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-800">Certificate Studio</span>
-          </Link>
+      <header className={cn(
+        "flex h-20 items-center border-b border-white/70 bg-white/60 px-6 backdrop-blur-xl md:px-8",
+        isAdminReadOnly ? "justify-center" : "justify-between",
+      )}>
+        {!isAdminReadOnly ? (
+          <>
+            <div className="flex items-center gap-3">
+              <Link href={dashboardHref} className="flex items-center gap-3">
+                <Image src="/icon-logo.png" alt="Brochify" width={34} height={34} className="h-8 w-8" />
+                <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-800">Certificate Studio</span>
+              </Link>
 
-          <Link
-            href={moduleHref}
-            className="rounded-full border border-slate-300/80 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur hover:bg-white"
-          >
-            Modules
-          </Link>
-        </div>
+              <Link
+                href={moduleHref}
+                className="rounded-full border border-slate-300/80 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-600 backdrop-blur hover:bg-white"
+              >
+                Modules
+              </Link>
+            </div>
 
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em]",
-              getStatusBadgeClass(reviewStatus),
-            )}
-          >
-            {reviewStatus}
-          </span>
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em]",
+                  getStatusBadgeClass(reviewStatus),
+                )}
+              >
+                {reviewStatus}
+              </span>
 
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={isWorkflowBusy}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white/85 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700 shadow-sm transition hover:shadow-md disabled:opacity-70"
-          >
-            <Save className="h-3.5 w-3.5" />
-            {workflowBusyState === "saving" ? "Saving..." : "Save"}
-          </button>
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={isWorkflowBusy || isAdminReadOnly}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white/85 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700 shadow-sm transition hover:shadow-md disabled:opacity-70"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {workflowBusyState === "saving" ? "Saving..." : "Save"}
+              </button>
 
-          {session.role === "faculty" && (
+              {session.role === "faculty" && (
+                <button
+                  type="button"
+                  onClick={() => void handleSubmitForReview()}
+                  disabled={isWorkflowBusy}
+                  className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-sky-700 transition hover:shadow-md disabled:opacity-70"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  {workflowBusyState === "submitting" ? "Submitting..." : "Submit"}
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span
+              className={cn(
+                "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em]",
+                getStatusBadgeClass(reviewStatus),
+              )}
+            >
+              {reviewStatus}
+            </span>
             <button
               type="button"
-              onClick={() => void handleSubmitForReview()}
+              onClick={() => void handleAdminDecision("approved")}
               disabled={isWorkflowBusy}
-              className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-sky-700 transition hover:shadow-md disabled:opacity-70"
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-700 transition hover:shadow-md disabled:opacity-70"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
-              {workflowBusyState === "submitting" ? "Submitting..." : "Submit"}
+              {workflowBusyState === "approving" ? "Approving..." : "Approve"}
             </button>
-          )}
 
-          {session.role === "admin" && (
-            <>
-              <button
-                type="button"
-                onClick={() => void handleAdminDecision("approved")}
-                disabled={isWorkflowBusy}
-                className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-700 transition hover:shadow-md disabled:opacity-70"
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                {workflowBusyState === "approving" ? "Approving..." : "Approve"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void handleAdminDecision("rejected")}
-                disabled={isWorkflowBusy}
-                className="inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-rose-700 transition hover:shadow-md disabled:opacity-70"
-              >
-                <XCircle className="h-3.5 w-3.5" />
-                {workflowBusyState === "rejecting" ? "Rejecting..." : "Reject"}
-              </button>
-            </>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => void handleAdminDecision("rejected")}
+              disabled={isWorkflowBusy}
+              className="inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-rose-700 transition hover:shadow-md disabled:opacity-70"
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              {workflowBusyState === "rejecting" ? "Rejecting..." : "Reject"}
+            </button>
+          </div>
+        )}
       </header>
 
       {(workflowError || workflowMessage) && (
@@ -581,119 +819,24 @@ export default function CertificateStudioPage({ session, certificate }: Certific
         </div>
       )}
 
-      <div className="grid h-[calc(100vh-80px)] grid-cols-1 xl:grid-cols-[320px_1fr]">
-        <aside className="border-r border-white/70 bg-white/50 p-4 backdrop-blur-xl xl:overflow-y-auto">
+      <div className={cn("grid h-[calc(100vh-80px)] grid-cols-1", showEditorSidebar && "xl:grid-cols-[320px_1fr]")}>
+        {showEditorSidebar && <aside className="border-r border-white/70 bg-white/50 p-4 backdrop-blur-xl xl:overflow-y-auto">
           <div className="rounded-2xl border border-white/80 bg-white/70 p-3 shadow-sm">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Certificate Type</p>
-            <select
-              value={certificateType}
-              onChange={(event) => setCertificateType(event.target.value as CertificateType)}
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Certificate Setup</p>
+            <p className="mt-2 text-xs text-slate-600">
+              Type: <span className="font-semibold capitalize">{certificateType}</span>
+            </p>
+            <p className="mt-1 text-xs text-slate-600">
+              Logos selected: <span className="font-semibold">{selectedLogoUrls.length}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowSetupForm(true)}
+              disabled={isAdminReadOnly}
+              className="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slate-700 disabled:opacity-60"
             >
-              <option value="workshop">Workshop</option>
-              <option value="hackathon">Hackathon</option>
-              <option value="event">Event</option>
-            </select>
-
-            <div className="mt-3 space-y-2">
-              {certificateType === "workshop" && (
-                <>
-                  <input
-                    value={formValues.instructorName}
-                    onChange={(event) => setFormValues((prev) => ({ ...prev, instructorName: event.target.value }))}
-                    placeholder="Instructor Name"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  />
-                  <input
-                    value={formValues.duration}
-                    onChange={(event) => setFormValues((prev) => ({ ...prev, duration: event.target.value }))}
-                    placeholder="Duration"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  />
-                  <input
-                    value={formValues.topic}
-                    onChange={(event) => setFormValues((prev) => ({ ...prev, topic: event.target.value }))}
-                    placeholder="Topic"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  />
-                </>
-              )}
-
-              {certificateType === "hackathon" && (
-                <>
-                  <input
-                    value={formValues.teamName}
-                    onChange={(event) => setFormValues((prev) => ({ ...prev, teamName: event.target.value }))}
-                    placeholder="Team Name"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  />
-                  <select
-                    value={formValues.position}
-                    onChange={(event) => setFormValues((prev) => ({ ...prev, position: event.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  >
-                    <option>Winner</option>
-                    <option>Runner</option>
-                  </select>
-                  <textarea
-                    value={formValues.problemStatement}
-                    onChange={(event) => setFormValues((prev) => ({ ...prev, problemStatement: event.target.value }))}
-                    placeholder="Problem Statement"
-                    className="min-h-20 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  />
-                </>
-              )}
-
-              {certificateType === "event" && (
-                <>
-                  {customFields.map((field) => (
-                    <div key={field.id} className="flex items-center gap-2">
-                      <input
-                        value={field.label}
-                        onChange={(event) =>
-                          setCustomFields((prev) =>
-                            prev.map((item) => (item.id === field.id ? { ...item, label: event.target.value } : item)),
-                          )
-                        }
-                        placeholder="Field"
-                        className="w-1/2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                      />
-                      <input
-                        value={field.value}
-                        onChange={(event) =>
-                          setCustomFields((prev) =>
-                            prev.map((item) => (item.id === field.id ? { ...item, value: event.target.value } : item)),
-                          )
-                        }
-                        placeholder="Value"
-                        className="w-1/2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setCustomFields((prev) => prev.filter((item) => item.id !== field.id))}
-                        className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:text-rose-600"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCustomFields((prev) => [
-                        ...prev,
-                        { id: `f-${Math.random().toString(36).slice(2, 8)}`, label: "", value: "" },
-                      ])
-                    }
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-slate-700"
-                  >
-                    <PlusCircle className="h-3.5 w-3.5" />
-                    Add Field
-                  </button>
-                </>
-              )}
-            </div>
+              Configure Form
+            </button>
           </div>
 
           <section className="mt-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-sm">
@@ -738,44 +881,6 @@ export default function CertificateStudioPage({ session, certificate }: Certific
           <section className="mt-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-sm">
             <button
               type="button"
-              onClick={() => setLogosOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between text-left"
-            >
-              <h2 className="text-xs font-black uppercase tracking-[0.18em] text-slate-700">Logos</h2>
-              {logosOpen ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
-            </button>
-
-            {logosOpen && (
-              <>
-                <input
-                  value={logoSearch}
-                  onChange={(event) => setLogoSearch(event.target.value)}
-                  placeholder="Search logos"
-                  className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                />
-
-                <div className="mt-3 grid max-h-60 grid-cols-2 gap-2 overflow-y-auto">
-                  {filteredLogos.map((logo) => (
-                    <button
-                      key={logo.id}
-                      type="button"
-                      onClick={() => addLogoToCanvas(logo)}
-                      className="group rounded-xl border border-slate-200 bg-white p-2 text-left transition hover:border-primary/40 hover:shadow-[0_14px_30px_-22px_rgba(15,23,42,0.9)]"
-                    >
-                      <div className="relative h-12 w-full overflow-hidden rounded-lg border border-slate-100 bg-slate-50">
-                        <Image src={logo.src} alt={logo.name} fill className="object-contain p-1" unoptimized />
-                      </div>
-                      <p className="mt-1 truncate text-[11px] font-semibold text-slate-700">{logo.name}</p>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </section>
-
-          <section className="mt-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-sm">
-            <button
-              type="button"
               onClick={() => setElementsOpen((prev) => !prev)}
               className="flex w-full items-center justify-between text-left"
             >
@@ -788,6 +893,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 <button
                   type="button"
                   onClick={addTextOverlay}
+                  disabled={isAdminReadOnly}
                   className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-700 transition hover:shadow-md"
                 >
                   <PlusCircle className="h-3.5 w-3.5" />
@@ -800,17 +906,122 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                   <input
                     type="file"
                     accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                    disabled={isAdminReadOnly}
                     className="hidden"
                     onChange={async (event) => {
-                      await addImageOverlayFromFile(event.currentTarget.files);
-                      event.currentTarget.value = "";
+                      const input = event.currentTarget;
+                      await addImageOverlayFromFile(input.files);
+                      input.value = "";
                     }}
                   />
                 </label>
               </div>
             )}
           </section>
-        </aside>
+
+          {session.role === "faculty" && (
+            <section className="mt-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setBulkOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between text-left"
+              >
+                <h2 className="text-xs font-black uppercase tracking-[0.18em] text-slate-700">Bulk Certificates</h2>
+                {bulkOpen ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+              </button>
+
+              {bulkOpen && (
+                <div className="mt-3 space-y-3">
+                  <label className="block">
+                    <span className="text-xs font-semibold text-slate-600">Upload CSV, XLSX, or JSON</span>
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls,.json"
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                      onChange={async (event) => {
+                        const input = event.currentTarget;
+                        const file = input.files?.[0];
+                        if (!file) return;
+                        try {
+                          await parseBulkFile(file);
+                          setWorkflowMessage("Bulk data imported successfully.");
+                          setWorkflowError(null);
+                        } catch (error) {
+                          setWorkflowError(error instanceof Error ? error.message : "Failed to parse upload.");
+                        } finally {
+                          input.value = "";
+                        }
+                      }}
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">Expected format: s.no, name, year, gender, prize</p>
+                  </label>
+
+                  {bulkRows.length > 0 && (
+                    <div className="max-h-40 overflow-auto rounded-xl border border-slate-200 bg-white">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-slate-50 text-slate-500">
+                          <tr>
+                            <th className="px-2 py-1 text-left">s.no</th>
+                            <th className="px-2 py-1 text-left">name</th>
+                            <th className="px-2 py-1 text-left">gender</th>
+                            <th className="px-2 py-1 text-left">prize</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bulkRows.slice(0, 10).map((row, index) => (
+                            <tr key={`row-${index}`} className="border-t border-slate-100">
+                              <td className="px-2 py-1">{`${row["s.no"] ?? row.sno ?? index + 1}`}</td>
+                              <td className="px-2 py-1">{`${row.name ?? ""}`}</td>
+                              <td className="px-2 py-1">{`${row.gender ?? ""}`}</td>
+                              <td className="px-2 py-1">{`${row.prize ?? ""}`}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {bulkIssues.length > 0 && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-2 py-2 text-[11px] text-rose-700">
+                      {bulkIssues.slice(0, 4).map((issue, index) => (
+                        <p key={`issue-${index}`}>Row {issue.row}: {issue.field} - {issue.message}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewStudentIndex(0)}
+                      disabled={normalizedBulkStudents.length === 0}
+                      className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                    >
+                      Preview First Certificate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={triggerBulkGeneration}
+                      disabled={bulkLoading || normalizedBulkStudents.length === 0}
+                      className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                    >
+                      Generate All Certificates
+                    </button>
+                    <button
+                      type="button"
+                      onClick={triggerBulkGeneration}
+                      disabled={bulkLoading || normalizedBulkStudents.length === 0}
+                      className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                    >
+                      Download ZIP
+                    </button>
+                  </div>
+
+                  {bulkProgressMessage && <p className="text-xs text-slate-600">{bulkProgressMessage}</p>}
+                </div>
+              )}
+            </section>
+          )}
+        </aside>}
 
         <section
           className="relative overflow-hidden bg-[radial-gradient(circle_at_50%_20%,rgba(148,163,184,0.22),rgba(226,232,240,0.45),rgba(248,250,252,0.95))]"
@@ -825,12 +1036,130 @@ export default function CertificateStudioPage({ session, certificate }: Certific
             setCanvasScale((prev) => Math.max(0.55, Math.min(1.8, prev + delta)));
           }}
         >
-          <div className="pointer-events-none absolute inset-x-0 top-2 z-30 flex justify-center px-3">
+          {showSetupForm && session.role === "faculty" && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-900/35 p-4 backdrop-blur-sm">
+              <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Initial Form</p>
+                    <h2 className="mt-1 text-xl font-black text-slate-900">Certificate Configuration</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSetupForm(false)}
+                    className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-100"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="block space-y-1">
+                    <span className="text-sm font-semibold text-slate-700">Certificate Type</span>
+                    <select
+                      value={certificateType}
+                      onChange={(event) => setCertificateType(event.target.value as CertificateType)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                    >
+                      <option value="workshop">Workshop</option>
+                      <option value="hackathon">Hackathon</option>
+                      <option value="symposium">Symposium</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    <p className="text-xs text-slate-500">Sentence structure auto-updates internally.</p>
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-sm font-semibold text-slate-700">Upload Logo(s)</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                      multiple
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                      onChange={async (event) => {
+                        const input = event.currentTarget;
+                        const files = input.files;
+                        if (!files || files.length === 0) return;
+                        const urls = await Promise.all(
+                          Array.from(files)
+                            .slice(0, 6)
+                            .map(
+                              (file) =>
+                                new Promise<string>((resolve, reject) => {
+                                  const reader = new FileReader();
+                                  reader.onload = () => resolve(String(reader.result || ""));
+                                  reader.onerror = () => reject(reader.error);
+                                  reader.readAsDataURL(file);
+                                }),
+                            ),
+                        );
+                        setSelectedLogoUrls((prev) => [...prev, ...urls].slice(0, 6));
+                        input.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <input
+                    value={setupLogoSearch}
+                    onChange={(event) => setSetupLogoSearch(event.target.value)}
+                    placeholder="Search logos"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  />
+                  <div className="mt-2 grid max-h-36 grid-cols-3 gap-2 overflow-y-auto">
+                    {setupLogoOptions.map((logo) => {
+                      const selected = selectedLogoUrls.includes(logo.src);
+                      return (
+                        <button
+                          key={logo.id}
+                          type="button"
+                          onClick={() => toggleSetupLogo(logo.src)}
+                          className={cn(
+                            "rounded-lg border p-1",
+                            selected ? "border-indigo-300 bg-indigo-50" : "border-slate-200 bg-white",
+                          )}
+                        >
+                          <div className="relative h-10 w-full overflow-hidden rounded border border-slate-100 bg-white">
+                            <Image src={logo.src} alt={logo.name} fill className="object-contain p-1" unoptimized />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {selectedLogoUrls.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {selectedLogoUrls.map((src, index) => (
+                        <div key={`${src}-${index}`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2">
+                          <div className="relative h-8 w-14 overflow-hidden rounded border border-slate-100 bg-slate-50">
+                            <Image src={src} alt={`Selected logo ${index + 1}`} fill className="object-contain p-1" unoptimized />
+                          </div>
+                          <p className="flex-1 text-xs text-slate-600">Top row logo {index + 1}</p>
+                          <button type="button" onClick={() => reorderSetupLogo(index, -1)} className="rounded border border-slate-200 px-2 py-1 text-xs">Up</button>
+                          <button type="button" onClick={() => reorderSetupLogo(index, 1)} className="rounded border border-slate-200 px-2 py-1 text-xs">Down</button>
+                          <button type="button" onClick={() => setSelectedLogoUrls((prev) => prev.filter((_, currentIndex) => currentIndex !== index))} className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button type="button" onClick={() => setShowSetupForm(false)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+                  <button type="button" onClick={applySetupForm} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Apply Setup</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isAdminReadOnly && <div className="pointer-events-none absolute inset-x-0 top-2 z-30 flex justify-center px-3">
             <div className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-[24px] border border-white/75 bg-white/75 px-4 py-3 shadow-[0_24px_45px_-30px_rgba(15,23,42,0.55)] backdrop-blur-xl">
               <button
                 type="button"
                 onClick={undo}
-                className="rounded-full border border-slate-200 bg-white p-2 text-slate-700 transition hover:shadow-md"
+                disabled={isAdminReadOnly}
+                className="rounded-full border border-slate-200 bg-white p-2 text-slate-700 transition hover:shadow-md disabled:opacity-60"
                 title="Undo"
               >
                 <Undo2 className="h-4 w-4" />
@@ -838,7 +1167,8 @@ export default function CertificateStudioPage({ session, certificate }: Certific
               <button
                 type="button"
                 onClick={redo}
-                className="rounded-full border border-slate-200 bg-white p-2 text-slate-700 transition hover:shadow-md"
+                disabled={isAdminReadOnly}
+                className="rounded-full border border-slate-200 bg-white p-2 text-slate-700 transition hover:shadow-md disabled:opacity-60"
                 title="Redo"
               >
                 <Redo2 className="h-4 w-4" />
@@ -846,7 +1176,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
               <button
                 type="button"
                 onClick={removeSelectedOverlay}
-                disabled={!selectedOverlayId}
+                disabled={!selectedOverlayId || isAdminReadOnly}
                 className="rounded-full border border-rose-300 bg-rose-50 p-2 text-rose-700 transition hover:shadow-md disabled:opacity-60"
                 title="Delete"
               >
@@ -856,7 +1186,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
               <select
                 value={selectedTextOverlay?.fontFamily || FONT_OPTIONS[0].value}
                 onChange={(event) => applyTextStyle({ fontFamily: normalizeFontFamilyValue(event.target.value) })}
-                disabled={!selectedTextOverlay}
+                disabled={!selectedTextOverlay || isAdminReadOnly}
                 className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs"
               >
                 {FONT_OPTIONS.map((font) => (
@@ -872,14 +1202,14 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 max={120}
                 value={selectedTextOverlay?.fontSize ?? 28}
                 onChange={(event) => applyTextStyle({ fontSize: Number(event.target.value) || 28 })}
-                disabled={!selectedTextOverlay}
+                disabled={!selectedTextOverlay || isAdminReadOnly}
                 className="w-16 rounded-full border border-slate-200 bg-white px-2 py-2 text-xs"
               />
 
               <button
                 type="button"
                 onClick={() => applyTextStyle({ fontWeight: (selectedTextOverlay?.fontWeight ?? 500) >= 700 ? 500 : 700 })}
-                disabled={!selectedTextOverlay}
+                disabled={!selectedTextOverlay || isAdminReadOnly}
                 className={cn(
                   "rounded-full border border-slate-200 bg-white p-2 text-slate-700 transition hover:shadow-md disabled:opacity-60",
                   (selectedTextOverlay?.fontWeight ?? 500) >= 700 && "bg-slate-900 text-white",
@@ -890,7 +1220,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
               <button
                 type="button"
                 onClick={() => applyTextStyle({ fontStyle: selectedTextOverlay?.fontStyle === "italic" ? "normal" : "italic" } as Partial<TextOverlayItem>)}
-                disabled={!selectedTextOverlay}
+                disabled={!selectedTextOverlay || isAdminReadOnly}
                 className={cn(
                   "rounded-full border border-slate-200 bg-white p-2 text-slate-700 transition hover:shadow-md disabled:opacity-60",
                   selectedTextOverlay?.fontStyle === "italic" && "bg-slate-900 text-white",
@@ -905,7 +1235,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                     textDecoration: selectedTextOverlay?.textDecoration === "underline" ? "none" : "underline",
                   } as Partial<TextOverlayItem>)
                 }
-                disabled={!selectedTextOverlay}
+                disabled={!selectedTextOverlay || isAdminReadOnly}
                 className={cn(
                   "rounded-full border border-slate-200 bg-white p-2 text-slate-700 transition hover:shadow-md disabled:opacity-60",
                   selectedTextOverlay?.textDecoration === "underline" && "bg-slate-900 text-white",
@@ -918,7 +1248,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 <button
                   type="button"
                   onClick={() => applyTextStyle({ align: "left" })}
-                  disabled={!selectedTextOverlay}
+                  disabled={!selectedTextOverlay || isAdminReadOnly}
                   className={cn(
                     "rounded-full p-2 text-slate-600 transition hover:bg-slate-100 disabled:opacity-50",
                     selectedTextOverlay?.align === "left" && "bg-slate-900 text-white",
@@ -929,7 +1259,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 <button
                   type="button"
                   onClick={() => applyTextStyle({ align: "center" })}
-                  disabled={!selectedTextOverlay}
+                  disabled={!selectedTextOverlay || isAdminReadOnly}
                   className={cn(
                     "rounded-full p-2 text-slate-600 transition hover:bg-slate-100 disabled:opacity-50",
                     selectedTextOverlay?.align === "center" && "bg-slate-900 text-white",
@@ -940,7 +1270,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 <button
                   type="button"
                   onClick={() => applyTextStyle({ align: "right" })}
-                  disabled={!selectedTextOverlay}
+                  disabled={!selectedTextOverlay || isAdminReadOnly}
                   className={cn(
                     "rounded-full p-2 text-slate-600 transition hover:bg-slate-100 disabled:opacity-50",
                     selectedTextOverlay?.align === "right" && "bg-slate-900 text-white",
@@ -954,7 +1284,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 type="color"
                 value={selectedTextOverlay?.color || "#0f172a"}
                 onChange={(event) => applyTextStyle({ color: event.target.value })}
-                disabled={!selectedTextOverlay}
+                disabled={!selectedTextOverlay || isAdminReadOnly}
                 className="h-10 w-12 rounded-full border border-slate-200 bg-white p-1"
               />
 
@@ -976,7 +1306,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 </button>
               </div>
             </div>
-          </div>
+          </div>}
 
           <div className="absolute inset-0 flex items-center justify-center px-4 pb-4 pt-24">
             <div
@@ -1001,7 +1331,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 <div className="pointer-events-none absolute bottom-0 right-0 h-16 w-56 bg-gradient-to-tl from-blue-200/45 via-blue-100/10 to-transparent" />
 
                 <BrochureOverlay
-                  items={overlayItems}
+                  items={previewOverlayItems}
                   selectedId={selectedOverlayId}
                   onSelect={setSelectedOverlayId}
                   onUpdate={updateOverlay}

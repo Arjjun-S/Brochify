@@ -7,6 +7,7 @@ export const CERTIFICATE_PAGE_HEIGHT = 680;
 export const CERTIFICATE_PLACEHOLDERS = ["{{name}}", "{{gender}}", "{{prize}}", "{{event}}", "{{date}}"] as const;
 
 export type CertificateTemplateName = "srm" | "beige" | "tan";
+export type CertificateType = "workshop" | "hackathon" | "symposium" | "custom";
 
 export type CertificateSignature = {
   name: string;
@@ -14,6 +15,7 @@ export type CertificateSignature = {
 };
 
 export type CertificateTemplateInput = {
+  certificateType: CertificateType;
   organizationName: string;
   collegeName: string;
   departmentName: string;
@@ -54,11 +56,27 @@ const DEFAULT_SIGNATURES: CertificateSignature[] = [
 ];
 
 const DEFAULT_BODY_TEXT =
-  "This is to certify that {{gender}} {{name}} from {{year}} has secured {{prize}} in {{event}} held on {{date}} organized by the Department of Computing Technologies, School of Computing, S.R.M. Institute of Science and Technology, Kattankulathur, Chennai, Tamil Nadu.";
+  "{{gender}} {{name}} from {{year}} has secured {{prize}} in {{event}} held on {{date}} organized by the Department of Computing Technologies, School of Computing, S.R.M. Institute of Science and Technology, Kattankulathur, Chennai, Tamil Nadu.";
 
 const INTERNAL_ORGANIZATION_NAME = "SRM Institute of Science and Technology";
 const INTERNAL_SCHOOL_NAME = "School of Computing";
 const INTERNAL_DEPARTMENT_NAME = "Department of Computing Technologies";
+
+export function getCertificateBodyTextForType(type: CertificateType): string {
+  if (type === "workshop") {
+    return "{{gender}} {{name}} has successfully participated in {{event}} held on {{date}}.";
+  }
+
+  if (type === "hackathon") {
+    return "{{gender}} {{name}} has secured {{prize}} in {{event}} conducted on {{date}}.";
+  }
+
+  if (type === "symposium") {
+    return "{{gender}} {{name}} has presented at {{event}} on {{date}}.";
+  }
+
+  return DEFAULT_BODY_TEXT;
+}
 
 function createId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -200,6 +218,7 @@ function normalizeDataUrlList(value: unknown): string[] {
 
 export function createDefaultCertificateTemplateInput(): CertificateTemplateInput {
   return {
+    certificateType: "custom",
     organizationName: INTERNAL_ORGANIZATION_NAME,
     collegeName: INTERNAL_SCHOOL_NAME,
     departmentName: INTERNAL_DEPARTMENT_NAME,
@@ -228,6 +247,13 @@ export function normalizeCertificateTemplateInput(input: unknown): CertificateTe
     : fallback.signatures;
 
   return {
+    certificateType:
+      input.certificateType === "workshop" ||
+      input.certificateType === "hackathon" ||
+      input.certificateType === "symposium" ||
+      input.certificateType === "custom"
+        ? input.certificateType
+        : fallback.certificateType,
     organizationName:
       typeof input.organizationName === "string" && input.organizationName.trim().length > 0
         ? input.organizationName.trim()
@@ -300,22 +326,22 @@ export function createCertificateOverlayLayout(
             background: "linear-gradient(145deg, rgba(255,255,255,1) 0%, rgba(241,245,249,1) 100%)",
           };
 
-  const topLogos = templateInput.logos.slice(0, 3);
-  const logoSlots = [
-    { x: 48, y: 30 },
-    { x: CERTIFICATE_PAGE_WIDTH / 2 - 52, y: 24 },
-    { x: CERTIFICATE_PAGE_WIDTH - 158, y: 30 },
-  ];
+  const topLogos = templateInput.logos.slice(0, 6);
+  const logoWidth = 98;
+  const logoHeight = 68;
+  const logoGap = 14;
+  const topRowWidth = topLogos.length * logoWidth + Math.max(0, topLogos.length - 1) * logoGap;
+  const topRowStartX = Math.max(20, (CERTIFICATE_PAGE_WIDTH - topRowWidth) / 2);
 
   topLogos.forEach((logo, index) => {
     overlays.push(
       createImageOverlay({
         src: logo,
         name: `logo-${index + 1}`,
-        x: logoSlots[index].x,
-        y: logoSlots[index].y,
-        width: 110,
-        height: 78,
+        x: topRowStartX + index * (logoWidth + logoGap),
+        y: 28,
+        width: logoWidth,
+        height: logoHeight,
         borderRadius: 2,
       }),
     );
@@ -324,12 +350,12 @@ export function createCertificateOverlayLayout(
   overlays.push(
     createTextOverlay({
       text: templateInput.organizationName.toUpperCase(),
-      x: 110,
+      x: 90,
       y: 118,
-      width: 763,
-      height: 34,
-      fontSize: 24,
-      fontWeight: 800,
+      width: 803,
+      height: 42,
+      fontSize: 36,
+      fontWeight: 600,
       align: "center",
       color: palette.accent,
       fontFamily: '"Times New Roman", Times, serif',
@@ -340,10 +366,10 @@ export function createCertificateOverlayLayout(
     createTextOverlay({
       text: templateInput.collegeName,
       x: 130,
-      y: 154,
+      y: 165,
       width: 723,
       height: 28,
-      fontSize: 21,
+      fontSize: 22,
       fontWeight: 700,
       align: "center",
       color: palette.accent,
@@ -355,10 +381,10 @@ export function createCertificateOverlayLayout(
     createTextOverlay({
       text: templateInput.departmentName,
       x: 130,
-      y: 184,
+      y: 195,
       width: 723,
       height: 28,
-      fontSize: 19,
+      fontSize: 22,
       fontWeight: 700,
       align: "center",
       color: palette.accent,
@@ -370,28 +396,13 @@ export function createCertificateOverlayLayout(
     createTextOverlay({
       text: templateInput.certificateTitle.toUpperCase(),
       x: 120,
-      y: 236,
+      y: 242,
       width: 743,
       height: 56,
-      fontSize: 52,
-      fontWeight: 800,
+      fontSize: 44,
+      fontWeight: 700,
       align: "center",
-      color: palette.title,
-      fontFamily: '"Times New Roman", Times, serif',
-    }),
-  );
-
-  overlays.push(
-    createTextOverlay({
-      text: "This is to certify that",
-      x: 110,
-      y: 314,
-      width: 763,
-      height: 28,
-      fontSize: 28,
-      fontWeight: 500,
-      align: "center",
-      color: palette.body,
+      color: "#6b4f2a",
       fontFamily: '"Times New Roman", Times, serif',
     }),
   );
@@ -400,14 +411,14 @@ export function createCertificateOverlayLayout(
     createTextOverlay({
       text: "{{name}}",
       x: 150,
-      y: 340,
+      y: 320,
       width: 683,
       height: 54,
-      fontSize: 52,
-      fontWeight: 800,
+      fontSize: 40,
+      fontWeight: 600,
       align: "center",
       color: palette.title,
-      fontFamily: '"Times New Roman", Times, serif',
+      fontFamily: '"Lobster", cursive',
     }),
   );
 
@@ -415,10 +426,10 @@ export function createCertificateOverlayLayout(
     createTextOverlay({
       text: templateInput.bodyText,
       x: 110,
-      y: 402,
+      y: 398,
       width: 763,
-      height: 98,
-      fontSize: 25,
+      height: 118,
+      fontSize: 22,
       fontWeight: 500,
       align: "center",
       color: palette.body,
@@ -713,7 +724,7 @@ export function renderCertificateHtmlForStudent(
 
       if (item.type === "text") {
         const text = applyCertificatePlaceholders(item.text, student);
-        return `<div style="${baseStyle};font-family:${escapeHtml(item.fontFamily)};font-size:${item.fontSize}px;font-weight:${item.fontWeight};font-style:${escapeHtml(item.fontStyle || "normal")};text-decoration:${escapeHtml(item.textDecoration || "none")};color:${escapeHtml(item.color)};text-align:${getTextAlignmentCss(item.align)};white-space:pre-wrap;line-height:1.2;overflow:hidden;">${escapeHtml(text)}</div>`;
+        return `<div style="${baseStyle};font-family:${escapeHtml(item.fontFamily)};font-size:${item.fontSize}px;font-weight:${item.fontWeight};font-style:${escapeHtml(item.fontStyle || "normal")};text-decoration:${escapeHtml(item.textDecoration || "none")};color:${escapeHtml(item.color)};text-align:${getTextAlignmentCss(item.align)};white-space:pre-wrap;line-height:1.6;overflow:hidden;">${escapeHtml(text)}</div>`;
       }
 
       if (item.type === "image") {

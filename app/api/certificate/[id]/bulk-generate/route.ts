@@ -87,6 +87,40 @@ function buildStudentDocument(pageHtml: string, watermarkText: string | null): s
   `;
 }
 
+function withAbsoluteImageUrls<T extends { overlayItems?: Array<Record<string, unknown>> }>(
+  state: T,
+  origin: string,
+): T {
+  if (!Array.isArray(state.overlayItems)) {
+    return state;
+  }
+
+  const overlayItems = state.overlayItems.map((item) => {
+    if (item.type !== "image") {
+      return item;
+    }
+
+    const rawSrc = typeof item.src === "string" ? item.src.trim() : "";
+    if (!rawSrc || rawSrc.startsWith("data:") || rawSrc.startsWith("http://") || rawSrc.startsWith("https://")) {
+      return item;
+    }
+
+    if (rawSrc.startsWith("/")) {
+      return {
+        ...item,
+        src: `${origin}${rawSrc}`,
+      };
+    }
+
+    return item;
+  });
+
+  return {
+    ...state,
+    overlayItems,
+  };
+}
+
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const session = readSessionFromRequest(request);
   if (!session) {
@@ -157,12 +191,29 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         for (let localIndex = 0; localIndex < batch.length; localIndex += 1) {
           const globalIndex = startIndex + localIndex;
           const student = batch[localIndex];
-          const pageHtml = renderCertificateHtmlForStudent(certificate.content, student);
+          const contentWithAbsoluteUrls = withAbsoluteImageUrls(certificate.content, request.nextUrl.origin);
+          const pageHtml = renderCertificateHtmlForStudent(contentWithAbsoluteUrls, student);
           const documentHtml = buildStudentDocument(pageHtml, watermarkText);
 
           await page.setContent(documentHtml, {
             waitUntil: "domcontentloaded",
             timeout: 60000,
+          });
+
+          await page.waitForSelector("img", { timeout: 60000 }).catch(() => undefined);
+          await page.waitForNetworkIdle({ idleTime: 350, timeout: 60000 }).catch(() => undefined);
+          await page.evaluate(async () => {
+            const pending = Array.from(document.images)
+              .filter((img) => !img.complete)
+              .map(
+                (img) =>
+                  new Promise<void>((resolve) => {
+                    img.onload = () => resolve();
+                    img.onerror = () => resolve();
+                  }),
+              );
+
+            await Promise.all(pending);
           });
 
           const fileName = getCertificateDownloadFileName(student.serialNo, globalIndex, format);
