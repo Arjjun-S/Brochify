@@ -365,6 +365,8 @@ export default function BrochureOverlay({
                   fontFamily: item.fontFamily,
                   fontSize: item.fontSize,
                   fontWeight: item.fontWeight,
+                  fontStyle: item.fontStyle ?? "normal",
+                  textDecoration: item.textDecoration ?? "none",
                   color: item.color,
                   textAlign: item.align,
                   background: "transparent",

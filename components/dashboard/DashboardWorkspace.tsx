@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock3,
   FileCheck2,
+  FileBadge2,
   FolderKanban,
   Home,
   LayoutTemplate,
@@ -290,7 +291,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
   const detailBusy = detailLoading || detailSaving || detailEnhancing;
 
   const dashboardHomeHref =
-    user.role === "admin" ? "/admin/dashboard" : "/faculty/dashboard";
+    user.role === "admin" ? "/admin/modules" : "/faculty/modules";
 
   const loadBrochures = useCallback(async () => {
     setLoading(true);
@@ -749,6 +750,14 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
             {user.role === "faculty" ? "My Brochures" : "Projects"}
           </a>
 
+          <Link
+            href={user.role === "faculty" ? "/faculty/certificates" : "/admin/certificates"}
+            className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          >
+            <FileBadge2 className="h-4 w-4" />
+            Certificates
+          </Link>
+
           <button
             type="button"
             disabled
@@ -758,15 +767,41 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
             Templates
           </button>
 
-          <button
-            type="button"
-            disabled
-            className="flex w-full cursor-not-allowed items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-slate-400"
+          <Link
+            href={user.role === "faculty" ? "/faculty/settings" : "/admin/modules"}
+            className={cn(
+              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+              user.role === "faculty"
+                ? "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                : "cursor-not-allowed text-slate-400",
+            )}
+            aria-disabled={user.role !== "faculty"}
+            onClick={(event) => {
+              if (user.role !== "faculty") {
+                event.preventDefault();
+              }
+            }}
           >
             <Settings2 className="h-4 w-4" />
             Settings
-          </button>
+          </Link>
         </nav>
+
+        <div className="mt-6 rounded-3xl border border-indigo-200 bg-gradient-to-br from-white to-indigo-50 p-4 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-indigo-700">
+            <FileBadge2 className="h-3.5 w-3.5" />
+            Certificate Builder
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-700">
+            Open certificate workflows without leaving the faculty shell.
+          </p>
+          <Link
+            href={user.role === "faculty" ? "/faculty/certificates" : "/admin/certificates"}
+            className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-white transition hover:bg-slate-800"
+          >
+            Open Certificates
+          </Link>
+        </div>
 
         <button
           type="button"

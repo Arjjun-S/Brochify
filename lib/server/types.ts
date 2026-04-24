@@ -1,7 +1,9 @@
 import type { BrochureData, OverlayItem, OverlayTextAlign, SegmentPosition } from "@/lib/domains/brochure";
+import type { CertificateEditorState } from "@/lib/domains/certificate";
 
 export type UserRole = "admin" | "faculty";
 export type BrochureStatus = "draft" | "pending" | "approved" | "rejected";
+export type CertificateStatus = BrochureStatus;
 
 export type SessionUser = {
 	userId: number;
@@ -38,6 +40,21 @@ export type BrochureRecord = {
 	assignedAdminId: number;
 	assignedAdminUsername: string | null;
 	status: BrochureStatus;
+	rejectionReason: string | null;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type CertificateRecord = {
+	id: number;
+	title: string;
+	description: string;
+	content: CertificateEditorState;
+	createdBy: number;
+	createdByUsername: string;
+	assignedAdminId: number;
+	assignedAdminUsername: string | null;
+	status: CertificateStatus;
 	rejectionReason: string | null;
 	createdAt: string;
 	updatedAt: string;

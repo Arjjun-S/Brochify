@@ -1,8 +1,18 @@
 import bcrypt from "bcryptjs";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { createEmptyBrochureData, normalizeBrochureData, normalizeFontFamilyValue } from "@/lib/domains/brochure";
+import { createEmptyCertificateEditorState, normalizeCertificateEditorState } from "@/lib/domains/certificate";
 import { pool } from "@/lib/server/db";
-import type { BrochureRecord, BrochureStatus, EditorFormLineStyle, EditorState, SessionUser, UserRole } from "@/lib/server/types";
+import type {
+	BrochureRecord,
+	BrochureStatus,
+	CertificateRecord,
+	CertificateStatus,
+	EditorFormLineStyle,
+	EditorState,
+	SessionUser,
+	UserRole,
+} from "@/lib/server/types";
 
 const TEMPLATE_IDS = ["whiteBlue", "beigeDust", "softBlue", "tealGloss", "yellowDust"] as const;
 
@@ -32,6 +42,21 @@ type BrochureRow = RowDataPacket & {
 	assignedAdminId: number;
 	assignedAdminUsername: string | null;
 	status: BrochureStatus;
+	rejectionReason: string | null;
+	createdAt: Date | string;
+	updatedAt: Date | string;
+};
+
+type CertificateRow = RowDataPacket & {
+	id: number;
+	title: string;
+	description: string;
+	content: unknown;
+	createdBy: number;
+	createdByUsername: string;
+	assignedAdminId: number;
+	assignedAdminUsername: string | null;
+	status: CertificateStatus;
 	rejectionReason: string | null;
 	createdAt: Date | string;
 	updatedAt: Date | string;
@@ -143,6 +168,23 @@ function mapBrochureRow(row: BrochureRow): BrochureRecord {
 	};
 }
 
+function mapCertificateRow(row: CertificateRow): CertificateRecord {
+	return {
+		id: row.id,
+		title: row.title,
+		description: row.description,
+		content: normalizeCertificateEditorState(row.content),
+		createdBy: row.createdBy,
+		createdByUsername: row.createdByUsername,
+		assignedAdminId: row.assignedAdminId,
+		assignedAdminUsername: row.assignedAdminUsername,
+		status: row.status,
+		rejectionReason: row.rejectionReason,
+		createdAt: new Date(row.createdAt).toISOString(),
+		updatedAt: new Date(row.updatedAt ?? row.createdAt).toISOString(),
+	};
+}
+
 async function columnExists(tableName: string, columnName: string): Promise<boolean> {
 	const [rows] = await pool.query<RowDataPacket[]>(
 		`
@@ -208,6 +250,33 @@ async function initSchema(): Promise<void> {
 	await addColumnIfMissing("brochures", "rejection_reason", "TEXT NULL AFTER status");
 	await addColumnIfMissing(
 		"brochures",
+		"updated_at",
+		"TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
+	);
+
+	await pool.query(`
+		CREATE TABLE IF NOT EXISTS certificates (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			title VARCHAR(255) NOT NULL,
+			description TEXT NOT NULL,
+			content JSON NOT NULL,
+			created_by INT NOT NULL,
+			assigned_admin INT NOT NULL,
+			status ENUM('draft', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'draft',
+			rejection_reason TEXT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			CONSTRAINT fk_certificate_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+			CONSTRAINT fk_certificate_assigned_admin FOREIGN KEY (assigned_admin) REFERENCES users(id) ON DELETE CASCADE,
+			INDEX idx_certificate_status (status),
+			INDEX idx_certificate_created_by (created_by),
+			INDEX idx_certificate_assigned_admin (assigned_admin)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+	`);
+
+	await addColumnIfMissing("certificates", "rejection_reason", "TEXT NULL AFTER status");
+	await addColumnIfMissing(
+		"certificates",
 		"updated_at",
 		"TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
 	);
@@ -286,6 +355,10 @@ export async function verifyUserCredentials(
 
 type ListBrochureOptions = {
 	status?: BrochureStatus;
+};
+
+type ListCertificateOptions = {
+	status?: CertificateStatus;
 };
 
 function isValidStatus(status: string | undefined): status is BrochureStatus {
@@ -496,4 +569,220 @@ export async function decideBrochure(
 	}
 
 	return getBrochureByIdForUser(id, user);
+}
+
+export async function listCertificatesForUser(
+	user: SessionUser,
+	options?: ListCertificateOptions,
+): Promise<CertificateRecord[]> {
+	await ensureSchema();
+
+	const whereClauses: string[] = [];
+	const values: Array<number | string> = [];
+
+	if (user.role === "faculty") {
+		whereClauses.push("c.created_by = ?");
+		values.push(user.userId);
+	} else {
+		whereClauses.push("c.assigned_admin = ?");
+		values.push(user.userId);
+	}
+
+	if (options?.status && isValidStatus(options.status)) {
+		whereClauses.push("c.status = ?");
+		values.push(options.status);
+	}
+
+	const [rows] = await pool.query<CertificateRow[]>(
+		`
+			SELECT
+				c.id,
+				c.title,
+				c.description,
+				c.content,
+				c.created_by AS createdBy,
+				creator.username AS createdByUsername,
+				c.assigned_admin AS assignedAdminId,
+				admin.username AS assignedAdminUsername,
+				c.status,
+				c.rejection_reason AS rejectionReason,
+				c.created_at AS createdAt,
+				c.updated_at AS updatedAt
+			FROM certificates c
+			INNER JOIN users creator ON creator.id = c.created_by
+			LEFT JOIN users admin ON admin.id = c.assigned_admin
+			WHERE ${whereClauses.join(" AND ")}
+			ORDER BY c.updated_at DESC
+		`,
+		values,
+	);
+
+	return rows.map(mapCertificateRow);
+}
+
+export async function getCertificateByIdForUser(
+	id: number,
+	user: SessionUser,
+): Promise<CertificateRecord | null> {
+	await ensureSchema();
+
+	const [rows] = await pool.query<CertificateRow[]>(
+		`
+			SELECT
+				c.id,
+				c.title,
+				c.description,
+				c.content,
+				c.created_by AS createdBy,
+				creator.username AS createdByUsername,
+				c.assigned_admin AS assignedAdminId,
+				admin.username AS assignedAdminUsername,
+				c.status,
+				c.rejection_reason AS rejectionReason,
+				c.created_at AS createdAt,
+				c.updated_at AS updatedAt
+			FROM certificates c
+			INNER JOIN users creator ON creator.id = c.created_by
+			LEFT JOIN users admin ON admin.id = c.assigned_admin
+			WHERE c.id = ? AND ${user.role === "faculty" ? "c.created_by = ?" : "c.assigned_admin = ?"}
+			LIMIT 1
+		`,
+		[id, user.userId],
+	);
+
+	const row = rows[0];
+	return row ? mapCertificateRow(row) : null;
+}
+
+export async function createCertificateDraft(input: {
+	title: string;
+	description: string;
+	createdBy: number;
+	assignedAdminId: number;
+	content?: unknown;
+}): Promise<number> {
+	await ensureSchema();
+
+	const normalizedContent = normalizeCertificateEditorState(
+		input.content === undefined ? createEmptyCertificateEditorState() : input.content,
+	);
+
+	const [result] = await pool.query<ResultSetHeader>(
+		`
+			INSERT INTO certificates (title, description, content, created_by, assigned_admin, status)
+			VALUES (?, ?, ?, ?, ?, 'draft')
+		`,
+		[input.title, input.description, JSON.stringify(normalizedContent), input.createdBy, input.assignedAdminId],
+	);
+
+	return result.insertId;
+}
+
+export async function updateCertificateContent(
+	id: number,
+	user: SessionUser,
+	content: unknown,
+): Promise<CertificateRecord | null> {
+	await ensureSchema();
+
+	const existing = await getCertificateByIdForUser(id, user);
+	if (!existing) {
+		return null;
+	}
+
+	const normalizedContent = normalizeCertificateEditorState(content);
+
+	await pool.query(
+		`
+			UPDATE certificates
+			SET content = ?
+			WHERE id = ?
+		`,
+		[JSON.stringify(normalizedContent), id],
+	);
+
+	return getCertificateByIdForUser(id, user);
+}
+
+export async function deleteCertificateForFaculty(id: number, user: SessionUser): Promise<boolean> {
+	await ensureSchema();
+
+	if (user.role !== "faculty") {
+		return false;
+	}
+
+	const [result] = await pool.query<ResultSetHeader>(
+		`
+			DELETE FROM certificates
+			WHERE id = ? AND created_by = ?
+		`,
+		[id, user.userId],
+	);
+
+	return result.affectedRows > 0;
+}
+
+export async function submitCertificateForReview(
+	id: number,
+	user: SessionUser,
+	content: unknown,
+): Promise<CertificateRecord | null> {
+	await ensureSchema();
+
+	if (user.role !== "faculty") {
+		return null;
+	}
+
+	const normalizedContent = normalizeCertificateEditorState(content);
+	const [result] = await pool.query<ResultSetHeader>(
+		`
+			UPDATE certificates
+			SET content = ?, status = 'pending', rejection_reason = NULL
+			WHERE id = ? AND created_by = ?
+		`,
+		[JSON.stringify(normalizedContent), id, user.userId],
+	);
+
+	if (result.affectedRows === 0) {
+		return null;
+	}
+
+	return getCertificateByIdForUser(id, user);
+}
+
+export async function decideCertificate(
+	id: number,
+	user: SessionUser,
+	decision: "approved" | "rejected",
+	content?: unknown,
+	rejectionReason?: string | null,
+): Promise<CertificateRecord | null> {
+	await ensureSchema();
+
+	if (user.role !== "admin") {
+		return null;
+	}
+
+	const normalizedContent = content === undefined ? null : normalizeCertificateEditorState(content);
+
+	const [result] = await pool.query<ResultSetHeader>(
+		`
+			UPDATE certificates
+			SET status = ?, content = COALESCE(?, content), rejection_reason = ?
+			WHERE id = ? AND assigned_admin = ?
+		`,
+		[
+			decision,
+			normalizedContent ? JSON.stringify(normalizedContent) : null,
+			decision === "rejected" ? (rejectionReason?.trim() || null) : null,
+			id,
+			user.userId,
+		],
+	);
+
+	if (result.affectedRows === 0) {
+		return null;
+	}
+
+	return getCertificateByIdForUser(id, user);
 }

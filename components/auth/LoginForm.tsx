@@ -39,9 +39,9 @@ export default function LoginForm() {
 			}
 
 			if (data.user.role === "admin") {
-				router.replace("/admin/dashboard");
+				router.replace("/admin/modules");
 			} else {
-				router.replace("/faculty/dashboard");
+				router.replace("/faculty/modules");
 			}
 		} catch (submitError) {
 			const message = submitError instanceof Error ? submitError.message : "Login failed.";
