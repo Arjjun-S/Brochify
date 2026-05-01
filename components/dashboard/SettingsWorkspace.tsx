@@ -6,15 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   Bell,
-  CircleUserRound,
-  FolderKanban,
-  Home,
-  LayoutTemplate,
   LogOut,
   MoonStar,
-  Palette,
   Save,
-  Settings2,
   SunMedium,
 } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
@@ -24,9 +18,10 @@ import { useThemePreference } from "./useThemePreference";
 
 type SettingsWorkspaceProps = {
   user: SessionUser;
+  backTo?: string;
 };
 
-export default function SettingsWorkspace({ user }: SettingsWorkspaceProps) {
+export default function SettingsWorkspace({ user, backTo }: SettingsWorkspaceProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, isDark, setTheme } = useThemePreference();
@@ -34,6 +29,7 @@ export default function SettingsWorkspace({ user }: SettingsWorkspaceProps) {
   const [saving, setSaving] = useState(false);
 
   const logoBackHref = resolveLogoBackNavigation(pathname || "/faculty/settings", user.role);
+  const dashboardBackHref = backTo || logoBackHref;
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -54,120 +50,20 @@ export default function SettingsWorkspace({ user }: SettingsWorkspaceProps) {
           : "bg-gradient-to-br from-slate-100 via-white to-indigo-50",
       )}
     >
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r p-6 backdrop-blur-lg transition-colors duration-300 lg:flex",
-          isDark ? "border-slate-700 bg-[#111827]/85" : "border-slate-200 bg-white/85",
-        )}
-      >
-        <Link href={logoBackHref} className="mb-8 flex items-center gap-3">
-          <Image src="/icon-logo.png" alt="Brochify Icon" width={38} height={38} className="h-9 w-9 object-contain" priority />
-          <Image src="/text-logo.png" alt="Brochify Wordmark" width={158} height={34} className="h-8 w-auto object-contain" priority />
-        </Link>
-
-        <nav className="space-y-1.5">
-          <button
-            type="button"
-            disabled
-            className={cn(
-              "flex w-full cursor-not-allowed items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold",
-              isDark ? "text-slate-500" : "text-slate-400",
-            )}
-          >
-            <Palette className="h-4 w-4" />
-            Create
-          </button>
-
-          <Link
-            href="/faculty/brochure"
-            className={cn(
-              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
-              isDark
-                ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-            )}
-          >
-            <Home className="h-4 w-4" />
-            Home
-          </Link>
-
-          <Link
-            href="/faculty/brochure"
-            className={cn(
-              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
-              isDark
-                ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-            )}
-          >
-            <FolderKanban className="h-4 w-4" />
-            My Brochures
-          </Link>
-
-          <button
-            type="button"
-            disabled
-            className={cn(
-              "flex w-full cursor-not-allowed items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold",
-              isDark ? "text-slate-500" : "text-slate-400",
-            )}
-          >
-            <LayoutTemplate className="h-4 w-4" />
-            Templates
-          </button>
-
-          <Link
-            href="/faculty/settings"
-            className={cn(
-              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
-              isDark
-                ? "bg-slate-800 text-white"
-                : "bg-slate-100 text-slate-900",
-            )}
-          >
-            <Settings2 className="h-4 w-4" />
-            Settings
-          </Link>
-        </nav>
-
-        <button
-          type="button"
-          onClick={() => void handleLogout()}
-          className={cn(
-            "mt-auto flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
-            isDark
-              ? "border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
-              : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-          )}
-        >
-          <LogOut className="h-4 w-4" />
-          Logout
-        </button>
-      </aside>
-
-      <div className="lg:pl-72">
       <header
         className={cn(
-          "sticky top-0 z-30 border-b px-6 py-5 backdrop-blur-lg transition-colors duration-300 md:px-10",
+          "sticky top-0 z-30 border-b px-6 py-4 backdrop-blur-lg transition-colors duration-300",
           isDark ? "border-slate-700 bg-[#111827]/80" : "border-slate-200 bg-white/80",
         )}
       >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className={cn(
-              "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em]",
-              isDark ? "border-indigo-700 bg-indigo-950 text-indigo-200" : "border-indigo-200 bg-indigo-50 text-indigo-700",
-            )}>
-              <CircleUserRound className="h-3.5 w-3.5" />
-              Faculty Settings
-            </p>
-            <h1 className={cn("mt-2 text-3xl font-black tracking-tight", isDark ? "text-slate-100" : "text-slate-950")}>Account preferences</h1>
-            <p className={cn("mt-1 text-sm", isDark ? "text-slate-300" : "text-slate-600")}>Manage profile details, theme, and account options.</p>
-          </div>
+        <div className="flex items-center justify-between gap-4">
+          <Link href={logoBackHref} className="flex items-center gap-3">
+            <Image src="/Main-logo.png" alt="Brochify Logo" width={160} height={40} className="h-10 w-auto object-contain" priority />
+          </Link>
 
           <div className="flex items-center gap-2">
             <Link
-              href={user.role === "faculty" ? "/faculty/modules" : "/admin/modules"}
+              href={dashboardBackHref}
               className={cn(
                 "rounded-2xl border px-4 py-2.5 text-sm font-semibold transition",
                 isDark
@@ -175,7 +71,7 @@ export default function SettingsWorkspace({ user }: SettingsWorkspaceProps) {
                   : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100",
               )}
             >
-              Back to Modules
+              Back to Dashboard
             </Link>
             <button
               type="button"
@@ -356,7 +252,6 @@ export default function SettingsWorkspace({ user }: SettingsWorkspaceProps) {
           </article>
         </div>
       </section>
-      </div>
     </main>
   );
 }

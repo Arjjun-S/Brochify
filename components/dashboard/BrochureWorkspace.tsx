@@ -214,7 +214,7 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
                       Switch to
                     </p>
                     <Link
-                      href="/faculty/certificates"
+                      href="/faculty/certificate"
                       onClick={() => setSwitchOpen(false)}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 text-sm font-semibold transition border-t",
@@ -274,7 +274,7 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
                     )}
                   >
                     <Link
-                      href="/faculty/settings"
+                      href="/faculty/settings?from=faculty/brochure"
                       onClick={() => setProfileOpen(false)}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 text-sm font-semibold transition rounded-t-2xl",

@@ -153,7 +153,7 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
 
   const dashboardHomeHref = "/faculty/brochure";
   const settingsHref = "/faculty/settings";
-  const logoBackHref = resolveLogoBackNavigation(pathname || "/faculty/certificates", user.role);
+  const logoBackHref = resolveLogoBackNavigation(pathname || "/faculty/certificate", user.role);
   const modulesHref = "/faculty/modules";
 
   const loadCertificates = useCallback(async () => {
@@ -459,7 +459,7 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
             My Brochures
           </Link>
 
-          <Link href="/faculty/certificates" className={cn(
+          <Link href="/faculty/certificate" className={cn(
             "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
             isDark
               ? "bg-slate-800 text-white"

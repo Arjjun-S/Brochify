@@ -276,7 +276,7 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
                     )}
                   >
                     <Link
-                      href="/faculty/settings"
+                      href="/faculty/settings?from=faculty/certificate"
                       onClick={() => setProfileOpen(false)}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 text-sm font-semibold transition rounded-t-2xl",
