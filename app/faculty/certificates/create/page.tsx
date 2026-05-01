@@ -133,7 +133,7 @@ export default function FacultyCertificateCreatePage() {
         isDark ? "border-slate-700 bg-[#111827]/80" : "border-slate-200 bg-white/80",
       )}>
         <div className="flex items-center justify-between gap-4">
-          <Link href="/faculty/certificates" className="flex items-center gap-3">
+          <Link href="/faculty/certificate" className="flex items-center gap-3">
             <Image src="/Main-logo.png" alt="Brochify Logo" width={160} height={40} className="h-10 w-auto object-contain" priority />
           </Link>
           <button
@@ -166,7 +166,7 @@ export default function FacultyCertificateCreatePage() {
             <p className="mt-1 text-sm text-slate-600">Fill in the details below to create your certificate template.</p>
           </div>
           <Link
-            href="/faculty/certificates"
+            href="/faculty/certificate"
             className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
           >
             Cancel
@@ -311,7 +311,7 @@ export default function FacultyCertificateCreatePage() {
                 {submitting ? "Creating..." : "Open Certificate Editor"}
               </button>
               <Link
-                href="/faculty/certificates"
+                href="/faculty/certificate"
                 className={cn(
                   "rounded-2xl border px-4 py-2.5 text-sm font-semibold transition",
                   isDark ? "border-slate-700 text-slate-300 hover:bg-slate-800" : "border-slate-300 text-slate-700 hover:bg-slate-100",

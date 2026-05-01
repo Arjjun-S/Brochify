@@ -14,12 +14,12 @@ export default async function CertificateStudioRoute({ searchParams }: Certifica
   const certificateId = Number.parseInt(rawCertificateId || "", 10);
 
   if (!Number.isFinite(certificateId) || certificateId <= 0) {
-    redirect(session.role === "admin" ? "/admin/certificates" : "/faculty/certificates");
+    redirect(session.role === "admin" ? "/admin/certificates" : "/faculty/certificate");
   }
 
   const certificate = await getCertificateByIdForUser(certificateId, session);
   if (!certificate) {
-    redirect(session.role === "admin" ? "/admin/certificates" : "/faculty/certificates");
+    redirect(session.role === "admin" ? "/admin/certificates" : "/faculty/certificate");
   }
 
   return <CertificateStudioPage session={session} certificate={certificate} />;
