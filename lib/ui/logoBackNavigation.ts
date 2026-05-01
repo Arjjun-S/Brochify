@@ -10,14 +10,14 @@ export function resolveLogoBackNavigation(pathname: string, role: SessionRole): 
   }
 
   if (pathname.startsWith("/studio") || pathname.startsWith("/brochure-studio")) {
-    return "/faculty/dashboard";
+    return "/faculty/brochure";
   }
 
   if (pathname.startsWith("/certificate")) {
     return "/faculty/certificates";
   }
 
-  if (pathname.startsWith("/faculty/dashboard")) {
+  if (pathname.startsWith("/faculty/brochure")) {
     return "/faculty/modules";
   }
 
