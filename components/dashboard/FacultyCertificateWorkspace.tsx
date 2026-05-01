@@ -459,14 +459,14 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
             My Brochures
           </Link>
 
-          <Link href="/faculty/dashboard" className={cn(
+          <Link href="/faculty/certificates" className={cn(
             "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
             isDark
               ? "bg-slate-800 text-white"
               : "bg-slate-100 text-slate-900",
           )}>
             <FileBadge2 className="h-4 w-4" />
-            Brochures
+            Certificates
           </Link>
 
           <button type="button" disabled className="flex w-full cursor-not-allowed items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-slate-400">

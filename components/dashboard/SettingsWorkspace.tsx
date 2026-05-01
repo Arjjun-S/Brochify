@@ -104,19 +104,6 @@ export default function SettingsWorkspace({ user }: SettingsWorkspaceProps) {
             My Brochures
           </Link>
 
-          <Link
-            href="/faculty/dashboard"
-            className={cn(
-              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
-              isDark
-                ? "text-slate-300 hover:bg-slate-800 hover:text-white"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-            )}
-          >
-            <Palette className="h-4 w-4" />
-            Brochures
-          </Link>
-
           <button
             type="button"
             disabled
