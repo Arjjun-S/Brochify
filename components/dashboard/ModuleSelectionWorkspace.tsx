@@ -30,10 +30,10 @@ export default function ModuleSelectionWorkspace({ role, username }: ModuleSelec
 
   return (
     <main className="relative min-h-screen overflow-hidden text-white">
-      <div
-        className="pointer-events-none absolute left-1/2 top-5 z-20 flex min-w-[280px] -translate-x-1/2 items-center justify-center rounded-full border border-white/60 bg-white/85 px-[40px] py-[12px] shadow-[0_8px_25px_rgba(0,0,0,0.15)] backdrop-blur-[18px]"
-      >
-        <Image src="/Main-logo.png" alt="Brochify" width={106} height={106} className="h-12 w-12 object-contain" priority />
+      <div className="absolute left-1/2 top-6 z-20 flex min-w-[160px] -translate-x-1/2 items-center justify-center rounded-3xl border border-white/60 bg-white/85 px-5 py-1.5 shadow-[0_8px_25px_rgba(0,0,0,0.15)] backdrop-blur-[18px]">
+        <Link href="/landing" aria-label="Brochify home" className="pointer-events-auto">
+          <Image src="/Main-logo.png" alt="Brochify" width={150} height={150} className="h-14 w-auto object-contain" priority />
+        </Link>
       </div>
 
       <section className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
