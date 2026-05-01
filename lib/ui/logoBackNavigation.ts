@@ -14,14 +14,18 @@ export function resolveLogoBackNavigation(pathname: string, role: SessionRole): 
   }
 
   if (pathname.startsWith("/certificate")) {
-    return "/faculty/certificates";
+    return "/faculty/certificate";
   }
 
   if (pathname.startsWith("/faculty/brochure")) {
     return "/faculty/modules";
   }
 
-  if (pathname.startsWith("/faculty/certificates")) {
+  if (pathname.startsWith("/faculty/certificate")) {
+    return "/faculty/modules";
+  }
+
+  if (pathname.startsWith("/faculty/certificate")) {
     return "/faculty/modules";
   }
 
