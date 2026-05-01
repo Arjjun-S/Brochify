@@ -151,7 +151,7 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const dashboardHomeHref = "/faculty/dashboard";
+  const dashboardHomeHref = "/faculty/brochure";
   const settingsHref = "/faculty/settings";
   const logoBackHref = resolveLogoBackNavigation(pathname || "/faculty/certificates", user.role);
   const modulesHref = "/faculty/modules";

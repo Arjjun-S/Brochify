@@ -79,7 +79,7 @@ export default function SettingsWorkspace({ user }: SettingsWorkspaceProps) {
           </button>
 
           <Link
-            href="/faculty/dashboard"
+            href="/faculty/brochure"
             className={cn(
               "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
               isDark
@@ -92,7 +92,7 @@ export default function SettingsWorkspace({ user }: SettingsWorkspaceProps) {
           </Link>
 
           <Link
-            href="/faculty/dashboard"
+            href="/faculty/brochure"
             className={cn(
               "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
               isDark

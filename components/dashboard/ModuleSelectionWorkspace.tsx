@@ -15,7 +15,7 @@ export default function ModuleSelectionWorkspace({ role, username }: ModuleSelec
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const brochureHref = role === "admin" ? "/admin/dashboard" : "/faculty/dashboard";
+  const brochureHref = role === "admin" ? "/admin/dashboard" : "/faculty/brochure";
   const certificateHref = role === "admin" ? "/admin/certificates" : "/faculty/certificates";
 
   const handleLogout = async () => {

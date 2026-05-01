@@ -7,32 +7,41 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRightLeft,
   CalendarDays,
+  CheckCircle2,
+  Clock3,
   FileBadge2,
+  FolderKanban,
   LogOut,
   MoonStar,
   PlusCircle,
   Search,
   Settings2,
+  Sparkles,
   SunMedium,
   Trash2,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/ui/cn";
 import { useThemePreference } from "./useThemePreference";
-import type { CertificateRecord, SessionUser } from "@/lib/server/types";
+import type { BrochureRecord, BrochureStatus, SessionUser } from "@/lib/server/types";
 
-type UiStatus = "draft" | "completed";
+type BrochureStatusFilter = "all" | BrochureStatus;
 type DateFilter = "all" | "7" | "30" | "90";
 
-const statusBadgeClassMap: Record<UiStatus, string> = {
+const statusBadgeClassMap: Record<BrochureStatus, string> = {
   draft: "border-slate-300 bg-slate-100 text-slate-700",
-  completed: "border-emerald-300 bg-emerald-100 text-emerald-700",
+  pending: "border-amber-300 bg-amber-100 text-amber-700",
+  approved: "border-emerald-300 bg-emerald-100 text-emerald-700",
+  rejected: "border-rose-300 bg-rose-100 text-rose-700",
 };
 
-const statusFilterOptions: Array<{ label: string; value: "all" | UiStatus }> = [
+const statusFilterOptions: Array<{ label: string; value: "all" | BrochureStatus }> = [
   { label: "All Types", value: "all" },
   { label: "Draft", value: "draft" },
-  { label: "Completed", value: "completed" },
+  { label: "Pending", value: "pending" },
+  { label: "Approved", value: "approved" },
+  { label: "Rejected", value: "rejected" },
 ];
 
 const dateFilterOptions: Array<{ label: string; value: DateFilter }> = [
@@ -62,62 +71,58 @@ function toFilterTimestamp(dateIso: string): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function getUiStatus(record: CertificateRecord): UiStatus {
-  return record.status === "draft" ? "draft" : "completed";
-}
-
-type CertificateWorkspaceProps = {
+type BrochureWorkspaceProps = {
   user: SessionUser;
 };
 
-export default function CertificateWorkspace({ user }: CertificateWorkspaceProps) {
+export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
   const router = useRouter();
   const { isDark, theme, setTheme } = useThemePreference();
-  const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
+  const [brochures, setBrochures] = useState<BrochureRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingCertificateId, setDeletingCertificateId] = useState<number | null>(null);
+  const [deletingBrochureId, setDeletingBrochureId] = useState<number | null>(null);
 
   const [searchText, setSearchText] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | UiStatus>("all");
+  const [typeFilter, setTypeFilter] = useState<BrochureStatusFilter>("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [switchOpen, setSwitchOpen] = useState(false);
 
-  const loadCertificates = useCallback(async () => {
+  const loadBrochures = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/certificate", { cache: "no-store" });
-      const data = (await response.json()) as { certificates?: CertificateRecord[]; error?: string };
-      if (!response.ok) throw new Error(data.error || "Failed to load certificates.");
-      setCertificates(data.certificates || []);
+      const response = await fetch("/api/brochure", { cache: "no-store" });
+      const data = (await response.json()) as { brochures?: BrochureRecord[]; error?: string };
+      if (!response.ok) throw new Error(data.error || "Failed to load brochures.");
+      setBrochures(data.brochures || []);
     } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : "Failed to load certificates.";
+      const message = loadError instanceof Error ? loadError.message : "Failed to load brochures.";
       setError(message);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void loadCertificates(); }, [loadCertificates]);
+  useEffect(() => { void loadBrochures(); }, [loadBrochures]);
 
-  const handleDeleteCertificate = async (certificateId: number) => {
-    const shouldDelete = window.confirm("Delete this certificate permanently?");
+  const handleDeleteBrochure = async (brochureId: number) => {
+    const shouldDelete = window.confirm("Delete this brochure permanently?");
     if (!shouldDelete) return;
-    setDeletingCertificateId(certificateId);
+    setDeletingBrochureId(brochureId);
     setError(null);
     try {
-      const response = await fetch(`/api/certificate/${certificateId}`, { method: "DELETE" });
+      const response = await fetch(`/api/brochure/${brochureId}`, { method: "DELETE" });
       const data = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(data.error || "Failed to delete certificate.");
-      setCertificates((prev) => prev.filter((c) => c.id !== certificateId));
+      if (!response.ok) throw new Error(data.error || "Failed to delete brochure.");
+      setBrochures((prev) => prev.filter((b) => b.id !== brochureId));
     } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : "Failed to delete certificate.";
+      const message = deleteError instanceof Error ? deleteError.message : "Failed to delete brochure.";
       setError(message);
     } finally {
-      setDeletingCertificateId(null);
+      setDeletingBrochureId(null);
     }
   };
 
@@ -126,34 +131,27 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
     router.replace("/login");
   };
 
-  const filteredCertificates = useMemo(() => {
+  const filteredBrochures = useMemo(() => {
     const normalizedQuery = searchText.trim().toLowerCase();
     const now = Date.now();
     const dateLimit = dateFilter === "all" ? null : now - Number(dateFilter) * 24 * 60 * 60 * 1000;
 
-    return [...certificates]
+    return [...brochures]
       .sort(
         (left, right) =>
           toFilterTimestamp(right.updatedAt || right.createdAt) -
           toFilterTimestamp(left.updatedAt || left.createdAt),
       )
-      .filter((certificate) => {
-        if (normalizedQuery.length > 0) {
-          const eventName = certificate.content.templateInput.eventName.toLowerCase();
-          if (!certificate.title.toLowerCase().includes(normalizedQuery) && !eventName.includes(normalizedQuery)) {
-            return false;
-          }
-        }
-
-        const uiStatus = getUiStatus(certificate);
-        if (typeFilter !== "all" && uiStatus !== typeFilter) return false;
+      .filter((brochure) => {
+        if (normalizedQuery.length > 0 && !brochure.title.toLowerCase().includes(normalizedQuery)) return false;
+        if (typeFilter !== "all" && brochure.status !== typeFilter) return false;
         if (dateLimit !== null) {
-          const editedTime = toFilterTimestamp(certificate.updatedAt || certificate.createdAt);
+          const editedTime = toFilterTimestamp(brochure.updatedAt || brochure.createdAt);
           if (editedTime < dateLimit) return false;
         }
         return true;
       });
-  }, [certificates, dateFilter, searchText, typeFilter]);
+  }, [brochures, dateFilter, searchText, typeFilter]);
 
   return (
     <main className={cn(
@@ -216,7 +214,7 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
                       Switch to
                     </p>
                     <Link
-                      href="/faculty/brochure"
+                      href="/faculty/certificates"
                       onClick={() => setSwitchOpen(false)}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 text-sm font-semibold transition border-t",
@@ -224,7 +222,7 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
                       )}
                     >
                       <FileBadge2 className="h-4 w-4" />
-                      Brochure Generator
+                      Certificate Generator
                     </Link>
                   </motion.div>
                 )}
@@ -310,9 +308,9 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
         {/* Create Button Section */}
         <div className="mb-6 flex justify-end">
           <Link
-            href="/faculty/certificate/create"
-            className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-white transition hover:brightness-105 shadow-[0_8px_20px_-8px_rgba(70,46,147,0.5)]"
-            style={{ backgroundColor: "#462E93" }}
+            href="/faculty/brochure/create"
+            className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-white transition hover:brightness-105 shadow-[0_8px_20px_-8px_rgba(0,42,130,0.5)]"
+            style={{ backgroundColor: "#002A82" }}
           >
             <PlusCircle className="h-4 w-4" />
             Create
@@ -340,7 +338,7 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
 
             <select
               value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value as "all" | UiStatus)}
+              onChange={(event) => setTypeFilter(event.target.value as BrochureStatusFilter)}
               className={cn(
                 "rounded-2xl border px-4 py-2.5 text-sm outline-none transition",
                 isDark ? "border-slate-700 bg-slate-900 text-slate-200 focus:border-indigo-500" : "border-slate-200 bg-white text-slate-700 focus:border-indigo-400",
@@ -366,22 +364,22 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
           </div>
 
           <p className={cn("mt-3 text-xs font-medium", isDark ? "text-slate-400" : "text-slate-500")}>
-            {filteredCertificates.length} results in recent certificates
+            {filteredBrochures.length} results in recent brochures
           </p>
         </section>
 
-        {/* Recent Certificates List */}
+        {/* Recent Brochures List */}
         <section className={cn(
           "rounded-3xl border p-6 shadow-sm",
           isDark ? "border-slate-700 bg-[#111827]" : "border-slate-200 bg-white",
         )}>
           <div className="mb-5 flex items-center justify-between gap-4">
-            <h2 className={cn("text-2xl font-black tracking-tight", isDark ? "text-slate-100" : "text-slate-900")}>Recent Certificates</h2>
+            <h2 className={cn("text-2xl font-black tracking-tight", isDark ? "text-slate-100" : "text-slate-900")}>Recent Brochures</h2>
             <span className={cn(
               "rounded-full border px-3 py-1 text-xs font-semibold",
               isDark ? "border-slate-700 bg-slate-800 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600",
             )}>
-              {filteredCertificates.length} items
+              {filteredBrochures.length} items
             </span>
           </div>
 
@@ -389,27 +387,26 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
             <p className={cn(
               "rounded-2xl border px-4 py-3 text-sm",
               isDark ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-600",
-            )}>Loading certificates...</p>
+            )}>Loading brochures...</p>
           ) : error ? (
             <p className={cn(
               "rounded-2xl border px-4 py-3 text-sm",
               isDark ? "border-rose-700 bg-rose-950 text-rose-400" : "border-rose-200 bg-rose-50 text-rose-700",
             )}>{error}</p>
-          ) : filteredCertificates.length === 0 ? (
+          ) : filteredBrochures.length === 0 ? (
             <p className={cn(
               "rounded-2xl border px-4 py-3 text-sm",
               isDark ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-600",
-            )}>No certificates found. Click Create to add one.</p>
+            )}>No brochures found. Click Create to add one.</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {filteredCertificates.map((certificate, index) => {
-                const uiStatus = getUiStatus(certificate);
-                const openHref = `/certificate?certificateId=${certificate.id}`;
-                const statusLabel = uiStatus === "draft" ? "Draft" : "Completed";
+              {filteredBrochures.map((brochure, index) => {
+                const openStudioHref = `/studio?brochureId=${brochure.id}`;
+                const statusLabel = brochure.status.charAt(0).toUpperCase() + brochure.status.slice(1);
 
                 return (
                   <motion.article
-                    key={certificate.id}
+                    key={brochure.id}
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.28, delay: Math.min(index * 0.05, 0.25) }}
@@ -421,7 +418,7 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
                     {/* Preview Header */}
                     <div className={cn(
                       "flex items-center justify-between border-b px-4 py-3",
-                      isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-gradient-to-r from-indigo-50 via-white to-violet-100",
+                      isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-50",
                     )}>
                       <div className="flex items-center gap-2">
                         <div className={cn(
@@ -430,13 +427,11 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
                         )}>
                           <FileBadge2 className={cn("h-4 w-4", isDark ? "text-indigo-300" : "text-indigo-600")} />
                         </div>
-                        <span className={cn("text-sm font-semibold", isDark ? "text-slate-200" : "text-slate-700")}>
-                          {certificate.content.templateInput.eventName}
-                        </span>
+                        <span className={cn("text-sm font-semibold", isDark ? "text-slate-200" : "text-slate-700")}>{brochure.title}</span>
                       </div>
                       <span className={cn(
                         "shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.15em]",
-                        statusBadgeClassMap[uiStatus],
+                        statusBadgeClassMap[brochure.status],
                       )}>
                         {statusLabel}
                       </span>
@@ -444,44 +439,38 @@ export default function CertificateWorkspace({ user }: CertificateWorkspaceProps
 
                     {/* Content */}
                     <div className="space-y-3 p-4">
-                      <h3 className={cn("line-clamp-2 text-lg font-black", isDark ? "text-slate-100" : "text-slate-900")}>
-                        {certificate.title}
-                      </h3>
-
-                      {certificate.description.trim().length > 0 && (
-                        <p className={cn("line-clamp-2 text-sm", isDark ? "text-slate-400" : "text-slate-600")}>
-                          {certificate.description}
-                        </p>
+                      {brochure.description.trim().length > 0 && (
+                        <p className={cn("line-clamp-2 text-sm", isDark ? "text-slate-400" : "text-slate-600")}>{brochure.description}</p>
                       )}
 
                       <div className="flex items-center gap-3 text-xs text-slate-500">
                         <span className="inline-flex items-center gap-1.5">
                           <CalendarDays className="h-3.5 w-3.5" />
-                          {formatRelativeTime(certificate.updatedAt || certificate.createdAt)}
+                          {formatRelativeTime(brochure.updatedAt || brochure.createdAt)}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2 pt-1">
                         <Link
-                          href={openHref}
+                          href={openStudioHref}
                           className={cn(
                             "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition",
                             isDark ? "border-slate-700 text-slate-200 hover:bg-slate-800" : "border-slate-300 text-slate-700 hover:bg-slate-100",
                           )}
                         >
-                          {uiStatus === "draft" ? "Continue Editing" : "Open"}
+                          Open
                         </Link>
                         <button
                           type="button"
-                          onClick={() => void handleDeleteCertificate(certificate.id)}
-                          disabled={deletingCertificateId === certificate.id}
+                          onClick={() => void handleDeleteBrochure(brochure.id)}
+                          disabled={deletingBrochureId === brochure.id}
                           className={cn(
-                            "inline-flex items-center justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition disabled:cursor-not-allowed disabled:opacity-60",
-                            isDark ? "border-rose-700 bg-rose-950 text-rose-400 hover:bg-rose-900" : "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100",
+                            "inline-flex items-center justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60",
+                            isDark ? "border-rose-700 bg-rose-950 text-rose-400 hover:bg-rose-900" : "border-rose-300 bg-rose-50 text-rose-700",
                           )}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          {deletingCertificateId === certificate.id ? "Deleting" : "Delete"}
+                          {deletingBrochureId === brochure.id ? "Deleting" : "Delete"}
                         </button>
                       </div>
                     </div>

@@ -155,7 +155,7 @@ export default function FacultyDetailedInputForm({ brochureId }: FacultyDetailed
               </p>
             </div>
             <Link
-              href="/faculty/dashboard"
+              href="/faculty/brochure"
               className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
             >
               Back to Dashboard
