@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -15,6 +14,7 @@ import { cn } from "@/lib/ui/cn";
 import type { SessionUser } from "@/lib/server/types";
 import { resolveLogoBackNavigation } from "@/lib/ui/logoBackNavigation";
 import { useThemePreference } from "./useThemePreference";
+import { Logo } from "@/components/ui/Logo";
 
 type SettingsWorkspaceProps = {
   user: SessionUser;
@@ -58,7 +58,7 @@ export default function SettingsWorkspace({ user, backTo }: SettingsWorkspacePro
       >
         <div className="flex items-center justify-between gap-4">
           <Link href={logoBackHref} className="flex items-center gap-3">
-            <Image src="/Main-logo.png" alt="Brochify Logo" width={160} height={40} className="h-10 w-auto object-contain" priority />
+            <Logo appearance={isDark ? "dark" : "light"} />
           </Link>
 
           <div className="flex items-center gap-2">

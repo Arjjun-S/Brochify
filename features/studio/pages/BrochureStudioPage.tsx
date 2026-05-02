@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -55,6 +54,8 @@ import { LoadingTask } from "@/lib/system/loading/loadingTaskManager";
 import { LIMITS } from "@/lib/system/content/limits";
 import type { BrochureTemplate } from "@/components/studio/editor/CanvasSidebar";
 import type { BrochureRecord, BrochureStatus, SessionUser } from "@/lib/server/types";
+import { SelectBox } from "@/components/ui/SelectBox";
+import { Logo } from "@/components/ui/Logo";
 
 const PAGE_WIDTH = 983;
 const PAGE_HEIGHT = 680;
@@ -1753,8 +1754,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
     <main className="h-screen bg-[#F8FAFC] flex flex-col font-sans overflow-hidden">
       <header className="h-20 bg-white border-b border-slate-200 px-8 lg:px-10 flex items-center justify-between shrink-0 z-[100] shadow-sm">
         <Link href={dashboardHref} className="flex items-center gap-3 group">
-          <Image src="/icon-logo.png" alt="Studio Icon" width={40} height={40} className="h-10 w-10 object-contain drop-shadow-sm" />
-          <Image src="/text-logo.png" alt="Studio Wordmark" width={176} height={40} className="h-10 w-auto object-contain drop-shadow-sm" />
+          <Logo appearance="light" />
         </Link>
 
         <div className="flex items-center gap-3">
@@ -2018,17 +2018,16 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
 
                 {selectedTextTarget && (
                   <>
-                    <select
+                    <SelectBox
                       value={selectedTextTarget.fontFamily}
-                      onChange={(event) => updateSelectedTextStyle({ fontFamily: event.target.value })}
-                      className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 outline-none"
-                    >
-                      {FONT_OPTIONS.map((font) => (
-                        <option key={font.value} value={font.value} style={{ fontFamily: font.value }}>
-                          {font.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => updateSelectedTextStyle({ fontFamily: val })}
+                      options={FONT_OPTIONS.map((font) => ({
+                        label: font.label,
+                        value: font.value,
+                        style: { fontFamily: font.value }
+                      }))}
+                      className="!bg-white !text-slate-700 !border-slate-200 !rounded-full !h-10 !px-4 !py-2 !text-sm !w-44"
+                    />
                     <input
                       type="number"
                       min={12}

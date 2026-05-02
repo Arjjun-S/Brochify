@@ -48,6 +48,8 @@ import {
 import { cn } from "@/lib/ui/cn";
 import { resolveLogoBackNavigation } from "@/lib/ui/logoBackNavigation";
 import type { CertificateRecord, CertificateStatus, SessionUser } from "@/lib/server/types";
+import { Logo } from "@/components/ui/Logo";
+import { SelectBox } from "@/components/ui/SelectBox";
 
 type CertificateStudioPageProps = {
   session: SessionUser;
@@ -751,8 +753,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
           <>
             <div className="flex items-center gap-3">
               <Link href={dashboardHref} className="flex items-center gap-3">
-                <Image src="/icon-logo.png" alt="Brochify" width={34} height={34} className="h-8 w-8" />
-                <span className="text-sm font-black uppercase tracking-[0.16em] text-slate-800">Certificate Studio</span>
+                <Logo appearance="light" iconClassName="h-8 w-8" />
               </Link>
 
               <Link
@@ -1078,20 +1079,21 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 </div>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <label className="block space-y-1">
+                  <div className="block space-y-1">
                     <span className="text-sm font-semibold text-slate-700">Certificate Type</span>
-                    <select
+                    <SelectBox
                       value={certificateType}
-                      onChange={(event) => setCertificateType(event.target.value as CertificateType)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
-                    >
-                      <option value="workshop">Workshop</option>
-                      <option value="hackathon">Hackathon</option>
-                      <option value="symposium">Symposium</option>
-                      <option value="custom">Custom</option>
-                    </select>
+                      onChange={(val) => setCertificateType(val as CertificateType)}
+                      options={[
+                        { label: "Workshop", value: "workshop" },
+                        { label: "Hackathon", value: "hackathon" },
+                        { label: "Symposium", value: "symposium" },
+                        { label: "Custom", value: "custom" },
+                      ]}
+                      className="!bg-white !text-slate-700 !border-slate-200"
+                    />
                     <p className="text-xs text-slate-500">Sentence structure auto-updates internally.</p>
-                  </label>
+                  </div>
 
                   <label className="block space-y-1">
                     <span className="text-sm font-semibold text-slate-700">Upload Logo(s)</span>
@@ -1207,18 +1209,17 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 <Trash2 className="h-4 w-4" />
               </button>
 
-              <select
+              <SelectBox
                 value={selectedTextOverlay?.fontFamily || FONT_OPTIONS[0].value}
-                onChange={(event) => applyTextStyle({ fontFamily: normalizeFontFamilyValue(event.target.value) })}
+                onChange={(val) => applyTextStyle({ fontFamily: normalizeFontFamilyValue(val) })}
                 disabled={!selectedTextOverlay || isAdminReadOnly}
-                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs"
-              >
-                {FONT_OPTIONS.map((font) => (
-                  <option key={font.value} value={font.value}>
-                    {font.label}
-                  </option>
-                ))}
-              </select>
+                options={FONT_OPTIONS.map((font) => ({
+                  label: font.label,
+                  value: font.value,
+                  style: { fontFamily: font.value }
+                }))}
+                className="!bg-white !text-slate-700 !border-slate-200 !rounded-full !h-10 !px-3 !py-2 !text-xs !w-40"
+              />
 
               <input
                 type="number"

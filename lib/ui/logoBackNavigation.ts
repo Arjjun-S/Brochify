@@ -1,6 +1,6 @@
-import type { SessionRole } from "@/lib/server/types";
+import type { UserRole } from "@/lib/server/types";
 
-export function resolveLogoBackNavigation(pathname: string, role: SessionRole): string {
+export function resolveLogoBackNavigation(pathname: string, role: UserRole): string {
   if (role === "admin") {
     if (pathname.startsWith("/certificate")) return "/admin/certificates";
     if (pathname.startsWith("/admin/certificates")) return "/admin/modules";

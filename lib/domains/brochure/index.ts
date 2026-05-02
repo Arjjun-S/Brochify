@@ -178,7 +178,7 @@ const legacyFontValueMap: Record<string, string> = {
   "var(--font-libre-baskerville)": '"Libre Baskerville", serif',
 };
 
-export const FONT_OPTIONS = [
+export const FONT_OPTIONS: FontOption[] = [
   { label: "Inter", value: "Inter, sans-serif", googleFamilyQuery: "Inter:wght@400;500;600;700;800" },
   { label: "Roboto", value: "Roboto, sans-serif", googleFamilyQuery: "Roboto:wght@400;500;700" },
   { label: "Open Sans", value: '"Open Sans", sans-serif', googleFamilyQuery: "Open+Sans:wght@400;500;600;700" },
@@ -199,7 +199,7 @@ export const FONT_OPTIONS = [
   { label: "Lobster", value: "Lobster, cursive", googleFamilyQuery: "Lobster" },
   { label: "Satisfy", value: "Satisfy, cursive", googleFamilyQuery: "Satisfy" },
   { label: "Caveat", value: "Caveat, cursive", googleFamilyQuery: "Caveat:wght@400;500;600;700" },
-] as const satisfies readonly FontOption[];
+];
 
 const FONT_VALUE_SET = new Set(FONT_OPTIONS.map((font) => font.value));
 const FONT_LABEL_TO_VALUE = new Map(

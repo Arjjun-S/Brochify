@@ -19,6 +19,7 @@ export function useThemePreference() {
   const [theme, setTheme] = useState<AppTheme>("light");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(readStoredTheme());
   }, []);
 

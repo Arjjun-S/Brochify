@@ -13,7 +13,7 @@ function cn(...inputs: ClassValue[]) {
 export interface SelectBoxProps {
   value?: string;
   onChange?: (value: string) => void;
-  options: { label: string; value: string }[];
+  options: { label: string; value: string; style?: React.CSSProperties }[];
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -54,6 +54,7 @@ export function SelectBox({
                 key={option.value}
                 value={option.value}
                 className="relative flex w-full cursor-pointer select-none items-center rounded-lg py-2.5 pl-9 pr-3 text-sm font-medium outline-none focus:bg-indigo-50 focus:text-indigo-900 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 transition-colors"
+                style={option.style}
               >
                 <span className="absolute left-3 flex h-3.5 w-3.5 items-center justify-center">
                   <SelectPrimitive.ItemIndicator>

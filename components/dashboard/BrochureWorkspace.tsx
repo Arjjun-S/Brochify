@@ -1,29 +1,25 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRightLeft,
   CalendarDays,
-  CheckCircle2,
-  Clock3,
   FileBadge2,
-  FolderKanban,
   LogOut,
   MoonStar,
   PlusCircle,
   Search,
   Settings2,
-  Sparkles,
   SunMedium,
   Trash2,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/ui/cn";
 import { useThemePreference } from "./useThemePreference";
+import { SelectBox } from "@/components/ui/SelectBox";
+import { Logo } from "@/components/ui/Logo";
 import type { BrochureRecord, BrochureStatus, SessionUser } from "@/lib/server/types";
 
 type BrochureStatusFilter = "all" | BrochureStatus;
@@ -167,15 +163,8 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
       )}>
         <div className="flex items-center justify-between gap-4">
           {/* Logo */}
-          <Link href="/faculty/modules">
-            <Image
-              src="/Main-logo.png"
-              alt="Brochify Logo"
-              width={160}
-              height={40}
-              className="h-10 w-auto object-contain cursor-pointer"
-              priority
-            />
+          <Link href="/faculty/modules" className="cursor-pointer">
+            <Logo appearance={isDark ? "dark" : "light"} />
           </Link>
 
           {/* Right Side Controls */}
@@ -336,31 +325,23 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
               />
             </label>
 
-            <select
+            <SelectBox
               value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value as BrochureStatusFilter)}
+              onChange={(val) => setTypeFilter(val as BrochureStatusFilter)}
+              options={statusFilterOptions}
               className={cn(
-                "rounded-2xl border px-4 py-2.5 text-sm outline-none transition",
-                isDark ? "border-slate-700 bg-slate-900 text-slate-200 focus:border-indigo-500" : "border-slate-200 bg-white text-slate-700 focus:border-indigo-400",
+                isDark ? "border-slate-700 bg-slate-900 text-slate-200" : "border-slate-200 bg-white text-slate-700"
               )}
-            >
-              {statusFilterOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            />
 
-            <select
+            <SelectBox
               value={dateFilter}
-              onChange={(event) => setDateFilter(event.target.value as DateFilter)}
+              onChange={(val) => setDateFilter(val as DateFilter)}
+              options={dateFilterOptions}
               className={cn(
-                "rounded-2xl border px-4 py-2.5 text-sm outline-none transition",
-                isDark ? "border-slate-700 bg-slate-900 text-slate-200 focus:border-indigo-500" : "border-slate-200 bg-white text-slate-700 focus:border-indigo-400",
+                isDark ? "border-slate-700 bg-slate-900 text-slate-200" : "border-slate-200 bg-white text-slate-700"
               )}
-            >
-              {dateFilterOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            />
           </div>
 
           <p className={cn("mt-3 text-xs font-medium", isDark ? "text-slate-400" : "text-slate-500")}>

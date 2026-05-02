@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import GuidedFlowPanel from "@/components/studio/editor/GuidedFlowPanel";
+import { SelectBox } from "@/components/ui/SelectBox";
+import { Logo } from "@/components/ui/Logo";
 import {
   BrochureData,
   createEmptyBrochureData,
@@ -713,22 +715,7 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
         isDark ? "border-slate-700 bg-[#111827]/85" : "border-slate-200 bg-white/85",
       )}>
         <Link href={logoBackHref} className="mb-8 flex items-center gap-3">
-          <Image
-            src="/icon-logo.png"
-            alt="Brochify Icon"
-            width={38}
-            height={38}
-            className="h-9 w-9 object-contain"
-            priority
-          />
-          <Image
-            src="/text-logo.png"
-            alt="Brochify Wordmark"
-            width={158}
-            height={34}
-            className="h-8 w-auto object-contain"
-            priority
-          />
+          <Logo appearance={isDark ? "dark" : "light"} iconClassName="h-9 w-9" textClassName="text-lg" />
         </Link>
 
         <nav className="space-y-1.5">
@@ -875,31 +862,21 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                 />
               </label>
 
-              <select
+              <SelectBox
                 value={typeFilter}
-                onChange={(event) =>
-                  setTypeFilter(event.target.value as "all" | BrochureStatus)
+                onChange={(val) =>
+                  setTypeFilter(val as "all" | BrochureStatus)
                 }
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-primary/40"
-              >
-                {statusFilterOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                options={statusFilterOptions}
+                className="!bg-white !text-slate-700 !border-slate-200"
+              />
 
-              <select
+              <SelectBox
                 value={dateFilter}
-                onChange={(event) => setDateFilter(event.target.value as DateFilter)}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-primary/40"
-              >
-                {dateFilterOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setDateFilter(val as DateFilter)}
+                options={dateFilterOptions}
+                className="!bg-white !text-slate-700 !border-slate-200"
+              />
             </div>
 
             <p className="mt-3 text-xs font-medium text-slate-500">
@@ -1107,25 +1084,20 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
                       />
                     </label>
 
-                    <label className="block space-y-1">
+                    <div className="block space-y-1">
                       <span className="text-sm font-semibold text-slate-700">Select Admin</span>
-                      <select
+                      <SelectBox
                         value={assignedAdminId}
-                        onChange={(event) => setAssignedAdminId(event.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-primary/40"
-                        required
+                        onChange={setAssignedAdminId}
+                        options={
+                          admins.length > 0
+                            ? admins.map(a => ({ label: a.username, value: String(a.id) }))
+                            : [{ label: "No admins available", value: "" }]
+                        }
+                        className="!bg-white !text-slate-700 !border-slate-200"
                         disabled={loadingAdmins || admins.length === 0}
-                      >
-                        {admins.length === 0 ? (
-                          <option value="">No admins available</option>
-                        ) : null}
-                        {admins.map((admin) => (
-                          <option key={admin.id} value={admin.id}>
-                            {admin.username}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                      />
+                    </div>
 
                     {createError && (
                       <p className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

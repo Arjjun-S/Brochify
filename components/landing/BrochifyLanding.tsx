@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { Logo } from "@/components/ui/Logo";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -205,23 +205,8 @@ export default function BrochifyLanding() {
       <div className="relative z-10">
         <header className="px-4 pt-4 sm:px-6 md:pt-6">
           <div className="mx-auto flex h-14 w-full max-w-[1180px] items-center justify-between rounded-full border border-white/5 bg-[#0C0916]/80 px-3.5 shadow-2xl backdrop-blur-2xl sm:px-5">
-            <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-              <Image
-                src="/icon-logo.png"
-                alt=""
-                width={36}
-                height={36}
-                className="h-8 w-8 object-contain"
-                priority
-              />
-              <Image
-                src="/text-logo.png"
-                alt="Brochify"
-                width={152}
-                height={34}
-                className="h-6 w-auto object-contain sm:h-7 invert opacity-90 brightness-200"
-                priority
-              />
+            <Link href="/" className="transition-opacity hover:opacity-80">
+              <Logo appearance="dark" iconClassName="h-8 w-8" textClassName="opacity-90 text-xl sm:text-2xl" />
             </Link>
 
             <div className="flex items-center gap-1.5 sm:gap-2">

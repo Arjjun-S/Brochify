@@ -6,10 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
-  CheckCircle2,
-  Clock3,
   FileBadge2,
-  FileCheck2,
   FolderKanban,
   Home,
   LayoutTemplate,
@@ -28,9 +25,11 @@ import {
   normalizeCertificateTemplateInput,
   type CertificateTemplateInput,
 } from "@/lib/domains/certificate";
+import { SelectBox } from "@/components/ui/SelectBox";
+import { Logo } from "@/components/ui/Logo";
 import { cn } from "@/lib/ui/cn";
 import { resolveLogoBackNavigation } from "@/lib/ui/logoBackNavigation";
-import type { CertificateRecord, CertificateStatus, SessionUser } from "@/lib/server/types";
+import type { CertificateRecord, SessionUser } from "@/lib/server/types";
 import { useThemePreference } from "./useThemePreference";
 
 type FacultyCertificateWorkspaceProps = {
@@ -154,7 +153,6 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
   const dashboardHomeHref = "/faculty/brochure";
   const settingsHref = "/faculty/settings";
   const logoBackHref = resolveLogoBackNavigation(pathname || "/faculty/certificate", user.role);
-  const modulesHref = "/faculty/modules";
 
   const loadCertificates = useCallback(async () => {
     setLoading(true);
@@ -425,8 +423,7 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
         isDark ? "border-slate-700 bg-[#111827]/85" : "border-slate-200 bg-white/85",
       )}>
         <Link href={logoBackHref} className="mb-8 flex items-center gap-3">
-          <Image src="/icon-logo.png" alt="Brochify Icon" width={38} height={38} className="h-9 w-9 object-contain" priority />
-          <Image src="/text-logo.png" alt="Brochify Wordmark" width={158} height={34} className="h-8 w-auto object-contain" priority />
+          <Logo appearance={isDark ? "dark" : "light"} iconClassName="h-9 w-9" textClassName="text-lg" />
         </Link>
 
         <nav className="space-y-1.5">
@@ -535,29 +532,19 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
                 />
               </label>
 
-              <select
+              <SelectBox
                 value={typeFilter}
-                onChange={(event) => setTypeFilter(event.target.value as "all" | UiStatus)}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-primary/40"
-              >
-                {statusFilterOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setTypeFilter(val as "all" | UiStatus)}
+                options={statusFilterOptions}
+                className="!bg-white !text-slate-700 !border-slate-200"
+              />
 
-              <select
+              <SelectBox
                 value={dateFilter}
-                onChange={(event) => setDateFilter(event.target.value as DateFilter)}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-primary/40"
-              >
-                {dateFilterOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setDateFilter(val as DateFilter)}
+                options={dateFilterOptions}
+                className="!bg-white !text-slate-700 !border-slate-200"
+              />
             </div>
 
             <p className="mt-3 text-xs font-medium text-slate-500">{filteredCertificates.length} results in certificates</p>
@@ -658,16 +645,19 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
 
               <label className="block space-y-1">
                 <span className="text-sm font-semibold text-slate-700">Certificate Type</span>
-                <select
-                  value={certificateType}
-                  onChange={(event) => setCertificateType(event.target.value as CertificateType)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
-                >
-                  <option value="workshop">Workshop</option>
-                  <option value="hackathon">Hackathon</option>
-                  <option value="symposium">Symposium</option>
-                  <option value="custom">Custom</option>
-                </select>
+                <div className="block">
+                  <SelectBox
+                    value={certificateType}
+                    onChange={(val) => setCertificateType(val as CertificateType)}
+                    options={[
+                      { label: "Workshop", value: "workshop" },
+                      { label: "Hackathon", value: "hackathon" },
+                      { label: "Symposium", value: "symposium" },
+                      { label: "Custom", value: "custom" },
+                    ]}
+                    className="!bg-white !text-slate-700 !border-slate-200"
+                  />
+                </div>
                 <p className="text-xs text-slate-500">
                   Template sentence will auto-adapt based on the selected type.
                 </p>
@@ -743,15 +733,20 @@ export default function FacultyCertificateWorkspace({ user }: FacultyCertificate
                 )}
               </div>
 
-              <label className="block space-y-1">
+              <div className="block space-y-1">
                 <span className="text-sm font-semibold text-slate-700">Select Admin Reviewer</span>
-                <select value={assignedAdminId} onChange={(event) => setAssignedAdminId(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm" required disabled={loadingAdmins || admins.length === 0}>
-                  {admins.length === 0 ? <option value="">No admins available</option> : null}
-                  {admins.map((admin) => (
-                    <option key={admin.id} value={admin.id}>{admin.username}</option>
-                  ))}
-                </select>
-              </label>
+                <SelectBox 
+                  value={assignedAdminId} 
+                  onChange={setAssignedAdminId} 
+                  options={
+                    admins.length > 0 
+                      ? admins.map(a => ({ label: a.username, value: String(a.id) })) 
+                      : [{ label: "No admins available", value: "" }]
+                  }
+                  className="!bg-white !text-slate-700 !border-slate-200" 
+                  disabled={loadingAdmins || admins.length === 0} 
+                />
+              </div>
 
               <p className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">The certificate header, body text, and placeholders are handled internally by Brochify.</p>
 

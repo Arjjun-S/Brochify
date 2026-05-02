@@ -1,12 +1,13 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { PlusCircle, X } from "lucide-react";
+import { PlusCircle } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 import { useThemePreference } from "@/components/dashboard/useThemePreference";
+import { SelectBox } from "@/components/ui/SelectBox";
+import { Logo } from "@/components/ui/Logo";
 
 type AdminOption = {
   id: number;
@@ -78,7 +79,7 @@ export default function FacultyBrochureCreatePage() {
       )}>
         <div className="flex items-center justify-between gap-4">
           <Link href="/faculty/brochure" className="flex items-center gap-3">
-            <Image src="/Main-logo.png" alt="Brochify Logo" width={160} height={40} className="h-10 w-auto object-contain" priority />
+            <Logo appearance={isDark ? "dark" : "light"} />
           </Link>
           <button
             type="button"
@@ -151,28 +152,24 @@ export default function FacultyBrochureCreatePage() {
               />
             </label>
 
-            <label className="block space-y-1">
+            <div className="block space-y-1">
               <span className={cn("text-sm font-semibold", isDark ? "text-slate-200" : "text-slate-700")}>Select Admin</span>
-              <select
+              <SelectBox
                 value={assignedAdminId}
-                onChange={(event) => setAssignedAdminId(event.target.value)}
+                onChange={setAssignedAdminId}
+                options={
+                  loadingAdmins 
+                    ? [{ label: "Loading admins...", value: "" }]
+                    : admins.length > 0
+                      ? admins.map(a => ({ label: a.username, value: String(a.id) }))
+                      : [{ label: "No admins available", value: "" }]
+                }
                 className={cn(
-                  "w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition",
-                  isDark ? "border-slate-700 bg-slate-900 text-slate-200 focus:border-indigo-500" : "border-slate-200 bg-white text-slate-700 focus:border-indigo-400",
+                  isDark ? "border-slate-700 bg-slate-900 text-slate-200" : "border-slate-200 bg-white text-slate-700"
                 )}
-                required
                 disabled={loadingAdmins || admins.length === 0}
-              >
-                {loadingAdmins ? (
-                  <option value="">Loading admins...</option>
-                ) : admins.length === 0 ? (
-                  <option value="">No admins available</option>
-                ) : null}
-                {admins.map((admin) => (
-                  <option key={admin.id} value={admin.id}>{admin.username}</option>
-                ))}
-              </select>
-            </label>
+              />
+            </div>
 
             {error && (
               <p className={cn(

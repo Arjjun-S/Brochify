@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import Image from 'next/image';
 import { getLoadingTaskMeta, LoadingTask } from '@/lib/system/loading/loadingTaskManager';
 
 interface LoadingOverlayProps {
@@ -20,7 +21,7 @@ export default function LoadingOverlay({ isVisible, message, task = 'idle' }: Lo
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/70 px-8 py-10 w-[360px] max-w-[90vw] flex flex-col items-center gap-6 text-center">
-                <img src="/icon-logo.png" alt="Brochify" className="w-16 h-16 object-contain" />
+                <Image src="/icon-logo.png" alt="Brochify" width={64} height={64} className="w-16 h-16 object-contain" priority />
 
                 <div className="flex items-center gap-3">
                     <div
