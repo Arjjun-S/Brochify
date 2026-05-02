@@ -76,6 +76,18 @@ model Certificate {
   @@map("certificates")
 }
 
+model Asset {
+  id           Int      @id @default(autoincrement())
+  name         String   @db.VarChar(255)
+  type         String   @db.VarChar(50)
+  cloudinaryUrl String  @map("cloudinary_url") @db.VarChar(512)
+  cloudinaryPublicId String @map("cloudinary_public_id") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([type])
+  @@map("assets")
+}
+
 model DesignProject {
   id            Int      @id @default(autoincrement())
   name          String   @db.VarChar(255)
