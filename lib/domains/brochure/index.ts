@@ -116,6 +116,8 @@ export type TextOverlayItem = OverlayBase & {
   fontFamily: string;
   fontSize: number;
   fontWeight: number;
+  fontStyle?: "normal" | "italic";
+  textDecoration?: "none" | "underline";
   color: string;
   align: OverlayTextAlign;
   backgroundColor: string;

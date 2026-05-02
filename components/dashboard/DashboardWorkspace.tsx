@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarDays,
   CheckCircle2,
   Clock3,
   FileCheck2,
+  FileBadge2,
   FolderKanban,
   Home,
   LayoutTemplate,
@@ -30,12 +31,14 @@ import {
 } from "@/lib/domains/brochure";
 import { generateBrochureData } from "@/lib/services/ai/openrouterClient";
 import { cn } from "@/lib/ui/cn";
+import { resolveLogoBackNavigation } from "@/lib/ui/logoBackNavigation";
 import type {
   BrochureRecord,
   BrochureStatus,
   EditorState,
   SessionUser,
 } from "@/lib/server/types";
+import { useThemePreference } from "./useThemePreference";
 
 type DashboardWorkspaceProps = {
   user: SessionUser;
@@ -257,6 +260,8 @@ function BrochureMiniPreview({ brochure }: { brochure: BrochureRecord }) {
 
 export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { isDark } = useThemePreference();
   const [brochures, setBrochures] = useState<BrochureRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -290,7 +295,8 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
   const detailBusy = detailLoading || detailSaving || detailEnhancing;
 
   const dashboardHomeHref =
-    user.role === "admin" ? "/admin/dashboard" : "/faculty/dashboard";
+    user.role === "admin" ? "/admin/modules" : "/faculty/modules";
+  const logoBackHref = resolveLogoBackNavigation(pathname || dashboardHomeHref, user.role);
 
   const loadBrochures = useCallback(async () => {
     setLoading(true);
@@ -696,9 +702,17 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
     user.role === "admin" ? "Projects" : "My Brochures";
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-indigo-100 text-slate-900">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-slate-200 bg-white/85 p-6 backdrop-blur-lg lg:flex">
-        <Link href={dashboardHomeHref} className="mb-8 flex items-center gap-3">
+    <main className={cn(
+      "min-h-screen transition-colors duration-300",
+      isDark
+        ? "bg-gradient-to-br from-[#0B0F1A] via-[#0f172a] to-[#111827] text-[#E5E7EB]"
+        : "bg-gradient-to-br from-slate-100 via-slate-50 to-indigo-100 text-slate-900",
+    )}>
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r p-6 backdrop-blur-lg transition-colors duration-300 lg:flex",
+        isDark ? "border-slate-700 bg-[#111827]/85" : "border-slate-200 bg-white/85",
+      )}>
+        <Link href={logoBackHref} className="mb-8 flex items-center gap-3">
           <Image
             src="/icon-logo.png"
             alt="Brochify Icon"
@@ -735,7 +749,12 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
 
           <Link
             href={dashboardHomeHref}
-            className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+            className={cn(
+              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+              isDark
+                ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            )}
           >
             <Home className="h-4 w-4" />
             Home
@@ -743,11 +762,29 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
 
           <a
             href="#brochure-grid"
-            className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+            className={cn(
+              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+              isDark
+                ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            )}
           >
             <FolderKanban className="h-4 w-4" />
             {user.role === "faculty" ? "My Brochures" : "Projects"}
           </a>
+
+          <Link
+            href={user.role === "faculty" ? "/faculty/certificate" : "/admin/certificates"}
+            className={cn(
+              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+              isDark
+                ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            )}
+          >
+            <FileBadge2 className="h-4 w-4" />
+            Certificates
+          </Link>
 
           <button
             type="button"
@@ -758,20 +795,37 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
             Templates
           </button>
 
-          <button
-            type="button"
-            disabled
-            className="flex w-full cursor-not-allowed items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-slate-400"
+          <Link
+            href={user.role === "faculty" ? "/faculty/settings" : "/admin/modules"}
+            className={cn(
+              "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
+              user.role === "faculty"
+                ? isDark
+                  ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                : "cursor-not-allowed text-slate-400",
+            )}
+            aria-disabled={user.role !== "faculty"}
+            onClick={(event) => {
+              if (user.role !== "faculty") {
+                event.preventDefault();
+              }
+            }}
           >
             <Settings2 className="h-4 w-4" />
             Settings
-          </button>
+          </Link>
         </nav>
 
         <button
           type="button"
           onClick={handleLogout}
-          className="mt-auto flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+          className={cn(
+            "mt-auto flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition",
+            isDark
+              ? "border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+              : "border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+          )}
         >
           <LogOut className="h-4 w-4" />
           Logout
@@ -779,7 +833,10 @@ export default function DashboardWorkspace({ user }: DashboardWorkspaceProps) {
       </aside>
 
       <div className="flex-1 lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 px-6 py-5 backdrop-blur-lg md:px-10">
+        <header className={cn(
+          "sticky top-0 z-30 border-b px-6 py-5 backdrop-blur-lg transition-colors duration-300 md:px-10",
+          isDark ? "border-slate-700 bg-[#111827]/80" : "border-slate-200 bg-white/80",
+        )}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-700">

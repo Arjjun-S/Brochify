@@ -109,7 +109,7 @@ export async function getServerSession(): Promise<SessionUser | null> {
 }
 
 function roleHome(role: UserRole): string {
-	return role === "admin" ? "/admin/dashboard" : "/faculty/dashboard";
+	return role === "admin" ? "/admin/modules" : "/faculty/modules";
 }
 
 export async function requireServerSession(allowedRoles?: UserRole[]): Promise<SessionUser> {
