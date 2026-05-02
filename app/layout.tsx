@@ -32,8 +32,8 @@ const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces" });
 const libreBaskerville = Libre_Baskerville({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-libre-baskerville" });
 
 export const metadata: Metadata = {
-  title: "Brochify - AI University Brochure Builder",
-  description: "Generate professional university brochures in seconds using AI.",
+  title: "Brochify — University brochures & certificates",
+  description: "Brochures and certificates for faculty teams—from draft to approved PDF.",
   icons: {
     icon: [
       { url: "/icon-logo.png", type: "image/png", sizes: "32x32" },
