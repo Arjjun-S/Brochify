@@ -37,6 +37,16 @@ function rect(
   height: number,
   fill: string,
   rx = 0,
+  options?: {
+    stroke?: string | null;
+    strokeWidth?: number;
+    strokeDashArray?: number[];
+    selectable?: boolean;
+    evented?: boolean;
+    hasControls?: boolean;
+    name?: string;
+    pageIndex?: number;
+  },
 ) {
   return {
     type: "rect",
@@ -50,11 +60,14 @@ function rect(
     rx,
     ry: rx,
     fill,
-    stroke: null,
-    strokeWidth: 0,
-    selectable: false,
-    evented: false,
-    hasControls: false,
+    stroke: options?.stroke ?? null,
+    strokeWidth: options?.strokeWidth ?? 0,
+    strokeDashArray: options?.strokeDashArray,
+    selectable: options?.selectable ?? false,
+    evented: options?.evented ?? (options?.selectable ?? false),
+    hasControls: options?.hasControls ?? (options?.selectable ?? false),
+    name: options?.name,
+    pageIndex: options?.pageIndex,
     scaleX: 1,
     scaleY: 1,
     angle: 0,
@@ -71,6 +84,14 @@ function text(
   fontWeight = 400,
   fontFamily = "Arial",
   textAlign = "left",
+  options?: {
+    editable?: boolean;
+    selectable?: boolean;
+    evented?: boolean;
+    hasControls?: boolean;
+    name?: string;
+    pageIndex?: number;
+  },
 ) {
   return {
     type: "textbox",
@@ -88,9 +109,12 @@ function text(
     lineHeight: 1.3,
     textAlign,
     text: value,
-    editable: true,
-    selectable: true,
-    hasControls: true,
+    editable: options?.editable ?? true,
+    selectable: options?.selectable ?? true,
+    evented: options?.evented ?? (options?.selectable ?? true),
+    hasControls: options?.hasControls ?? (options?.selectable ?? true),
+    name: options?.name,
+    pageIndex: options?.pageIndex,
     scaleX: 1,
     scaleY: 1,
     angle: 0,
@@ -117,115 +141,447 @@ function line(x1: number, y1: number, x2: number, y2: number, stroke: string, st
   };
 }
 
+function circle(
+  left: number,
+  top: number,
+  radius: number,
+  fill: string,
+  options?: {
+    stroke?: string | null;
+    strokeWidth?: number;
+    strokeDashArray?: number[];
+    selectable?: boolean;
+    evented?: boolean;
+    hasControls?: boolean;
+  },
+) {
+  return {
+    type: "circle",
+    version: "5.3.0",
+    originX: "left",
+    originY: "top",
+    left,
+    top,
+    radius,
+    fill,
+    stroke: options?.stroke ?? null,
+    strokeWidth: options?.strokeWidth ?? 0,
+    strokeDashArray: options?.strokeDashArray,
+    selectable: options?.selectable ?? false,
+    evented: options?.evented ?? (options?.selectable ?? false),
+    hasControls: options?.hasControls ?? (options?.selectable ?? false),
+    scaleX: 1,
+    scaleY: 1,
+    angle: 0,
+  };
+}
+
+function sectionHeader(
+  left: number,
+  top: number,
+  width: number,
+  label: string,
+  fill = "#0b4ca8",
+  labelColor = "#ffffff",
+) {
+  return [
+    rect(left, top, width, 30, fill, 8),
+    text(label, left + 10, top + 6, width - 20, 13, labelColor, 700, "Arial", "left", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+    }),
+  ];
+}
+
+function placeholderBox(
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+  label: string,
+) {
+  return [
+    rect(left, top, width, height, "#ffffff", 10, {
+      stroke: "#2563eb",
+      strokeWidth: 2,
+      strokeDashArray: [8, 6],
+      selectable: true,
+      evented: true,
+      hasControls: true,
+    }),
+    text(`[${label}]`, left + 8, top + height / 2 - 10, width - 16, 14, "#1d4ed8", 700, "Arial", "center"),
+  ];
+}
+
 // ─── Trifold Templates ──────────────────────────────────────────────────
 
-const W_TRI = 1754;
-const H_TRI = 1240;
-const COL_W = Math.floor(W_TRI / 3);
+const TRI_SIDE_W = 1754;
+const TRI_SIDE_H = 1240;
+const TRI_PAGE_GAP = 120;
+const TRI_OUTER_MARGIN = 40;
+const W_TRI = TRI_SIDE_W * 2 + TRI_PAGE_GAP + TRI_OUTER_MARGIN * 2;
+const H_TRI = TRI_SIDE_H;
+const TRI_PANEL_W = TRI_SIDE_W / 3;
 
-function trifoldClassic(): BuiltInTemplate {
+function trifoldFdpTwoSide(): BuiltInTemplate {
+  const frontPageX = TRI_OUTER_MARGIN;
+  const backPageX = TRI_OUTER_MARGIN + TRI_SIDE_W + TRI_PAGE_GAP;
+
+  const frontLeftX = frontPageX;
+  const frontMiddleX = frontPageX + TRI_PANEL_W;
+  const frontRightX = frontPageX + TRI_PANEL_W * 2;
+
+  const backLeftX = backPageX;
+  const backMiddleX = backPageX + TRI_PANEL_W;
+  const backRightX = backPageX + TRI_PANEL_W * 2;
+
+  const tableX = backRightX + 20;
+  const tableY = 92;
+  const tableW = TRI_PANEL_W - 40;
+  const rowH = 86;
+
   const objects = [
-    workspace(W_TRI, H_TRI, "#ffffff"),
-    rect(0, 0, W_TRI, 160, "#1e3a5f"),
-    text("Your Event Title", 48, 40, W_TRI - 96, 42, "#ffffff", 700, "Arial", "center"),
-    text("Department Name  |  Date Range", 48, 100, W_TRI - 96, 18, "#94b8d9", 500, "Arial", "center"),
-    line(COL_W, 180, COL_W, H_TRI - 60, "#d1d5db", 1),
-    line(COL_W * 2, 180, COL_W * 2, H_TRI - 60, "#d1d5db", 1),
-    rect(24, 190, COL_W - 48, 100, "#e8f0fe", 12),
-    text("About the Program", 44, 205, COL_W - 88, 20, "#1e3a5f", 700),
-    text("Add a brief description of your program, workshop, or event here. Highlight key objectives and what participants will gain.", 44, 240, COL_W - 88, 14, "#374151"),
-    text("Schedule & Topics", 44, 370, COL_W - 88, 20, "#1e3a5f", 700),
-    text("Day 1: Topic A — Morning Session\nDay 1: Topic B — Afternoon Session\nDay 2: Topic C — Morning Session\nDay 2: Topic D — Afternoon Session", 44, 405, COL_W - 88, 14, "#374151"),
-    rect(COL_W + 24, 190, COL_W - 48, 100, "#e8f0fe", 12),
-    text("Speakers & Guests", COL_W + 44, 205, COL_W - 88, 20, "#1e3a5f", 700),
-    text("Dr. Jane Smith — AI Researcher, MIT\nProf. John Doe — Data Science, Stanford\nMs. Sarah Lee — Industry Expert, Google", COL_W + 44, 310, COL_W - 88, 14, "#374151"),
-    text("Program Highlights", COL_W + 44, 500, COL_W - 88, 20, "#1e3a5f", 700),
-    text("• Hands-on workshops\n• Industry expert sessions\n• Networking opportunities\n• Certificate of participation", COL_W + 44, 535, COL_W - 88, 14, "#374151"),
-    rect(COL_W * 2 + 24, 190, COL_W - 48, 100, "#e8f0fe", 12),
-    text("Registration", COL_W * 2 + 44, 205, COL_W - 88, 20, "#1e3a5f", 700),
-    text("Early Bird: ₹500\nRegular: ₹750\nDeadline: 15th March 2026", COL_W * 2 + 44, 310, COL_W - 88, 14, "#374151"),
-    text("Contact Information", COL_W * 2 + 44, 500, COL_W - 88, 20, "#1e3a5f", 700),
-    text("Email: event@college.edu\nPhone: +91 98765 43210\nWebsite: www.college.edu/event", COL_W * 2 + 44, 535, COL_W - 88, 14, "#374151"),
-    rect(0, H_TRI - 50, W_TRI, 50, "#1e3a5f"),
-    text("College Name  •  Address  •  www.college.edu", 48, H_TRI - 40, W_TRI - 96, 14, "#94b8d9", 500, "Arial", "center"),
+    workspace(W_TRI, H_TRI, "#e5e7eb"),
+
+    rect(frontPageX, 0, TRI_SIDE_W, H_TRI, "#ffffff", 16, {
+      stroke: "#94a3b8",
+      strokeWidth: 2,
+      name: "page-frame",
+      pageIndex: 1,
+    }),
+    rect(backPageX, 0, TRI_SIDE_W, H_TRI, "#ffffff", 16, {
+      stroke: "#94a3b8",
+      strokeWidth: 2,
+      name: "page-frame",
+      pageIndex: 2,
+    }),
+    text("PAGE 1 - OUTER SIDE", frontPageX + 14, 8, 220, 12, "#334155", 700, "Arial", "left", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      name: "page-label",
+      pageIndex: 1,
+    }),
+    text("PAGE 2 - INNER SIDE", backPageX + 14, 8, 220, 12, "#334155", 700, "Arial", "left", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      name: "page-label",
+      pageIndex: 2,
+    }),
+
+    rect(frontMiddleX, 0, TRI_PANEL_W, H_TRI, "#0b4ca8"),
+    rect(backLeftX, 0, TRI_PANEL_W, H_TRI, "#0a4a96"),
+    rect(backMiddleX, 0, TRI_PANEL_W, H_TRI, "#f5f7fb"),
+    rect(backRightX, 0, TRI_PANEL_W, H_TRI, "#0b4ca8"),
+
+    line(frontPageX + TRI_PANEL_W, 0, frontPageX + TRI_PANEL_W, H_TRI, "#dbeafe", 1),
+    line(frontPageX + TRI_PANEL_W * 2, 0, frontPageX + TRI_PANEL_W * 2, H_TRI, "#dbeafe", 1),
+    line(backPageX + TRI_PANEL_W, 0, backPageX + TRI_PANEL_W, H_TRI, "#93c5fd", 1),
+    line(backPageX + TRI_PANEL_W * 2, 0, backPageX + TRI_PANEL_W * 2, H_TRI, "#93c5fd", 1),
+    line(frontPageX + TRI_SIDE_W + TRI_PAGE_GAP / 2, 0, frontPageX + TRI_SIDE_W + TRI_PAGE_GAP / 2, H_TRI, "#64748b", 2),
+
+    // FRONT SIDE - Panel 1 (Committees)
+    rect(frontLeftX + 18, 24, TRI_PANEL_W - 36, H_TRI - 48, "#f8fbff", 16, {
+      stroke: "#3b82f6",
+      strokeWidth: 2,
+    }),
+
+    ...sectionHeader(frontLeftX + 34, 40, TRI_PANEL_W - 68, "ADVISORY COMMITTEE"),
+    text(
+      "Dr. P. Sathivel, Chair, IEEE Madras Section\nDr. S. Radha, Secretary, IEEE Madras Section\nDr. S. Brindha, Treasurer, IEEE Madras Section\nDr. S. Arumugaperumal, Vice Chair, IEEE Madras Section",
+      frontLeftX + 38,
+      78,
+      TRI_PANEL_W - 76,
+      11,
+      "#0f172a",
+      500,
+    ),
+
+    ...sectionHeader(frontLeftX + 34, 196, TRI_PANEL_W - 68, "ORGANIZING COMMITTEE"),
+    text(
+      "CHIEF PATRONS\nDr. T. R. Paarivendhar, Chancellor, SRMIST\nDr. Ravi Pachamoothoo, Pro-Chancellor, SRMIST\n\nPATRONS\nDr. C. Muthamizhchelvan, Vice Chancellor, SRMIST, KTR\nDr. S. Ponnusamy, Registrar, SRMIST, KTR",
+      frontLeftX + 38,
+      234,
+      TRI_PANEL_W - 76,
+      11,
+      "#0f172a",
+      500,
+    ),
+
+    ...sectionHeader(frontLeftX + 34, 504, TRI_PANEL_W - 68, "ACADEMIC ADVISORY COMMITTEE"),
+    text(
+      "Dr. Leenus Jesu Martin M\nDr. Sridhar S S\nDr. Revathi Venkatasamy\nDr. M. Pushpalatha\nDr. C. Lokasami\nDr. S. Niranjana",
+      frontLeftX + 38,
+      542,
+      TRI_PANEL_W - 76,
+      11,
+      "#0f172a",
+      500,
+    ),
+
+    ...sectionHeader(frontLeftX + 34, 760, TRI_PANEL_W - 68, "CONVENER / CO-CONVENER / CO-ORDINATORS"),
+    text(
+      "Dr. Gokulakrishnan D, Associate Professor, CTECH\nDr. K. Kishore Anthony, Assistant Professor, CTECH\nDr. Muralidharan C, Assistant Professor, CTECH\nDr. Arulalan V, Assistant Professor, CTECH\nDr. Arunachalam N, Assistant Professor, CTECH\nDr. Abirami G, Assistant Professor, CTECH\nDr. Balamurugan G, Associate Professor, CTECH\nDr. V. Vijayakumar K, Assistant Professor, CTECH",
+      frontLeftX + 38,
+      798,
+      TRI_PANEL_W - 76,
+      10,
+      "#0f172a",
+      500,
+    ),
+
+    // FRONT SIDE - Panel 2 (Registration, QR, Account, Contact)
+    rect(frontMiddleX + 92, 20, TRI_PANEL_W - 184, 42, "#ffffff", 22),
+    text("REGISTRATION DETAIL", frontMiddleX + 102, 31, TRI_PANEL_W - 204, 20, "#0b4ca8", 700, "Arial", "center", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+    }),
+
+    rect(frontMiddleX + 20, 82, TRI_PANEL_W - 40, 560, "#0d55c9", 10, {
+      stroke: "#93c5fd",
+      strokeWidth: 2,
+    }),
+    text(
+      "Registration Fee:\nIEEE Member            : Rs. 500/-\nNon IEEE Member        : Rs. 750/-\n(Refundable for IEEE membership enrollment)\nLast date for registration: 19th March 2026\nRegistration Link: https://forms.gle/TEMPLATE-LINK\n\nNote:\n• Registration confirmation by mail\n• Session timing: 9:30 AM - 4:00 PM\n• Registration is compulsory for all participants\n• Participation certificate provided by IEEE\n• Laptops are required for hands-on sessions",
+      frontMiddleX + 34,
+      106,
+      TRI_PANEL_W - 68,
+      14,
+      "#ffffff",
+      500,
+    ),
+    ...placeholderBox(frontMiddleX + TRI_PANEL_W / 2 - 88, 276, 176, 176, "QR PLACEHOLDER"),
+
+    rect(frontMiddleX + 92, 662, TRI_PANEL_W - 184, 40, "#ffffff", 20),
+    text("ACCOUNT DETAIL", frontMiddleX + 102, 671, TRI_PANEL_W - 204, 18, "#0b4ca8", 700, "Arial", "center", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+    }),
+    rect(frontMiddleX + 20, 710, TRI_PANEL_W - 40, 194, "#0d55c9", 10, {
+      stroke: "#93c5fd",
+      strokeWidth: 2,
+    }),
+    text(
+      "Bank Name : Indian Bank\nAccount No : 7111751848\nAccount Name : COMPUTER SCIENCE AND ENGG ASSOCIATION\nAccount Type : SB\nBranch : SRM University, Kattankulathur\nIFSC Code : IDIB000S181",
+      frontMiddleX + 34,
+      734,
+      TRI_PANEL_W - 68,
+      15,
+      "#ffffff",
+      500,
+    ),
+
+    rect(frontMiddleX + 112, 920, TRI_PANEL_W - 224, 38, "#ffffff", 19),
+    text("CONTACT DETAILS", frontMiddleX + 122, 928, TRI_PANEL_W - 244, 17, "#0b4ca8", 700, "Arial", "center", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+    }),
+    rect(frontMiddleX + 20, 966, TRI_PANEL_W - 40, 230, "#eef4ff", 10, {
+      stroke: "#93c5fd",
+      strokeWidth: 2,
+    }),
+    text(
+      "Dr. Gokulakrishnan D\nAssociate Professor, CTECH\nMobile: +91 98765 43210\n\nDr. Muralidharan C\nAssistant Professor, CTECH\nMobile: +91 90000 12345\n\nEmail: fdp@srm.edu.in",
+      frontMiddleX + 34,
+      990,
+      TRI_PANEL_W - 68,
+      13,
+      "#0f172a",
+      500,
+    ),
+
+    // FRONT SIDE - Panel 3 (Cover)
+    ...placeholderBox(frontRightX + 18, 18, 130, 52, "LOGO 1"),
+    ...placeholderBox(frontRightX + 157, 18, 130, 52, "LOGO 2"),
+    ...placeholderBox(frontRightX + 296, 18, 130, 52, "LOGO 3"),
+    ...placeholderBox(frontRightX + 435, 18, 130, 52, "LOGO 4"),
+
+    text("IEEE Madras Section Sponsored", frontRightX + 34, 96, TRI_PANEL_W - 68, 34, "#111827", 700, "Arial", "center"),
+    text("Five Days Faculty Development Program on", frontRightX + 34, 144, TRI_PANEL_W - 68, 34, "#111827", 700, "Arial", "center"),
+
+    rect(frontRightX + 40, 262, TRI_PANEL_W - 80, 188, "#fde047", 6, {
+      stroke: "#facc15",
+      strokeWidth: 1,
+    }),
+    text(
+      "DEMYSTIFYING GENERATIVE\nAI: FROM FOUNDATIONS TO\nFRONTIERS",
+      frontRightX + 52,
+      284,
+      TRI_PANEL_W - 104,
+      44,
+      "#111827",
+      800,
+      "Arial",
+      "center",
+    ),
+
+    text("23rd - 27th March, 2026", frontRightX + 34, 474, TRI_PANEL_W - 68, 36, "#111827", 700, "Arial", "center"),
+
+    circle(frontRightX + 182, 552, 74, "#dbeafe", {
+      stroke: "#38bdf8",
+      strokeWidth: 3,
+      selectable: true,
+      evented: true,
+      hasControls: true,
+      strokeDashArray: [8, 6],
+    }),
+    circle(frontRightX + 330, 552, 74, "#dbeafe", {
+      stroke: "#38bdf8",
+      strokeWidth: 3,
+      selectable: true,
+      evented: true,
+      hasControls: true,
+      strokeDashArray: [8, 6],
+    }),
+    line(frontRightX + 256, 624, frontRightX + 330, 624, "#38bdf8", 4),
+    text("[ICON A]", frontRightX + 190, 610, 58, 14, "#0369a1", 700, "Arial", "center"),
+    text("[ICON B]", frontRightX + 338, 610, 58, 14, "#0369a1", 700, "Arial", "center"),
+
+    text("Organized by", frontRightX + 34, 746, TRI_PANEL_W - 68, 28, "#111827", 700, "Arial", "center"),
+    text("Department of Computing Technologies\nSchool of Computing\nin association with\nAdvanced Multilingual Computing Vertical", frontRightX + 34, 780, TRI_PANEL_W - 68, 17, "#111827", 500, "Arial", "center"),
+
+    text("SRM Institute of Science and Technology", frontRightX + 34, 968, TRI_PANEL_W - 68, 16, "#111827", 700, "Arial", "center"),
+    text("Kattankulathur - 603203, Chengalpattu Dist., TN", frontRightX + 34, 992, TRI_PANEL_W - 68, 14, "#111827", 500, "Arial", "center"),
+
+    ...placeholderBox(frontRightX + 18, 1042, 100, 46, "LOGO A"),
+    ...placeholderBox(frontRightX + 127, 1042, 100, 46, "LOGO B"),
+    ...placeholderBox(frontRightX + 236, 1042, 100, 46, "LOGO C"),
+    ...placeholderBox(frontRightX + 345, 1042, 100, 46, "LOGO D"),
+    ...placeholderBox(frontRightX + 454, 1042, 110, 46, "LOGO E"),
+
+    // BACK SIDE - Panel 4 (About SRM)
+    text("About SRM", backLeftX + 36, 42, TRI_PANEL_W - 72, 36, "#ffffff", 800, "Arial", "center"),
+    text(
+      "SRM Institute of Science and Technology, Chennai, India is one of the top ranking institutions in India with over 60,000 students and 6,000 faculty members. SRM has state-of-the-art infrastructure, smart classrooms, high-tech labs and world class research facilities.\n\nThe institute is placed in Category-I by UGC and accredited by NAAC with highest grade. SRM is known for multidisciplinary research, innovation and strong global collaborations.",
+      backLeftX + 34,
+      102,
+      TRI_PANEL_W - 68,
+      14,
+      "#e2e8f0",
+      500,
+    ),
+    text("About the School", backLeftX + 36, 634, TRI_PANEL_W - 72, 32, "#ffffff", 800, "Arial", "center"),
+    text(
+      "The School of Computing is among the largest in SRM with over 1000 students and 500 faculty members. Departments include CSE, CTECH, AI and DS, Software Engineering, Networks and Communications. Programs are offered at UG, PG and doctoral levels with strong industry alignment.",
+      backLeftX + 34,
+      684,
+      TRI_PANEL_W - 68,
+      14,
+      "#e2e8f0",
+      500,
+    ),
+
+    // BACK SIDE - Panel 5 (Department + FDP)
+    text("About the Computing Technologies", backMiddleX + 30, 34, TRI_PANEL_W - 60, 32, "#111827", 800),
+    text(
+      "The Department of Computing Technologies (CTECH) fosters cutting-edge innovation and interdisciplinary education in Computer Science and Engineering. The department contributes to national and international research while nurturing students for impactful careers.",
+      backMiddleX + 30,
+      86,
+      TRI_PANEL_W - 60,
+      14,
+      "#334155",
+      500,
+    ),
+
+    text("About the FDP", backMiddleX + 30, 406, TRI_PANEL_W - 60, 32, "#111827", 800),
+    text(
+      "The Faculty Development Program on AI to Generative AI explores concepts, techniques and research pathways from foundational AI to practical GenAI systems.\n\nDay 1 : Intro to AI and Generative AI\nDay 2 : Retrieval-Augmented Generation\nDay 3 : GenAI for agriculture and healthcare\nDay 4 : Multimodal AI and agentic systems\nDay 5 : Research problem formulation, proposal writing and funding paths",
+      backMiddleX + 30,
+      458,
+      TRI_PANEL_W - 60,
+      14,
+      "#334155",
+      500,
+    ),
+
+    // BACK SIDE - Panel 6 (Topics + Eminent Speakers)
+    text("Topics to be covered", backRightX + 34, 38, TRI_PANEL_W - 68, 34, "#ffffff", 800, "Arial", "center"),
+
+    rect(tableX, tableY, tableW, 44 + rowH * 5, "#0b4ca8", 8, {
+      stroke: "#bfdbfe",
+      strokeWidth: 2,
+    }),
+    line(tableX + 86, tableY, tableX + 86, tableY + 44 + rowH * 5, "#bfdbfe", 1),
+    line(tableX + tableW * 0.57, tableY, tableX + tableW * 0.57, tableY + 44 + rowH * 5, "#bfdbfe", 1),
+    line(tableX, tableY + 44, tableX + tableW, tableY + 44, "#bfdbfe", 1),
+    line(tableX, tableY + 44 + rowH, tableX + tableW, tableY + 44 + rowH, "#bfdbfe", 1),
+    line(tableX, tableY + 44 + rowH * 2, tableX + tableW, tableY + 44 + rowH * 2, "#bfdbfe", 1),
+    line(tableX, tableY + 44 + rowH * 3, tableX + tableW, tableY + 44 + rowH * 3, "#bfdbfe", 1),
+    line(tableX, tableY + 44 + rowH * 4, tableX + tableW, tableY + 44 + rowH * 4, "#bfdbfe", 1),
+
+    text("Date", tableX + 8, tableY + 12, 70, 14, "#ffffff", 700, "Arial", "center", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+    }),
+    text("Forenoon", tableX + 96, tableY + 12, tableW * 0.57 - 98, 14, "#ffffff", 700, "Arial", "center", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+    }),
+    text("Afternoon", tableX + tableW * 0.57 + 8, tableY + 12, tableW * 0.43 - 16, 14, "#ffffff", 700, "Arial", "center", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+    }),
+
+    text("23rd March", tableX + 8, tableY + 64, 70, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("Intro to Generative AI", tableX + 96, tableY + 60, tableW * 0.57 - 98, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("Large Language Models (LLMs)", tableX + tableW * 0.57 + 8, tableY + 60, tableW * 0.43 - 16, 12, "#e2e8f0", 600, "Arial", "center"),
+
+    text("24th March", tableX + 8, tableY + 150, 70, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("Retrieval-Augmented Generation", tableX + 96, tableY + 146, tableW * 0.57 - 98, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("Prompt Engineering & Output Evaluation", tableX + tableW * 0.57 + 8, tableY + 146, tableW * 0.43 - 16, 12, "#e2e8f0", 600, "Arial", "center"),
+
+    text("25th March", tableX + 8, tableY + 236, 70, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("GenAI for Sustainable Agriculture", tableX + 96, tableY + 232, tableW * 0.57 - 98, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("GenAI in Ethical Healthcare Systems", tableX + tableW * 0.57 + 8, tableY + 232, tableW * 0.43 - 16, 12, "#e2e8f0", 600, "Arial", "center"),
+
+    text("26th March", tableX + 8, tableY + 322, 70, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("GenAI for Climate and Environment", tableX + 96, tableY + 318, tableW * 0.57 - 98, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("Multimodal AI and Agentic Systems", tableX + tableW * 0.57 + 8, tableY + 318, tableW * 0.43 - 16, 12, "#e2e8f0", 600, "Arial", "center"),
+
+    text("27th March", tableX + 8, tableY + 408, 70, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("Research Problem Formulation", tableX + 96, tableY + 404, tableW * 0.57 - 98, 12, "#e2e8f0", 600, "Arial", "center"),
+    text("Proposal Writing, Funding & Impact", tableX + tableW * 0.57 + 8, tableY + 404, tableW * 0.43 - 16, 12, "#e2e8f0", 600, "Arial", "center"),
+
+    text("Eminent Speakers", backRightX + 34, 640, TRI_PANEL_W - 68, 30, "#ffffff", 800, "Arial", "center"),
+    ...placeholderBox(backRightX + 26, 688, 54, 54, "ICON"),
+    ...placeholderBox(backRightX + 26, 758, 54, 54, "ICON"),
+    ...placeholderBox(backRightX + 26, 828, 54, 54, "ICON"),
+    ...placeholderBox(backRightX + 26, 898, 54, 54, "ICON"),
+    text(
+      "Dr. Nancy Jane - Assistant Professor\nDr. D. Thenmozhi - Associate Professor\nDr. B. Bharathi - Associate Professor\nDr. Subaellatha C N - Professor\nMs. Monagapathi V - Senior Associate Engineer\nMr. Luvk Yannan - Product Manager",
+      backRightX + 94,
+      698,
+      TRI_PANEL_W - 120,
+      13,
+      "#e2e8f0",
+      500,
+    ),
   ];
 
   return {
-    id: "builtin-trifold-classic",
-    name: "Classic Trifold",
+    id: "builtin-trifold-fdp-two-side",
+    name: "FDP Trifold (Two-Side)",
     width: W_TRI,
     height: H_TRI,
     json: JSON.stringify({ version: "5.3.0", objects }),
-    thumbnailColor: "#1e3a5f",
-  };
-}
-
-function trifoldModern(): BuiltInTemplate {
-  const objects = [
-    workspace(W_TRI, H_TRI, "#f8fafc"),
-    rect(0, 0, W_TRI, 200, "#7c3aed"),
-    text("Workshop / Symposium Title", 48, 50, W_TRI - 96, 48, "#ffffff", 800, "Arial", "center"),
-    text("Organized by Department of Computer Science", 48, 120, W_TRI - 96, 20, "#ddd6fe", 500, "Arial", "center"),
-    text("Date: March 15-16, 2026  |  Venue: Auditorium Hall", 48, 155, W_TRI - 96, 16, "#c4b5fd", 400, "Arial", "center"),
-    rect(30, 220, COL_W - 45, H_TRI - 280, "#f3e8ff", 16),
-    rect(COL_W + 8, 220, COL_W - 15, H_TRI - 280, "#ede9fe", 16),
-    rect(COL_W * 2 + 15, 220, COL_W - 45, H_TRI - 280, "#f3e8ff", 16),
-    text("About", 60, 245, COL_W - 105, 22, "#7c3aed", 700),
-    text("This event brings together researchers, practitioners, and students to explore cutting-edge topics in technology and innovation.", 60, 280, COL_W - 105, 14, "#1e1b4b"),
-    text("Key Topics", 60, 440, COL_W - 105, 22, "#7c3aed", 700),
-    text("• Artificial Intelligence & ML\n• Cloud Computing\n• Cybersecurity\n• IoT & Edge Computing\n• Data Analytics", 60, 475, COL_W - 105, 14, "#1e1b4b"),
-    text("Invited Speakers", COL_W + 38, 245, COL_W - 75, 22, "#7c3aed", 700),
-    text("Dr. A. Kumar\nAI Research Lead, Google\n\nProf. B. Sharma\nDirector, IIT Mumbai\n\nMs. C. Patel\nCTO, TechStart Inc.", COL_W + 38, 280, COL_W - 75, 14, "#1e1b4b"),
-    text("Schedule", COL_W + 38, 550, COL_W - 75, 22, "#7c3aed", 700),
-    text("Day 1 AM: Inauguration & Keynote\nDay 1 PM: Technical Sessions\nDay 2 AM: Workshops\nDay 2 PM: Panel Discussion", COL_W + 38, 585, COL_W - 75, 14, "#1e1b4b"),
-    text("Registration", COL_W * 2 + 45, 245, COL_W - 105, 22, "#7c3aed", 700),
-    text("Students: ₹300\nFaculty: ₹500\nIndustry: ₹1000\n\nRegister before March 1st\nfor early bird discount!", COL_W * 2 + 45, 280, COL_W - 105, 14, "#1e1b4b"),
-    text("Contact", COL_W * 2 + 45, 520, COL_W - 105, 22, "#7c3aed", 700),
-    text("Prof. Coordinator Name\nDept. of Computer Science\n\nPhone: +91 98765 43210\nEmail: event@college.edu\n\nRegister: forms.google.com", COL_W * 2 + 45, 555, COL_W - 105, 14, "#1e1b4b"),
-    rect(0, H_TRI - 50, W_TRI, 50, "#7c3aed"),
-    text("Institution Name  •  City, State  •  Accredited by NAAC", 48, H_TRI - 38, W_TRI - 96, 13, "#ddd6fe", 500, "Arial", "center"),
-  ];
-
-  return {
-    id: "builtin-trifold-modern",
-    name: "Modern Purple Trifold",
-    width: W_TRI,
-    height: H_TRI,
-    json: JSON.stringify({ version: "5.3.0", objects }),
-    thumbnailColor: "#7c3aed",
-  };
-}
-
-function trifoldMinimal(): BuiltInTemplate {
-  const objects = [
-    workspace(W_TRI, H_TRI, "#fafaf9"),
-    rect(0, 0, W_TRI, 4, "#0d9488"),
-    text("Event / Workshop Title", 60, 40, W_TRI - 120, 44, "#0f172a", 800, "Georgia", "center"),
-    text("Department  •  Institution  •  Dates", 60, 100, W_TRI - 120, 18, "#64748b", 400, "Arial", "center"),
-    line(60, 140, W_TRI - 60, 140, "#e2e8f0", 2),
-    text("About", 50, 170, COL_W - 80, 24, "#0d9488", 700),
-    text("A comprehensive overview of the event, its goals, and what participants can expect. Edit this text to describe your specific program.", 50, 210, COL_W - 80, 14, "#334155"),
-    text("Topics Covered", 50, 400, COL_W - 80, 24, "#0d9488", 700),
-    text("1. Introduction & Fundamentals\n2. Advanced Concepts\n3. Practical Applications\n4. Case Studies\n5. Future Directions", 50, 440, COL_W - 80, 14, "#334155"),
-    text("Speakers", COL_W + 20, 170, COL_W - 40, 24, "#0d9488", 700),
-    text("Speaker Name 1\nDesignation, Organization\n\nSpeaker Name 2\nDesignation, Organization\n\nSpeaker Name 3\nDesignation, Organization", COL_W + 20, 210, COL_W - 40, 14, "#334155"),
-    text("Highlights", COL_W + 20, 520, COL_W - 40, 24, "#0d9488", 700),
-    text("• Expert-led sessions\n• Hands-on experience\n• Industry exposure\n• Certificate provided", COL_W + 20, 560, COL_W - 40, 14, "#334155"),
-    text("How to Register", COL_W * 2 + 20, 170, COL_W - 50, 24, "#0d9488", 700),
-    text("Fee: ₹500 (Students)\nFee: ₹800 (Others)\nDeadline: March 10, 2026\n\nScan the QR code or visit\nthe registration link below.", COL_W * 2 + 20, 210, COL_W - 50, 14, "#334155"),
-    text("Contact Us", COL_W * 2 + 20, 520, COL_W - 50, 24, "#0d9488", 700),
-    text("Name: Coordinator Name\nMobile: +91 98765 43210\nEmail: info@college.edu\nWeb: college.edu/event", COL_W * 2 + 20, 560, COL_W - 50, 14, "#334155"),
-    rect(0, H_TRI - 40, W_TRI, 40, "#0d9488"),
-    text("Institution Name  •  Address Line  •  contact@college.edu", 48, H_TRI - 30, W_TRI - 96, 12, "#ffffff", 500, "Arial", "center"),
-  ];
-
-  return {
-    id: "builtin-trifold-minimal",
-    name: "Minimal Teal Trifold",
-    width: W_TRI,
-    height: H_TRI,
-    json: JSON.stringify({ version: "5.3.0", objects }),
-    thumbnailColor: "#0d9488",
+    thumbnailColor: "#0b4ca8",
   };
 }
 
@@ -350,9 +706,7 @@ function posterMinimal(): BuiltInTemplate {
 // ─── Export ──────────────────────────────────────────────────────────────
 
 const allBuiltIn: BuiltInTemplate[] = [
-  trifoldClassic(),
-  trifoldModern(),
-  trifoldMinimal(),
+  trifoldFdpTwoSide(),
   posterBold(),
   posterElegant(),
   posterMinimal(),

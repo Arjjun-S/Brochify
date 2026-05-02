@@ -4,9 +4,10 @@ import { useCallback, useEffect } from "react";
 interface UseAutoResizeProps {
   canvas: fabric.Canvas | null;
   container: HTMLDivElement | null;
+  activePage?: number;
 }
 
-export const useAutoResize = ({ canvas, container }: UseAutoResizeProps) => {
+export const useAutoResize = ({ canvas, container, activePage = 1 }: UseAutoResizeProps) => {
   const autoZoom = useCallback(() => {
     if (!canvas || !container) return;
 
@@ -18,20 +19,26 @@ export const useAutoResize = ({ canvas, container }: UseAutoResizeProps) => {
 
     const center = canvas.getCenter();
 
-    const zoomRatio = 0.85;
     const localWorkspace = canvas
       .getObjects()
       .find((object) => object.name === "clip");
+    const pageFrames = canvas
+      .getObjects()
+      .filter((object) => object.name === "page-frame")
+      .sort((left, right) => (left.left ?? 0) - (right.left ?? 0));
+    const pageIndex = Math.max(1, Math.floor(activePage));
+    const zoomTarget = pageFrames[pageIndex - 1] ?? pageFrames[0] ?? localWorkspace;
+    const zoomRatio = pageFrames.length > 0 ? 0.98 : 0.85;
 
     // Workspace may be temporarily unavailable while loading JSON.
     // In that case, keep the canvas sized but skip zoom math.
-    if (!localWorkspace) {
+    if (!localWorkspace || !zoomTarget) {
       canvas.requestRenderAll();
       return;
     }
 
-    const workspaceWidth = localWorkspace.getScaledWidth();
-    const workspaceHeight = localWorkspace.getScaledHeight();
+    const workspaceWidth = zoomTarget.getScaledWidth();
+    const workspaceHeight = zoomTarget.getScaledHeight();
 
     if (!workspaceWidth || !workspaceHeight) {
       canvas.requestRenderAll();
@@ -45,7 +52,7 @@ export const useAutoResize = ({ canvas, container }: UseAutoResizeProps) => {
     canvas.setViewportTransform(fabric.iMatrix.concat());
     canvas.zoomToPoint(new fabric.Point(center.left, center.top), zoom);
 
-    const workspaceCenter = localWorkspace.getCenterPoint();
+    const workspaceCenter = zoomTarget.getCenterPoint();
     const viewportTransform = canvas.viewportTransform;
 
     if (
@@ -67,11 +74,11 @@ export const useAutoResize = ({ canvas, container }: UseAutoResizeProps) => {
 
     canvas.setViewportTransform(nextViewportTransform);
 
-    localWorkspace.clone((cloned: fabric.Rect) => {
+    zoomTarget.clone((cloned: fabric.Rect) => {
       canvas.clipPath = cloned;
       canvas.requestRenderAll();
     });
-  }, [canvas, container]);
+  }, [canvas, container, activePage]);
 
   useEffect(() => {
     let resizeObserver: ResizeObserver | null = null;

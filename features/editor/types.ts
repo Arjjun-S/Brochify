@@ -4,6 +4,7 @@ import * as material from "material-colors";
 
 export const JSON_KEYS = [
   "name",
+  "pageIndex",
   "gradientAngle",
   "selectable",
   "hasControls",
@@ -112,7 +113,7 @@ export type ActiveTool =
 export type BrochureType = "trifold" | "poster";
 
 export const CANVAS_PRESETS: Record<BrochureType, { width: number; height: number; label: string }> = {
-  trifold: { width: 1754, height: 1240, label: "Trifold Brochure" },
+  trifold: { width: 3708, height: 1240, label: "Trifold Brochure (Two-Side)" },
   poster: { width: 1240, height: 1754, label: "Poster / Flyer" },
 };
 
@@ -202,7 +203,9 @@ export type BuildEditorProps = {
   strokeWidth: number;
   selectedObjects: fabric.Object[];
   strokeDashArray: number[];
+  activePage: number;
   fontFamily: string;
+  setActivePage: (value: number) => void;
   setStrokeDashArray: (value: number[]) => void;
   setFillColor: (value: string) => void;
   setStrokeColor: (value: string) => void;
@@ -268,5 +271,9 @@ export interface Editor {
   getActiveStrokeColor: () => string;
   getActiveStrokeWidth: () => number;
   getActiveStrokeDashArray: () => number[];
+  getPageCount: () => number;
+  getActivePage: () => number;
+  goToPage: (page: number) => void;
+  addPage: () => void;
   selectedObjects: fabric.Object[];
 };

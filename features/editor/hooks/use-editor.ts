@@ -53,8 +53,43 @@ const buildEditor = ({
   setStrokeWidth,
   selectedObjects,
   strokeDashArray,
+  activePage,
+  setActivePage,
   setStrokeDashArray,
 }: BuildEditorProps): Editor => {
+  const getWorkspace = () => {
+    return canvas
+      .getObjects()
+      .find((object) => object.name === "clip");
+  };
+
+  const getPageFrames = () => {
+    return canvas
+      .getObjects()
+      .filter((object) => object.name === "page-frame")
+      .sort((left, right) => (left.left ?? 0) - (right.left ?? 0));
+  };
+
+  const getActivePageFrame = () => {
+    const pageFrames = getPageFrames();
+    if (pageFrames.length === 0) {
+      return undefined;
+    }
+
+    const activePageIndex = Math.min(Math.max(1, activePage), pageFrames.length) - 1;
+    return pageFrames[activePageIndex];
+  };
+
+  const withNoClip = <T>(work: () => T): T => {
+    const previousClipPath = canvas.clipPath;
+    canvas.clipPath = undefined;
+    try {
+      return work();
+    } finally {
+      canvas.clipPath = previousClipPath;
+    }
+  };
+
   const generateSaveOptions = () => {
     const { width, height, left, top } = getWorkspace() as fabric.Rect;
 
@@ -73,7 +108,7 @@ const buildEditor = ({
     const options = generateSaveOptions();
 
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    const dataUrl = canvas.toDataURL(options);
+    const dataUrl = withNoClip(() => canvas.toDataURL(options));
 
     downloadFile(dataUrl, "png");
     autoZoom();
@@ -83,7 +118,7 @@ const buildEditor = ({
     const options = generateSaveOptions();
 
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    const dataUrl = canvas.toDataURL(options);
+    const dataUrl = withNoClip(() => canvas.toDataURL(options));
 
     downloadFile(dataUrl, "svg");
     autoZoom();
@@ -93,7 +128,7 @@ const buildEditor = ({
     const options = generateSaveOptions();
 
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    const dataUrl = canvas.toDataURL(options);
+    const dataUrl = withNoClip(() => canvas.toDataURL(options));
 
     downloadFile(dataUrl, "jpg");
     autoZoom();
@@ -106,7 +141,7 @@ const buildEditor = ({
     };
 
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    const imageDataUrl = canvas.toDataURL(exportOptions);
+    const imageDataUrl = withNoClip(() => canvas.toDataURL(exportOptions));
     autoZoom();
 
     const response = await fetch("/api/v1/brochure/pdf", {
@@ -158,15 +193,190 @@ const buildEditor = ({
     });
   };
 
-  const getWorkspace = () => {
-    return canvas
-    .getObjects()
-    .find((object) => object.name === "clip");
+  const focusTarget = (target: fabric.Object, pageIndex?: number) => {
+    if (
+      canvas.width === undefined
+      || canvas.height === undefined
+    ) {
+      return;
+    }
+
+    const targetWidth = target.getScaledWidth();
+    const targetHeight = target.getScaledHeight();
+
+    if (!targetWidth || !targetHeight) {
+      return;
+    }
+
+    const zoomRatio = 0.98;
+    const zoom = zoomRatio * Math.min(canvas.width / targetWidth, canvas.height / targetHeight);
+    const center = target.getCenterPoint();
+
+    const nextViewportTransform: [number, number, number, number, number, number] = [
+      zoom,
+      0,
+      0,
+      zoom,
+      canvas.width / 2 - center.x * zoom,
+      canvas.height / 2 - center.y * zoom,
+    ];
+
+    canvas.setViewportTransform(nextViewportTransform);
+
+    target.clone((cloned: fabric.Rect) => {
+      canvas.clipPath = cloned;
+      canvas.requestRenderAll();
+    });
+
+    if (typeof pageIndex === "number") {
+      setActivePage(pageIndex);
+    }
+  };
+
+  const getPageCount = () => {
+    const pageFrames = getPageFrames();
+    if (pageFrames.length > 0) {
+      return pageFrames.length;
+    }
+
+    return 1;
+  };
+
+  const getActivePage = () => activePage;
+
+  const goToPage = (page: number) => {
+    const pageFrames = getPageFrames();
+
+    if (pageFrames.length === 0) {
+      autoZoom();
+      return;
+    }
+
+    const clampedIndex = Math.min(Math.max(1, page), pageFrames.length) - 1;
+    const pageFrame = pageFrames[clampedIndex];
+    if (!pageFrame) {
+      return;
+    }
+
+    focusTarget(pageFrame, clampedIndex + 1);
+  };
+
+  const addPage = () => {
+    const pageFrames = getPageFrames();
+    if (pageFrames.length === 0) {
+      return;
+    }
+
+    const firstPageFrame = pageFrames[0];
+    const lastPageFrame = pageFrames[pageFrames.length - 1];
+
+    if (!firstPageFrame || !lastPageFrame) {
+      return;
+    }
+
+    const pageWidth = firstPageFrame.getScaledWidth();
+    const pageHeight = firstPageFrame.getScaledHeight();
+
+    if (!pageWidth || !pageHeight) {
+      return;
+    }
+
+    const inferredGap = pageFrames.length > 1
+      ? (pageFrames[1]?.left ?? 0) - (firstPageFrame.left ?? 0) - pageWidth
+      : 120;
+    const pageGap = Number.isFinite(inferredGap) && inferredGap > 40 ? inferredGap : 120;
+
+    const nextPageLeft = (lastPageFrame.left ?? 0) + pageWidth + pageGap;
+    const nextPageTop = lastPageFrame.top ?? 0;
+    const nextPageNumber = pageFrames.length + 1;
+
+    const newPageFrame = new fabric.Rect({
+      left: nextPageLeft,
+      top: nextPageTop,
+      width: pageWidth,
+      height: pageHeight,
+      rx: 16,
+      ry: 16,
+      fill: "#ffffff",
+      stroke: "#94a3b8",
+      strokeWidth: 2,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      name: "page-frame",
+    });
+    (newPageFrame as unknown as { pageIndex: number }).pageIndex = nextPageNumber;
+
+    const newPageLabel = new fabric.Textbox(`PAGE ${nextPageNumber}`, {
+      left: nextPageLeft + 14,
+      top: nextPageTop + 8,
+      width: 220,
+      fontSize: 12,
+      fontWeight: 700,
+      fontFamily: "Arial",
+      fill: "#334155",
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      name: "page-label",
+    });
+    (newPageLabel as unknown as { pageIndex: number }).pageIndex = nextPageNumber;
+
+    const panelWidth = pageWidth / 3;
+    const panelGuideOne = new fabric.Line(
+      [nextPageLeft + panelWidth, nextPageTop, nextPageLeft + panelWidth, nextPageTop + pageHeight],
+      {
+        stroke: "#dbeafe",
+        strokeWidth: 1,
+        selectable: false,
+        evented: false,
+        hasControls: false,
+      },
+    );
+    panelGuideOne.set("name", "page-guide");
+    (panelGuideOne as unknown as { pageIndex: number }).pageIndex = nextPageNumber;
+
+    const panelGuideTwo = new fabric.Line(
+      [nextPageLeft + panelWidth * 2, nextPageTop, nextPageLeft + panelWidth * 2, nextPageTop + pageHeight],
+      {
+        stroke: "#dbeafe",
+        strokeWidth: 1,
+        selectable: false,
+        evented: false,
+        hasControls: false,
+      },
+    );
+    panelGuideTwo.set("name", "page-guide");
+    (panelGuideTwo as unknown as { pageIndex: number }).pageIndex = nextPageNumber;
+
+    canvas.add(newPageFrame);
+    canvas.add(newPageLabel);
+    canvas.add(panelGuideOne);
+    canvas.add(panelGuideTwo);
+
+    const workspace = getWorkspace() as fabric.Rect | undefined;
+    if (workspace) {
+      const workspaceWidth = workspace.width ?? 0;
+      const lastPageRight = (lastPageFrame.left ?? 0) + pageWidth;
+      const rightPadding = workspaceWidth - lastPageRight;
+      const nextPageRight = nextPageLeft + pageWidth;
+      const nextWorkspaceWidth = nextPageRight + Math.max(rightPadding, 40);
+
+      workspace.set({
+        width: Math.max(workspaceWidth, nextWorkspaceWidth),
+      });
+      workspace.sendToBack();
+    }
+
+    save();
+    goToPage(nextPageNumber);
   };
 
   const center = (object: fabric.Object) => {
+    const activePageFrame = getActivePageFrame();
     const workspace = getWorkspace();
-    const center = workspace?.getCenterPoint();
+    const center = activePageFrame?.getCenterPoint() ?? workspace?.getCenterPoint();
 
     if (!center) return;
 
@@ -191,6 +401,10 @@ const buildEditor = ({
     canRedo,
     autoZoom,
     getWorkspace,
+    getPageCount,
+    getActivePage,
+    goToPage,
+    addPage,
     zoomIn: () => {
       let zoomRatio = canvas.getZoom();
       zoomRatio += 0.05;
@@ -254,10 +468,13 @@ const buildEditor = ({
       fabric.Image.fromURL(
         value,
         (image) => {
+          const activePageFrame = getActivePageFrame();
           const workspace = getWorkspace();
+          const fitWidth = activePageFrame?.width || workspace?.width || 0;
+          const fitHeight = activePageFrame?.height || workspace?.height || 0;
 
-          image.scaleToWidth(workspace?.width || 0);
-          image.scaleToHeight(workspace?.height || 0);
+          image.scaleToWidth(fitWidth);
+          image.scaleToHeight(fitHeight);
 
           addToCanvas(image);
         },
@@ -672,6 +889,7 @@ export const useEditor = ({
   const [strokeColor, setStrokeColor] = useState(STROKE_COLOR);
   const [strokeWidth, setStrokeWidth] = useState(STROKE_WIDTH);
   const [strokeDashArray, setStrokeDashArray] = useState<number[]>(STROKE_DASH_ARRAY);
+  const [activePage, setActivePage] = useState(1);
 
   useWindowEvents();
 
@@ -693,6 +911,7 @@ export const useEditor = ({
   const { autoZoom } = useAutoResize({
     canvas,
     container,
+    activePage,
   });
 
   useCanvasEvents({
@@ -738,7 +957,9 @@ export const useEditor = ({
         setStrokeColor,
         setStrokeWidth,
         strokeDashArray,
+        activePage,
         selectedObjects,
+        setActivePage,
         setStrokeDashArray,
         fontFamily,
         setFontFamily,
@@ -760,6 +981,7 @@ export const useEditor = ({
     fillColor,
     strokeWidth,
     strokeColor,
+    activePage,
     selectedObjects,
     strokeDashArray,
     fontFamily,
@@ -805,6 +1027,7 @@ export const useEditor = ({
 
       setCanvas(initialCanvas);
       setContainer(initialContainer);
+      setActivePage(1);
 
       let currentState = initialState.current;
       if (!currentState) {
@@ -826,6 +1049,7 @@ export const useEditor = ({
     [
       canvasHistoryRef, // No need, this is from useRef
       setHistoryIndex, // No need, this is from useState
+      setActivePage,
     ]
   );
 
