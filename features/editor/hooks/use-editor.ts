@@ -281,7 +281,7 @@ const buildEditor = ({
       addToCanvas(object);
     },
     getActiveOpacity: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return 1;
@@ -302,7 +302,7 @@ const buildEditor = ({
       canvas.renderAll();
     },
     getActiveFontSize: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return FONT_SIZE;
@@ -325,7 +325,7 @@ const buildEditor = ({
       canvas.renderAll();
     },
     getActiveTextAlign: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return "left";
@@ -348,7 +348,7 @@ const buildEditor = ({
       canvas.renderAll();
     },
     getActiveFontUnderline: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return false;
@@ -371,7 +371,7 @@ const buildEditor = ({
       canvas.renderAll();
     },
     getActiveFontLinethrough: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return false;
@@ -394,7 +394,7 @@ const buildEditor = ({
       canvas.renderAll();
     },
     getActiveFontStyle: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return "normal";
@@ -578,7 +578,7 @@ const buildEditor = ({
     },
     canvas,
     getActiveFontWeight: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return FONT_WEIGHT;
@@ -591,7 +591,7 @@ const buildEditor = ({
       return value;
     },
     getActiveFontFamily: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return fontFamily;
@@ -604,7 +604,7 @@ const buildEditor = ({
       return value;
     },
     getActiveFillColor: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return fillColor;
@@ -616,7 +616,7 @@ const buildEditor = ({
       return value as string;
     },
     getActiveStrokeColor: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return strokeColor;
@@ -627,7 +627,7 @@ const buildEditor = ({
       return value;
     },
     getActiveStrokeWidth: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return strokeWidth;
@@ -638,7 +638,7 @@ const buildEditor = ({
       return value;
     },
     getActiveStrokeDashArray: () => {
-      const selectedObject = selectedObjects[0];
+      const selectedObject = selectedObjects?.[0];
 
       if (!selectedObject) {
         return strokeDashArray;

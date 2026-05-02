@@ -1,7 +1,7 @@
-import { 
-  ActiveTool, 
-  Editor, 
-  STROKE_DASH_ARRAY, 
+import {
+  ActiveTool,
+  Editor,
+  STROKE_DASH_ARRAY,
   STROKE_WIDTH
 } from "@/features/editor/types";
 import { ToolSidebarClose } from "@/features/editor/components/tool-sidebar-close";
@@ -57,7 +57,13 @@ export const StrokeWidthSidebar = ({
           </Label>
           <Slider
             value={[widthValue]}
-            onValueChange={(values) => onChangeStrokeWidth(values[0])}
+            onValueChange={(values) => {
+              const nextWidth = values?.[0];
+              if (typeof nextWidth !== "number") {
+                return;
+              }
+              onChangeStrokeWidth(nextWidth);
+            }}
           />
         </div>
         <div className="p-4 space-y-4 border-b">

@@ -42,23 +42,24 @@ const EditorProjectIdPage = ({
     isError
   } = useGetProject(projectId);
 
+  const project = data?.data;
+  const hasValidProject =
+    !!project
+    && typeof project.id === "number"
+    && typeof project.name === "string"
+    && typeof project.json === "string"
+    && typeof project.width === "number"
+    && typeof project.height === "number";
+
   const brochureIdFromQuery =
     Number.isFinite(parsedBrochureId) && parsedBrochureId > 0
       ? parsedBrochureId
       : undefined;
   const brochureIdFromProject =
-    typeof data?.data.brochureId === "number" && data.data.brochureId > 0
-      ? data.data.brochureId
+    typeof project?.brochureId === "number" && project.brochureId > 0
+      ? project.brochureId
       : undefined;
   const brochureId = brochureIdFromQuery ?? brochureIdFromProject;
-
-  if (isLoading || !data) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center">
-        <Loader className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   if (isError) {
     return (
@@ -76,7 +77,31 @@ const EditorProjectIdPage = ({
     );
   }
 
-  return <Editor initialData={data.data} brochureId={brochureId} />
+  if (isLoading) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center">
+        <Loader className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!hasValidProject) {
+    return (
+      <div className="h-full flex flex-col gap-y-5 items-center justify-center">
+        <TriangleAlert className="size-6 text-muted-foreground" />
+        <p className="text-muted-foreground text-sm">
+          Project data is unavailable
+        </p>
+        <Button asChild variant="secondary">
+          <Link href="/">
+            Back to Home
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return <Editor initialData={project} brochureId={brochureId} />
 };
 
 export default EditorProjectIdPage;

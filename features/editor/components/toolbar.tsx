@@ -1,20 +1,20 @@
 import { useState } from "react";
 
-import { 
-  FaBold, 
-  FaItalic, 
-  FaStrikethrough, 
+import {
+  FaBold,
+  FaItalic,
+  FaStrikethrough,
   FaUnderline
 } from "react-icons/fa";
 import { TbColorFilter } from "react-icons/tb";
 import { BsBorderWidth } from "react-icons/bs";
 import { RxTransparencyGrid } from "react-icons/rx";
-import { 
-  ArrowUp, 
-  ArrowDown, 
-  ChevronDown, 
-  AlignLeft, 
-  AlignCenter, 
+import {
+  ArrowUp,
+  ArrowDown,
+  ChevronDown,
+  AlignLeft,
+  AlignCenter,
   AlignRight,
   Trash,
   SquareSplitHorizontal,
@@ -23,10 +23,10 @@ import {
 
 import { isTextType } from "@/features/editor/utils";
 import { FontSizeInput } from "@/features/editor/components/font-size-input";
-import { 
-  ActiveTool, 
-  Editor, 
-  FONT_SIZE, 
+import {
+  ActiveTool,
+  Editor,
+  FONT_SIZE,
   FONT_WEIGHT
 } from "@/features/editor/types";
 
@@ -67,8 +67,8 @@ export const Toolbar = ({
     fontSize: initialFontSize,
   });
 
-  const selectedObject = editor?.selectedObjects[0];
-  const selectedObjectType = editor?.selectedObjects[0]?.type;
+  const selectedObject = editor?.selectedObjects?.[0];
+  const selectedObjectType = editor?.selectedObjects?.[0]?.type;
 
   const isText = isTextType(selectedObjectType);
   const isImage = selectedObjectType === "image";
@@ -154,7 +154,7 @@ export const Toolbar = ({
     }));
   };
 
-  if (editor?.selectedObjects.length === 0) {
+  if ((editor?.selectedObjects?.length ?? 0) === 0) {
     return (
       <div className="shrink-0 h-[56px] border-b bg-white w-full flex items-center overflow-x-auto z-[49] p-2 gap-x-2" />
     );
@@ -350,10 +350,10 @@ export const Toolbar = ({
       )}
       {isText && (
         <div className="flex items-center h-full justify-center">
-         <FontSizeInput
+          <FontSizeInput
             value={properties.fontSize}
             onChange={onChangeFontSize}
-         />
+          />
         </div>
       )}
       {isImage && (

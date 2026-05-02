@@ -1,7 +1,7 @@
-import { 
-  ActiveTool, 
-  Editor, 
-  STROKE_COLOR, 
+import {
+  ActiveTool,
+  Editor,
+  STROKE_COLOR,
   STROKE_WIDTH
 } from "@/features/editor/types";
 import { ToolSidebarClose } from "@/features/editor/components/tool-sidebar-close";
@@ -58,7 +58,13 @@ export const DrawSidebar = ({
           </Label>
           <Slider
             value={[widthValue]}
-            onValueChange={(values) => onWidthChange(values[0])}
+            onValueChange={(values) => {
+              const nextWidth = values?.[0];
+              if (typeof nextWidth !== "number") {
+                return;
+              }
+              onWidthChange(nextWidth);
+            }}
           />
         </div>
         <div className="p-4 space-y-6">

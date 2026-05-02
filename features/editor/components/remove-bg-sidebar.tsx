@@ -25,7 +25,7 @@ export const RemoveBgSidebar = ({
 }: RemoveBgSidebarProps) => {
   const mutation = useRemoveBg();
 
-  const selectedObject = editor?.selectedObjects[0];
+  const selectedObject = editor?.selectedObjects?.[0];
   const imageObject = selectedObject as
     | (fabric.Image & { _originalElement?: HTMLImageElement })
     | undefined;

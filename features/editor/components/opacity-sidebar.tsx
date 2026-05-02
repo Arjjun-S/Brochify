@@ -22,7 +22,7 @@ export const OpacitySidebar = ({
   activeTool,
   onChangeActiveTool,
 }: OpacitySidebarProps) => {
-  const selectedObject = useMemo(() => editor?.selectedObjects[0], [editor?.selectedObjects]);
+  const selectedObject = useMemo(() => editor?.selectedObjects?.[0], [editor?.selectedObjects]);
   const selectedOpacity =
     typeof selectedObject?.get("opacity") === "number"
       ? (selectedObject.get("opacity") as number)
@@ -55,7 +55,13 @@ export const OpacitySidebar = ({
           <Slider
             key={sliderKey}
             defaultValue={[selectedOpacity]}
-            onValueChange={(values) => onChange(values[0])}
+            onValueChange={(values) => {
+              const nextOpacity = values?.[0];
+              if (typeof nextOpacity !== "number") {
+                return;
+              }
+              onChange(nextOpacity);
+            }}
             max={1}
             min={0}
             step={0.01}

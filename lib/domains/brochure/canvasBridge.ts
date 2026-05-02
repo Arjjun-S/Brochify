@@ -23,6 +23,10 @@ type Palette = {
   panel: string;
 };
 
+// Tri-fold brochure defaults (A4 landscape ratio) for generated canvas seeds.
+const DEFAULT_TRIFOLD_WIDTH = 1680;
+const DEFAULT_TRIFOLD_HEIGHT = 1188;
+
 const templatePalette: Record<EditorState["template"], Palette> = {
   whiteBlue: {
     page: "#f7fbff",
@@ -401,8 +405,8 @@ export function createDesignProjectSeedFromBrochure(
 ): BridgeResult {
   const tokenMap = buildTokenMap(brochure);
 
-  const width = template?.width && template.width > 0 ? template.width : 900;
-  const height = template?.height && template.height > 0 ? template.height : 1200;
+  const width = template?.width && template.width > 0 ? template.width : DEFAULT_TRIFOLD_WIDTH;
+  const height = template?.height && template.height > 0 ? template.height : DEFAULT_TRIFOLD_HEIGHT;
 
   const templateJson = template?.json ? applyTemplateJson(template.json, tokenMap, width, height) : null;
 

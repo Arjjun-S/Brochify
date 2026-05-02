@@ -71,12 +71,19 @@ export default async function StudioPage({ searchParams }: StudioPageProps) {
 			return null;
 		}
 
-		const preferredToken = brochure.content.template.toLowerCase();
-		return (
-			templates.find((template) =>
-				template.name.toLowerCase().includes(preferredToken),
-			) ?? templates[0]
+		const trifoldTemplates = templates.filter((template) =>
+			/tri[\s-]?fold/i.test(template.name)
+			&& template.width > template.height,
 		);
+
+		if (trifoldTemplates.length === 0) {
+			return null;
+		}
+
+		const preferredToken = brochure.content.template.toLowerCase();
+		return trifoldTemplates.find((template) =>
+			template.name.toLowerCase().includes(preferredToken),
+		) ?? trifoldTemplates[0];
 	})();
 
 	const seed = createDesignProjectSeedFromBrochure(brochure, preferredTemplate);
