@@ -43,4 +43,5 @@ next-env.d.ts
 # temporary scaffold runtime
 temp_init/runtime/
 
-.claude
+#godly reference repo
+canva-clone-main
