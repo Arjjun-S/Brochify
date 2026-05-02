@@ -11,7 +11,7 @@ cloudinary.config({
 
 const prisma = new PrismaClient();
 
-const ASSET_FOLDERS = {
+const ASSET_FOLDERS: Record<string, string> = {
   logos: "public/logos",
   certificate: "public/certificate",
   badges: "public/badges",
@@ -23,7 +23,7 @@ const ASSET_TYPES = {
   badges: "badge",
 };
 
-async function uploadFile(filePath, folder, type) {
+async function uploadFile(filePath: string, folder: string, type: string) {
   const fileName = path.basename(filePath);
 
   const result = await cloudinary.uploader.upload(filePath, {
@@ -73,7 +73,7 @@ async function main() {
       try {
         await uploadFile(filePath, key, ASSET_TYPES[key]);
       } catch (error) {
-        console.error(`Failed to upload ${file}:`, error.message);
+        console.error(`Failed to upload ${file}:`, error instanceof Error ? error.message : error);
       }
     }
   }

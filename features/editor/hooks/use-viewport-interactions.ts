@@ -23,6 +23,9 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
     }
 
     const wrapper = (canvas as fabric.Canvas & { wrapperEl: HTMLDivElement }).wrapperEl;
+    if (!wrapper) {
+      return;
+    }
 
     let isPanning = false;
     let lastClientX = 0;

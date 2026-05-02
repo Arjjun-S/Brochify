@@ -1,6 +1,6 @@
 "use client";
 
-import { 
+import {
   LayoutTemplate,
   ImageIcon,
   Pencil,
@@ -8,19 +8,26 @@ import {
   Shapes,
   Sparkles,
   Type,
+  BadgeIcon,
+  FileText,
+  Vote,
 } from "lucide-react";
 
 import { ActiveTool } from "@/features/editor/types";
 import { SidebarItem } from "@/features/editor/components/sidebar-item";
 
+type EditorType = "brochure" | "certificate";
+
 interface SidebarProps {
   activeTool: ActiveTool;
   onChangeActiveTool: (tool: ActiveTool) => void;
+  editorType?: EditorType;
 };
 
 export const Sidebar = ({
   activeTool,
   onChangeActiveTool,
+  editorType = "brochure",
 }: SidebarProps) => {
   return (
     <aside className="bg-white flex flex-col w-[100px] h-full border-r overflow-y-auto">
@@ -31,12 +38,34 @@ export const Sidebar = ({
           isActive={activeTool === "templates"}
           onClick={() => onChangeActiveTool("templates")}
         />
+        {editorType === "certificate" && (
+          <SidebarItem
+            icon={FileText}
+            label="Cert Tmpl"
+            isActive={activeTool === "certificate-templates"}
+            onClick={() => onChangeActiveTool("certificate-templates")}
+          />
+        )}
+        <SidebarItem
+          icon={Vote}
+          label="Logos"
+          isActive={activeTool === "logos"}
+          onClick={() => onChangeActiveTool("logos")}
+        />
         <SidebarItem
           icon={ImageIcon}
           label="Image"
           isActive={activeTool === "images"}
           onClick={() => onChangeActiveTool("images")}
         />
+        {editorType === "certificate" && (
+          <SidebarItem
+            icon={BadgeIcon}
+            label="Elements"
+            isActive={activeTool === "elements"}
+            onClick={() => onChangeActiveTool("elements")}
+          />
+        )}
         <SidebarItem
           icon={Type}
           label="Text"
