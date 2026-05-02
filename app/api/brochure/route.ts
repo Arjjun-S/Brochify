@@ -29,12 +29,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const statusParam = request.nextUrl.searchParams.get("status");
-  const brochures = await listBrochuresForUser(session, {
-    status: isValidStatus(statusParam) ? statusParam : undefined,
-  });
+  try {
+    const statusParam = request.nextUrl.searchParams.get("status");
+    const brochures = await listBrochuresForUser(session, {
+      status: isValidStatus(statusParam) ? statusParam : undefined,
+    });
 
-  return NextResponse.json({ brochures });
+    return NextResponse.json({ brochures });
+  } catch (error: unknown) {
+    console.error("Failed to list brochures", error);
+    const message = error instanceof Error ? error.message : "Failed to load brochures.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {

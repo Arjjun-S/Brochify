@@ -98,7 +98,7 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
     setError(null);
     try {
       const response = await fetch("/api/brochure", { cache: "no-store" });
-      const data = (await response.json()) as { brochures?: BrochureRecord[]; error?: string };
+      const data = (await response.json().catch(() => ({}))) as { brochures?: BrochureRecord[]; error?: string };
       if (!response.ok) throw new Error(data.error || "Failed to load brochures.");
       setBrochures(data.brochures || []);
     } catch (loadError) {
@@ -118,7 +118,7 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
     setError(null);
     try {
       const response = await fetch(`/api/brochure/${brochureId}`, { method: "DELETE" });
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Failed to delete brochure.");
       setBrochures((prev) => prev.filter((b) => b.id !== brochureId));
     } catch (deleteError) {

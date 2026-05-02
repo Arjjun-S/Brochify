@@ -10,6 +10,15 @@ AI-Powered University Brochure Builder.
    npm install
    ```
 
+   If installation fails while Puppeteer tries to download browsers (common in locked-down Windows environments), you can skip the download and use a locally installed Chrome/Edge instead:
+
+   ```powershell
+   $env:PUPPETEER_SKIP_DOWNLOAD = "1"
+   npm ci
+   ```
+
+   If you don't have Chrome/Edge in standard locations, set `PUPPETEER_EXECUTABLE_PATH` to the browser executable.
+
 2. Set up environment variables in `.env.local`:
 
    ```env
@@ -41,6 +50,29 @@ AI-Powered University Brochure Builder.
    ```bash
    npm run dev
    ```
+
+## Local Database (Docker)
+
+If your current `DATABASE_URL` points to a remote MySQL instance that is not reachable from your machine (VPN/firewall/offline), you can run a local MySQL for development:
+
+1. Start MySQL:
+
+   ```bash
+   docker compose up -d db
+   ```
+
+2. Create a `.env.local` based on `.env.local.example` and ensure `DATABASE_URL` points to `localhost`.
+
+3. Create tables in the local DB:
+
+   ```powershell
+   # Prisma CLI loads `.env` by default. If your `.env` points to a remote DB,
+   # temporarily override DATABASE_URL for this shell when pushing the schema.
+   $env:DATABASE_URL = "mysql://root:brochify@localhost:3306/brochify"
+   npm run prisma:push
+   ```
+
+Then restart `npm run dev`.
 
 ## Folder Structure
 

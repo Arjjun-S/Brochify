@@ -221,8 +221,43 @@ async function seedUsersIfMissing(): Promise<void> {
 }
 
 function wrapSchemaError(error: unknown): never {
-  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
-    throw new Error("Database tables are missing. Run Prisma migrations with npm run prisma:migrate or npm run prisma:push.");
+  const databaseUrl = typeof process.env.DATABASE_URL === "string" ? process.env.DATABASE_URL.trim() : "";
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is not set. Create a .env.local (or .env) with a valid MySQL connection string.");
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2021") {
+      throw new Error(
+        "Database tables are missing. Run Prisma migrations with npm run prisma:migrate or npm run prisma:push.",
+      );
+    }
+
+    throw error;
+  }
+
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    const message = error.message || "";
+    if (message.includes("Can't reach database server") || message.includes("Timed out") || message.includes("ECONN")) {
+      throw new Error(
+        "Database is not reachable. Check DATABASE_URL and ensure the MySQL server is running and accessible from this machine.",
+      );
+    }
+
+    if (message.toLowerCase().includes("authentication") || message.toLowerCase().includes("access denied")) {
+      throw new Error("Database authentication failed. Verify the username/password in DATABASE_URL.");
+    }
+
+    throw new Error("Database connection failed. Check DATABASE_URL and database availability.");
+  }
+
+  if (error instanceof Error) {
+    const message = error.message || "";
+    if (message.includes("Can't reach database server")) {
+      throw new Error(
+        "Database is not reachable. Check DATABASE_URL and ensure the MySQL server is running and accessible from this machine.",
+      );
+    }
   }
 
   throw error;
@@ -239,7 +274,10 @@ async function initDatabase(): Promise<void> {
 
 async function ensureDatabase(): Promise<void> {
   if (!databaseReadyPromise) {
-    databaseReadyPromise = initDatabase();
+    databaseReadyPromise = initDatabase().catch((error) => {
+      databaseReadyPromise = null;
+      throw error;
+    });
   }
 
   await databaseReadyPromise;

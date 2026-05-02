@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import puppeteer from "puppeteer";
 import { FONT_PDF_STYLESHEET_HREF } from "@/lib/domains/brochure";
+import { launchPuppeteer } from "@/lib/server/puppeteer";
 
 function escapeHtml(text: string): string {
   return text
@@ -80,7 +80,7 @@ export async function handleGeneratePdf(req: NextRequest) {
       : "";
 
     console.log("Launching browser...");
-    const browser = await puppeteer.launch({
+    const browser = await launchPuppeteer({
       headless: true,
       args: [
         "--no-sandbox",

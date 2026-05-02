@@ -1,0 +1,21 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: brochify-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: brochify
+      MYSQL_DATABASE: brochify
+    ports:
+      - "3306:3306"
+    command: --default-authentication-plugin=mysql_native_password --mysqlx=0
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-prochify"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - brochify_mysql_data:/var/lib/mysql
+
+volumes:
+  brochify_mysql_data:

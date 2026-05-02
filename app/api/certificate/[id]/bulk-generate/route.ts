@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
-import puppeteer from "puppeteer";
+import { launchPuppeteer } from "@/lib/server/puppeteer";
 import {
   getCertificateDownloadFileName,
   normalizeCertificateStudentRows,
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const zip = new JSZip();
 
-    const browser = await puppeteer.launch({
+    const browser = await launchPuppeteer({
       headless: true,
       args: [
         "--no-sandbox",

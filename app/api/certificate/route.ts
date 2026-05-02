@@ -13,12 +13,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const statusParam = request.nextUrl.searchParams.get("status");
-  const certificates = await listCertificatesForUser(session, {
-    status: isValidStatus(statusParam) ? statusParam : undefined,
-  });
+  try {
+    const statusParam = request.nextUrl.searchParams.get("status");
+    const certificates = await listCertificatesForUser(session, {
+      status: isValidStatus(statusParam) ? statusParam : undefined,
+    });
 
-  return NextResponse.json({ certificates });
+    return NextResponse.json({ certificates });
+  } catch (error: unknown) {
+    console.error("Failed to list certificates", error);
+    const message = error instanceof Error ? error.message : "Failed to load certificates.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
