@@ -38,6 +38,14 @@
   * {
     border-color: var(--color-border);
   }
+
+  /*
+   * Fabric.js mounts a hidden textarea on document.body (markup: data-fabric-hiddentextarea).
+   * Never force font-size here — it fights Fabric's anchoring math vs zoom/viewport.
+   */
+  textarea[data-fabric-hiddentextarea] {
+    caret-color: rgb(15 23 42);
+  }
 }
 
 /* Custom Utilities for Premium Look */

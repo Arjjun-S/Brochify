@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireServerSession } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
+import { sanitizeDesignProjectJson } from "@/lib/server/designProjectJson";
 
 function isBrochureLinkingUnavailable(error: unknown) {
   if (!(error instanceof Error)) {
@@ -122,7 +123,7 @@ export async function GET(
         data: {
           id: fallbackProject.id,
           name: fallbackProject.name,
-          json: fallbackProject.json,
+          json: sanitizeDesignProjectJson(fallbackProject.json),
           width: fallbackProject.width,
           height: fallbackProject.height,
           thumbnailUrl: fallbackProject.thumbnailUrl,
@@ -152,7 +153,7 @@ export async function GET(
       data: {
         id: project.id,
         name: project.name,
-        json: project.json,
+        json: sanitizeDesignProjectJson(project.json),
         width: project.width,
         height: project.height,
         thumbnailUrl: project.thumbnailUrl,
@@ -226,7 +227,11 @@ export async function PATCH(
     const body = await request.json();
     const updateData: Record<string, unknown> = {};
     if (body.name !== undefined) updateData.name = body.name;
-    if (body.json !== undefined) updateData.json = body.json;
+    if (body.json !== undefined) {
+      updateData.json = typeof body.json === "string"
+        ? sanitizeDesignProjectJson(body.json)
+        : body.json;
+    }
     if (body.width !== undefined) updateData.width = body.width;
     if (body.height !== undefined) updateData.height = body.height;
     if (body.thumbnailUrl !== undefined) updateData.thumbnailUrl = body.thumbnailUrl;

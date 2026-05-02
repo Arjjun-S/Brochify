@@ -8,8 +8,10 @@ export const Logo = () => {
         <Image
           src="/icon-logo.png"
           fill
+          sizes="32px"
+          priority
           alt="Brochify"
-          className="shrink-0 hover:opacity-75 transition"
+          className="object-contain shrink-0 transition hover:opacity-75"
         />
       </div>
     </Link>

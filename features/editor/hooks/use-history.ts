@@ -1,7 +1,8 @@
 import { fabric } from "fabric";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { JSON_KEYS } from "@/features/editor/types";
+import { finalizeFabricTextObjectsAfterLoad, sanitizeCanvasState } from "@/features/editor/utils";
 
 interface UseHistoryProps {
   canvas: fabric.Canvas | null;
@@ -10,12 +11,19 @@ interface UseHistoryProps {
     height: number;
     width: number;
   }) => void;
+  /** Re-apply viewport + page clip/interaction after canvas JSON restore (undo/redo). */
+  afterRestore?: () => void;
 };
 
-export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
+export const useHistory = ({ canvas, saveCallback, afterRestore }: UseHistoryProps) => {
   const [historyIndex, setHistoryIndex] = useState(0);
   const canvasHistory = useRef<string[]>([]);
   const skipSave = useRef(false);
+  const afterRestoreRef = useRef(afterRestore);
+
+  useEffect(() => {
+    afterRestoreRef.current = afterRestore;
+  }, [afterRestore]);
 
   const canUndo = useCallback(() => {
     return historyIndex > 0;
@@ -31,7 +39,12 @@ export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
     let json: string;
     try {
       const currentState = canvas.toJSON(JSON_KEYS);
-      json = JSON.stringify(currentState);
+      const sanitizedState = sanitizeCanvasState(currentState) || {
+        version: "5.3.0",
+        viewportTransform: [1, 0, 0, 1, 0, 0],
+        objects: [],
+      };
+      json = JSON.stringify(sanitizedState);
     } catch {
       return;
     }
@@ -74,7 +87,16 @@ export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
         return;
       }
 
-      canvas?.loadFromJSON(previousState, () => {
+      const sanitizedPreviousState = sanitizeCanvasState(previousState);
+      if (!sanitizedPreviousState) {
+        skipSave.current = false;
+        return;
+      }
+
+      canvas?.loadFromJSON(sanitizedPreviousState, () => {
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        finalizeFabricTextObjectsAfterLoad(canvas);
+        afterRestoreRef.current?.();
         canvas.renderAll();
         setHistoryIndex(previousIndex);
         skipSave.current = false;
@@ -102,7 +124,16 @@ export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
         return;
       }
 
-      canvas?.loadFromJSON(nextState, () => {
+      const sanitizedNextState = sanitizeCanvasState(nextState);
+      if (!sanitizedNextState) {
+        skipSave.current = false;
+        return;
+      }
+
+      canvas?.loadFromJSON(sanitizedNextState, () => {
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        finalizeFabricTextObjectsAfterLoad(canvas);
+        afterRestoreRef.current?.();
         canvas.renderAll();
         setHistoryIndex(nextIndex);
         skipSave.current = false;

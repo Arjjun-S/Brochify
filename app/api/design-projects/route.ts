@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireServerSession } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
+import { sanitizeDesignProjectJson } from "@/lib/server/designProjectJson";
 
 function isBrochureLinkingUnavailable(error: unknown) {
   if (!(error instanceof Error)) {
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
 
     const baseData = {
       name: name || "Untitled project",
-      json: json || "",
+      json: typeof json === "string" ? sanitizeDesignProjectJson(json) : "",
       width: width || 900,
       height: height || 1200,
       createdBy: session.userId,

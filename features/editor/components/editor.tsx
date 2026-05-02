@@ -30,6 +30,7 @@ import { AiSidebar } from "@/features/editor/components/ai-sidebar";
 import { TemplateSidebar } from "@/features/editor/components/template-sidebar";
 import { RemoveBgSidebar } from "@/features/editor/components/remove-bg-sidebar";
 import { SettingsSidebar } from "@/features/editor/components/settings-sidebar";
+import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
 
 interface EditorProps {
   initialData: {
@@ -94,6 +95,7 @@ export const Editor = ({ initialData, brochureId, brochureType }: EditorProps) =
 
   const canvasRef = useRef(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const canvas = new fabric.Canvas(canvasRef.current, {
@@ -110,6 +112,26 @@ export const Editor = ({ initialData, brochureId, brochureType }: EditorProps) =
       canvas.dispose();
     };
   }, [init]);
+
+  useEffect(() => {
+    const canvas = editor?.canvas;
+    const mainEl = mainScrollRef.current;
+    if (!canvas || !mainEl) {
+      return;
+    }
+
+    const sync = () => {
+      refreshFabricTextEditingAnchor(canvas);
+    };
+
+    mainEl.addEventListener("scroll", sync, { passive: true });
+    window.addEventListener("resize", sync);
+
+    return () => {
+      mainEl.removeEventListener("scroll", sync);
+      window.removeEventListener("resize", sync);
+    };
+  }, [editor]);
 
   return (
     <div className="h-full flex flex-col">
@@ -196,14 +218,17 @@ export const Editor = ({ initialData, brochureId, brochureType }: EditorProps) =
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
         />
-        <main className="bg-muted flex-1 overflow-auto relative flex flex-col">
+        <main
+          ref={mainScrollRef}
+          className="bg-muted flex-1 min-h-0 overflow-auto relative flex flex-col"
+        >
           <Toolbar
             editor={editor}
             activeTool={activeTool}
             onChangeActiveTool={onChangeActiveTool}
           />
-          <div className="flex-1 h-[calc(100%-124px)] bg-muted" ref={containerRef}>
-            <canvas ref={canvasRef} />
+          <div className="flex-1 min-h-0 h-[calc(100%-124px)] bg-muted relative" ref={containerRef}>
+            <canvas ref={canvasRef} className="block" />
           </div>
           <Footer editor={editor} />
         </main>

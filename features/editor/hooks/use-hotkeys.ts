@@ -20,14 +20,17 @@ export const useHotkeys = ({ canvas, undo, redo, save, copy, paste }: UseHotkeys
 
     // delete key
     if (event.keyCode === 46) {
-      canvas?.getActiveObjects().forEach((Object) => canvas?.remove(Object));
+      canvas?.getActiveObjects().forEach((object) => canvas?.remove(object));
       canvas?.discardActiveObject();
       canvas?.renderAll();
+      save();
     }
 
     if (isBackspace) {
       canvas?.remove(...canvas.getActiveObjects());
       canvas?.discardActiveObject();
+      canvas?.renderAll();
+      save();
     }
 
     if (isCtrlKey && event.key === "z") {
@@ -59,10 +62,14 @@ export const useHotkeys = ({ canvas, undo, redo, save, copy, paste }: UseHotkeys
       event.preventDefault();
       canvas?.discardActiveObject();
 
-      const allObjects = canvas?.getObjects().filter((object) => object.selectable);
+      const allObjects = canvas?.getObjects().filter((object) => object.selectable) ?? [];
 
-      canvas?.setActiveObject(new fabric.ActiveSelection(allObjects, { canvas }));
-      canvas?.renderAll();
+      if (allObjects.length === 0 || !canvas) {
+        return;
+      }
+
+      canvas.setActiveObject(new fabric.ActiveSelection(allObjects, { canvas }));
+      canvas.renderAll();
     }
   });
 };

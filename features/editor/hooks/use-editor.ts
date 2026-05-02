@@ -23,15 +23,188 @@ import { useHistory } from "@/features/editor/hooks/use-history";
 import { 
   createFilter, 
   downloadFile, 
+  exportCropRectForFabricObject,
   isTextType,
+  sanitizeCanvasState,
+  finalizeFabricTextObjectsAfterLoad,
+  refreshFabricTextEditingAnchor,
+  syncCanvasClipToActivePage,
   transformText
 } from "@/features/editor/utils";
 import { useHotkeys } from "@/features/editor/hooks/use-hotkeys";
 import { useClipboard } from "@/features/editor/hooks/use-clipboard";
 import { useAutoResize } from "@/features/editor/hooks/use-auto-resize";
 import { useCanvasEvents } from "@/features/editor/hooks/use-canvas-events";
+import { useViewportInteractions } from "@/features/editor/hooks/use-viewport-interactions";
 import { useWindowEvents } from "@/features/editor/hooks/use-window-events";
 import { useLoadState } from "@/features/editor/hooks/use-load-state";
+
+const IDENTITY_MATRIX: [number, number, number, number, number, number] = [1, 0, 0, 1, 0, 0];
+
+function toFiniteNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function toSafeMatrix(value: unknown): [number, number, number, number, number, number] {
+  if (!Array.isArray(value)) {
+    return [...IDENTITY_MATRIX];
+  }
+
+  return [
+    toFiniteNumber(value[0], 1),
+    toFiniteNumber(value[1], 0),
+    toFiniteNumber(value[2], 0),
+    toFiniteNumber(value[3], 1),
+    toFiniteNumber(value[4], 0),
+    toFiniteNumber(value[5], 0),
+  ];
+}
+
+function ensureCanvasViewportTransform(canvas: fabric.Canvas) {
+  canvas.setViewportTransform(toSafeMatrix(canvas.viewportTransform));
+}
+
+function patchFabricTextEditingPresentation() {
+  const marker = fabric as typeof fabric & { __brochifyTextPresentation?: boolean };
+  if (marker.__brochifyTextPresentation) {
+    return;
+  }
+  marker.__brochifyTextPresentation = true;
+
+  Object.assign(fabric.IText.prototype, {
+    cursorWidth: 2,
+    cursorColor: "",
+    editingBorderColor: "rgba(37, 99, 235, 0.55)",
+    selectionColor: "rgba(37, 99, 235, 0.32)",
+  });
+}
+
+/**
+ * Fabric draws the caret using full font-size height while glyphs sit higher (_fontSizeFraction),
+ * so the bar looks too tall and sits wrong vs caps (especially Textbox / zoom). Match line metrics
+ * and keep thickness at Fabric's nominal cursorWidth (screen px).
+ */
+function patchFabricTextEditingCursorMetrics() {
+  const marker = fabric as typeof fabric & { __brochifyTextCursorMetrics?: boolean };
+  if (marker.__brochifyTextCursorMetrics) {
+    return;
+  }
+  marker.__brochifyTextCursorMetrics = true;
+
+  fabric.IText.prototype.renderCursor = function (
+    boundaries: { left: number; top: number; leftOffset: number; topOffset: number },
+    ctx: CanvasRenderingContext2D,
+  ) {
+    const cursorLocation = this.get2DCursorLocation();
+    const lineIndex = cursorLocation.lineIndex;
+    const charIndex = cursorLocation.charIndex > 0 ? cursorLocation.charIndex - 1 : 0;
+
+    const fontSize = Number(this.getValueOfPropertyAt(lineIndex, charIndex, "fontSize"));
+    const lhRaw = this.lineHeight;
+    const lh =
+      typeof lhRaw === "number" && lhRaw > 0 ? lhRaw : 1.16;
+    const lineHeightPx = this.getHeightOfLine(lineIndex);
+    const innerLine = lineHeightPx / lh;
+
+    const multiplier =
+      Math.abs(typeof this.scaleX === "number" ? this.scaleX : 1)
+      * (this.canvas ? this.canvas.getZoom() : 1);
+
+    const nominal =
+      typeof this.cursorWidth === "number" && this.cursorWidth > 0 ? this.cursorWidth : 2;
+    const cursorStroke = nominal / multiplier;
+
+    const frac =
+      typeof this._fontSizeFraction === "number" ? this._fontSizeFraction : 0.222;
+
+    let topOffset = boundaries.topOffset;
+    const dy = Number(this.getValueOfPropertyAt(lineIndex, charIndex, "deltaY"));
+
+    topOffset += ((1 - frac) * lineHeightPx) / lh - fontSize * (1 - frac);
+
+    const cursorHeight = Math.min(fontSize * 0.74, innerLine * 0.9);
+    topOffset += (fontSize - cursorHeight) / 2;
+
+    if (this.inCompositionMode) {
+      this.renderSelection(boundaries, ctx);
+    }
+
+    const fillAtCaret = this.getValueOfPropertyAt(lineIndex, charIndex, "fill");
+    ctx.fillStyle =
+      typeof this.cursorColor === "string" && this.cursorColor.length > 0
+        ? this.cursorColor
+        : typeof fillAtCaret === "string"
+          ? fillAtCaret
+          : "#111827";
+
+    const editingState = this as fabric.IText & {
+      __isMousedown?: boolean;
+      _currentCursorOpacity?: number;
+    };
+    ctx.globalAlpha = editingState.__isMousedown ? 1 : (editingState._currentCursorOpacity ?? 1);
+
+    ctx.fillRect(
+      boundaries.left + boundaries.leftOffset - cursorStroke / 2,
+      topOffset + boundaries.top + dy,
+      cursorStroke,
+      cursorHeight,
+    );
+  };
+}
+
+function patchFabricTransformGuards() {
+  const util = (
+    fabric as unknown as {
+      util?: Record<string, unknown>;
+    }
+  ).util;
+
+  if (!util) {
+    return;
+  }
+
+  const marker = util as { __brochifySafeMatrixPatched?: boolean };
+  if (marker.__brochifySafeMatrixPatched) {
+    return;
+  }
+  marker.__brochifySafeMatrixPatched = true;
+
+  const originalMultiply = util.multiplyTransformMatrices as
+    | ((a: number[], b: number[], is2x2?: boolean) => number[])
+    | undefined;
+  if (originalMultiply) {
+    util.multiplyTransformMatrices = ((a: unknown, b: unknown, is2x2?: boolean) => {
+      return originalMultiply(toSafeMatrix(a), toSafeMatrix(b), is2x2);
+    }) as unknown;
+  }
+
+  const originalInvert = util.invertTransform as
+    | ((matrix: number[]) => number[])
+    | undefined;
+  if (originalInvert) {
+    util.invertTransform = ((matrix: unknown) => {
+      return originalInvert(toSafeMatrix(matrix));
+    }) as unknown;
+  }
+
+  const originalQrDecompose = util.qrDecompose as
+    | ((matrix: number[]) => unknown)
+    | undefined;
+  if (originalQrDecompose) {
+    util.qrDecompose = ((matrix: unknown) => {
+      return originalQrDecompose(toSafeMatrix(matrix));
+    }) as unknown;
+  }
+
+  const originalTransformPoint = util.transformPoint as
+    | ((point: fabric.Point, matrix: number[], ignoreOffset?: boolean) => fabric.Point)
+    | undefined;
+  if (originalTransformPoint) {
+    util.transformPoint = ((point: fabric.Point, matrix: unknown, ignoreOffset?: boolean) => {
+      return originalTransformPoint(point, toSafeMatrix(matrix), ignoreOffset);
+    }) as unknown;
+  }
+}
 
 const buildEditor = ({
   save,
@@ -80,6 +253,32 @@ const buildEditor = ({
     return pageFrames[activePageIndex];
   };
 
+  const getSelectedPlaceholderFrame = () => {
+    const selectedObject = selectedObjects?.[0];
+
+    if (!selectedObject) {
+      return undefined;
+    }
+
+    if (selectedObject.name === "image-placeholder") {
+      return selectedObject;
+    }
+
+    if (selectedObject.name === "placeholder-image") {
+      const placeholderId = (selectedObject as fabric.Object & { placeholderId?: string }).placeholderId;
+      if (!placeholderId) {
+        return undefined;
+      }
+
+      return canvas
+        .getObjects()
+        .find((object) => object.name === "image-placeholder"
+          && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholderId);
+    }
+
+    return undefined;
+  };
+
   const withNoClip = <T>(work: () => T): T => {
     const previousClipPath = canvas.clipPath;
     canvas.clipPath = undefined;
@@ -105,12 +304,34 @@ const buildEditor = ({
   };
 
   const savePng = () => {
-    const options = generateSaveOptions();
-
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    const dataUrl = withNoClip(() => canvas.toDataURL(options));
 
-    downloadFile(dataUrl, "png");
+    const frames = getPageFrames();
+
+    if (frames.length >= 2) {
+      const urls = frames.map((frame) => {
+        const crop = exportCropRectForFabricObject(frame);
+        return withNoClip(() =>
+          canvas.toDataURL({
+            format: "png",
+            quality: 1,
+            ...crop,
+          }),
+        );
+      });
+
+      urls.forEach((dataUrl, index) => {
+        window.setTimeout(() => {
+          downloadFile(dataUrl, "png", `brochure-page-${index + 1}`);
+        }, index * 350);
+      });
+    }
+    else {
+      const options = generateSaveOptions();
+      const dataUrl = withNoClip(() => canvas.toDataURL(options));
+      downloadFile(dataUrl, "png");
+    }
+
     autoZoom();
   };
 
@@ -125,35 +346,91 @@ const buildEditor = ({
   };
 
   const saveJpg = () => {
-    const options = generateSaveOptions();
-
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    const dataUrl = withNoClip(() => canvas.toDataURL(options));
 
-    downloadFile(dataUrl, "jpg");
+    const frames = getPageFrames();
+
+    if (frames.length >= 2) {
+      const urls = frames.map((frame) => {
+        const crop = exportCropRectForFabricObject(frame);
+        return withNoClip(() =>
+          canvas.toDataURL({
+            format: "jpeg",
+            quality: 1,
+            ...crop,
+          }),
+        );
+      });
+
+      urls.forEach((dataUrl, index) => {
+        window.setTimeout(() => {
+          downloadFile(dataUrl, "jpg", `brochure-page-${index + 1}`);
+        }, index * 350);
+      });
+    }
+    else {
+      const options = {
+        ...generateSaveOptions(),
+        format: "jpeg" as const,
+        quality: 0.92,
+      };
+      const dataUrl = withNoClip(() => canvas.toDataURL(options));
+      downloadFile(dataUrl, "jpg");
+    }
+
     autoZoom();
   };
 
   const savePdf = async (options?: { watermarkText?: string | null; template?: string }) => {
-    const exportOptions = {
-      ...generateSaveOptions(),
-      format: "png" as const,
-    };
-
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    const imageDataUrl = withNoClip(() => canvas.toDataURL(exportOptions));
+
+    const frames = getPageFrames();
+
+    let html: string;
+    let spreadPages = 1;
+
+    if (frames.length >= 2) {
+      spreadPages = frames.length;
+
+      const sheets = frames.map((frame) => {
+        const crop = exportCropRectForFabricObject(frame);
+        const imageDataUrl = withNoClip(() =>
+          canvas.toDataURL({
+            format: "png",
+            quality: 1,
+            ...crop,
+          }),
+        );
+
+        return `<div class="pdf-export-sheet"><img src="${imageDataUrl}" alt="" /></div>`;
+      });
+
+      html = sheets.join("");
+    }
+    else {
+      const exportOptions = {
+        ...generateSaveOptions(),
+        format: "png" as const,
+      };
+
+      const imageDataUrl = withNoClip(() => canvas.toDataURL(exportOptions));
+
+      html = `
+          <div style=\"width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:white;\">
+            <img src=\"${imageDataUrl}\" alt=\"Design export\" style=\"width:100%;height:100%;object-fit:contain;display:block;\" />
+          </div>
+        `;
+    }
+
     autoZoom();
 
     const response = await fetch("/api/v1/brochure/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        html: `
-          <div style=\"width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:white;\">
-            <img src=\"${imageDataUrl}\" alt=\"Design export\" style=\"width:100%;height:100%;object-fit:contain;display:block;\" />
-          </div>
-        `,
+        html,
         css: "",
+        spreadPages,
         watermarkText: options?.watermarkText ?? null,
         template: options?.template ?? "",
       }),
@@ -186,9 +463,22 @@ const buildEditor = ({
   };
 
   const loadJson = (json: string) => {
-    const data = JSON.parse(json);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      return;
+    }
+
+    const data = sanitizeCanvasState(parsed);
+
+    if (!data) {
+      return;
+    }
 
     canvas.loadFromJSON(data, () => {
+      ensureCanvasViewportTransform(canvas);
+      finalizeFabricTextObjectsAfterLoad(canvas);
       autoZoom();
     });
   };
@@ -223,14 +513,15 @@ const buildEditor = ({
 
     canvas.setViewportTransform(nextViewportTransform);
 
-    target.clone((cloned: fabric.Rect) => {
-      canvas.clipPath = cloned;
-      canvas.requestRenderAll();
-    });
+    syncCanvasClipToActivePage(canvas, pageIndex ?? activePage);
 
     if (typeof pageIndex === "number") {
       setActivePage(pageIndex);
     }
+
+    refreshFabricTextEditingAnchor(canvas);
+
+    canvas.requestRenderAll();
   };
 
   const getPageCount = () => {
@@ -409,19 +700,15 @@ const buildEditor = ({
       let zoomRatio = canvas.getZoom();
       zoomRatio += 0.05;
       const center = canvas.getCenter();
-      canvas.zoomToPoint(
-        new fabric.Point(center.left, center.top),
-        zoomRatio > 1 ? 1 : zoomRatio
-      );
+      const clamped = Math.min(Math.max(zoomRatio, 0.05), 12);
+      canvas.zoomToPoint(new fabric.Point(center.left, center.top), clamped);
     },
     zoomOut: () => {
       let zoomRatio = canvas.getZoom();
       zoomRatio -= 0.05;
       const center = canvas.getCenter();
-      canvas.zoomToPoint(
-        new fabric.Point(center.left, center.top),
-        zoomRatio < 0.2 ? 0.2 : zoomRatio,
-      );
+      const clamped = Math.min(Math.max(zoomRatio, 0.05), 12);
+      canvas.zoomToPoint(new fabric.Point(center.left, center.top), clamped);
     },
     changeSize: (value: { width: number; height: number }) => {
       const workspace = getWorkspace();
@@ -468,6 +755,89 @@ const buildEditor = ({
       fabric.Image.fromURL(
         value,
         (image) => {
+          const selectedPlaceholderFrame = getSelectedPlaceholderFrame();
+
+          if (selectedPlaceholderFrame) {
+            const placeholder = selectedPlaceholderFrame as fabric.Object & {
+              placeholderId?: string;
+              pageIndex?: number;
+              rx?: number;
+              ry?: number;
+            };
+            const placeholderWidth = placeholder.getScaledWidth();
+            const placeholderHeight = placeholder.getScaledHeight();
+
+            if (placeholderWidth && placeholderHeight) {
+              const placeholderCenter = placeholder.getCenterPoint();
+              const imageWidth = image.width || 1;
+              const imageHeight = image.height || 1;
+              const coverScale = Math.max(
+                placeholderWidth / imageWidth,
+                placeholderHeight / imageHeight,
+              );
+
+              image.set({
+                originX: "center",
+                originY: "center",
+                left: placeholderCenter.x,
+                top: placeholderCenter.y,
+                scaleX: coverScale,
+                scaleY: coverScale,
+                name: "placeholder-image",
+              });
+
+              (image as unknown as { placeholderId?: string }).placeholderId = placeholder.placeholderId;
+              (image as unknown as { pageIndex?: number }).pageIndex = placeholder.pageIndex;
+
+              const clipPath = placeholder.type === "circle"
+                ? new fabric.Circle({
+                  originX: "center",
+                  originY: "center",
+                  radius: Math.min(placeholderWidth, placeholderHeight) / 2,
+                })
+                : new fabric.Rect({
+                  originX: "center",
+                  originY: "center",
+                  width: placeholderWidth,
+                  height: placeholderHeight,
+                  rx: Math.max(0, (placeholder.rx || 0) * (placeholder.scaleX || 1)),
+                  ry: Math.max(0, (placeholder.ry || 0) * (placeholder.scaleY || 1)),
+                });
+
+              image.set({ clipPath });
+
+              const existingPlaceholderImages = canvas
+                .getObjects()
+                .filter((object) => object.name === "placeholder-image"
+                  && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholder.placeholderId);
+
+              existingPlaceholderImages.forEach((object) => {
+                canvas.remove(object);
+              });
+
+              const frameIndex = canvas.getObjects().indexOf(placeholder);
+              if (frameIndex >= 0) {
+                canvas.insertAt(image, frameIndex, false);
+              } else {
+                canvas.add(image);
+              }
+
+              const labelsToRemove = canvas
+                .getObjects()
+                .filter((object) => object.name === "placeholder-label"
+                  && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholder.placeholderId);
+              labelsToRemove.forEach((label) => {
+                canvas.remove(label);
+              });
+
+              placeholder.set({ fill: "rgba(255,255,255,0.001)" });
+              canvas.bringToFront(placeholder);
+              canvas.setActiveObject(image);
+              canvas.requestRenderAll();
+              return;
+            }
+          }
+
           const activePageFrame = getActivePageFrame();
           const workspace = getWorkspace();
           const fitWidth = activePageFrame?.width || workspace?.width || 0;
@@ -893,6 +1263,8 @@ export const useEditor = ({
 
   useWindowEvents();
 
+  const autoZoomRef = useRef<() => void>(() => {});
+
   const {
     save, 
     canRedo, 
@@ -903,7 +1275,10 @@ export const useEditor = ({
     setHistoryIndex,
   } = useHistory({
     canvas,
-    saveCallback
+    saveCallback,
+    afterRestore: () => {
+      autoZoomRef.current();
+    },
   });
 
   const { copy, paste } = useClipboard({ canvas });
@@ -914,12 +1289,16 @@ export const useEditor = ({
     activePage,
   });
 
+  autoZoomRef.current = autoZoom;
+
   useCanvasEvents({
     save,
     canvas,
     setSelectedObjects,
     clearSelectionCallback,
   });
+
+  useViewportInteractions({ canvas });
 
   useHotkeys({
     undo,
@@ -995,6 +1374,20 @@ export const useEditor = ({
       initialCanvas: fabric.Canvas;
       initialContainer: HTMLDivElement;
     }) => {
+      const workspaceWidth = Number(initialWidth.current) || 0;
+      const workspaceHeight = Number(initialHeight.current) || 0;
+      const rawInitialState = initialState.current?.trim();
+      const isEmptyInitialState = !rawInitialState || rawInitialState === "{}";
+      const shouldBootstrapTrifoldPages =
+        isEmptyInitialState
+        && workspaceWidth > 0
+        && workspaceHeight > 0
+        && workspaceWidth / workspaceHeight > 2.3;
+
+      patchFabricTransformGuards();
+      patchFabricTextEditingPresentation();
+      patchFabricTextEditingCursorMetrics();
+
       fabric.Object.prototype.set({
         cornerColor: "#FFF",
         cornerStyle: "circle",
@@ -1006,10 +1399,10 @@ export const useEditor = ({
       });
 
       const initialWorkspace = new fabric.Rect({
-        width: initialWidth.current,
-        height: initialHeight.current,
+        width: workspaceWidth || 900,
+        height: workspaceHeight || 600,
         name: "clip",
-        fill: "white",
+        fill: shouldBootstrapTrifoldPages ? "#e5e7eb" : "white",
         selectable: false,
         hasControls: false,
         shadow: new fabric.Shadow({
@@ -1020,17 +1413,176 @@ export const useEditor = ({
 
       initialCanvas.setWidth(initialContainer.offsetWidth);
       initialCanvas.setHeight(initialContainer.offsetHeight);
+      ensureCanvasViewportTransform(initialCanvas);
+
+      const originalGetPointer = initialCanvas.getPointer.bind(initialCanvas) as (
+        event: unknown,
+        ignoreZoom?: boolean,
+      ) => fabric.Point;
+
+      (
+        initialCanvas as unknown as {
+          getPointer: (event: unknown, ignoreZoom?: boolean) => fabric.Point;
+        }
+      ).getPointer = (event, ignoreZoom) => {
+        ensureCanvasViewportTransform(initialCanvas);
+
+        return originalGetPointer(event, ignoreZoom);
+      };
 
       initialCanvas.add(initialWorkspace);
       initialCanvas.centerObject(initialWorkspace);
-      initialCanvas.clipPath = initialWorkspace;
+
+      if (shouldBootstrapTrifoldPages) {
+        const pageGap = 120;
+        const outerMargin = 40;
+        const sideWidth = (workspaceWidth - pageGap - outerMargin * 2) / 2;
+
+        if (Number.isFinite(sideWidth) && sideWidth > 200) {
+          const workspaceLeft = initialWorkspace.left ?? 0;
+          const workspaceTop = initialWorkspace.top ?? 0;
+          const pageOneLeft = workspaceLeft + outerMargin;
+          const pageTwoLeft = pageOneLeft + sideWidth + pageGap;
+          const pageTop = workspaceTop;
+
+          const pageOneFrame = new fabric.Rect({
+            left: pageOneLeft,
+            top: pageTop,
+            width: sideWidth,
+            height: workspaceHeight,
+            rx: 16,
+            ry: 16,
+            fill: "#ffffff",
+            stroke: "#94a3b8",
+            strokeWidth: 2,
+            selectable: false,
+            evented: false,
+            hasControls: false,
+            name: "page-frame",
+          });
+          (pageOneFrame as unknown as { pageIndex: number }).pageIndex = 1;
+
+          const pageTwoFrame = new fabric.Rect({
+            left: pageTwoLeft,
+            top: pageTop,
+            width: sideWidth,
+            height: workspaceHeight,
+            rx: 16,
+            ry: 16,
+            fill: "#ffffff",
+            stroke: "#94a3b8",
+            strokeWidth: 2,
+            selectable: false,
+            evented: false,
+            hasControls: false,
+            name: "page-frame",
+          });
+          (pageTwoFrame as unknown as { pageIndex: number }).pageIndex = 2;
+
+          const pageOneLabel = new fabric.Textbox("PAGE 1 - OUTER SIDE", {
+            left: pageOneLeft + 14,
+            top: pageTop + 8,
+            width: 220,
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: "Arial",
+            fill: "#334155",
+            editable: false,
+            selectable: false,
+            evented: false,
+            hasControls: false,
+            name: "page-label",
+          });
+          (pageOneLabel as unknown as { pageIndex: number }).pageIndex = 1;
+
+          const pageTwoLabel = new fabric.Textbox("PAGE 2 - INNER SIDE", {
+            left: pageTwoLeft + 14,
+            top: pageTop + 8,
+            width: 220,
+            fontSize: 12,
+            fontWeight: 700,
+            fontFamily: "Arial",
+            fill: "#334155",
+            editable: false,
+            selectable: false,
+            evented: false,
+            hasControls: false,
+            name: "page-label",
+          });
+          (pageTwoLabel as unknown as { pageIndex: number }).pageIndex = 2;
+
+          const panelWidth = sideWidth / 3;
+          const panelGuideOne = new fabric.Line(
+            [pageOneLeft + panelWidth, pageTop, pageOneLeft + panelWidth, pageTop + workspaceHeight],
+            {
+              stroke: "#dbeafe",
+              strokeWidth: 1,
+              selectable: false,
+              evented: false,
+              hasControls: false,
+              name: "page-guide",
+            },
+          );
+          (panelGuideOne as unknown as { pageIndex: number }).pageIndex = 1;
+
+          const panelGuideTwo = new fabric.Line(
+            [pageOneLeft + panelWidth * 2, pageTop, pageOneLeft + panelWidth * 2, pageTop + workspaceHeight],
+            {
+              stroke: "#dbeafe",
+              strokeWidth: 1,
+              selectable: false,
+              evented: false,
+              hasControls: false,
+              name: "page-guide",
+            },
+          );
+          (panelGuideTwo as unknown as { pageIndex: number }).pageIndex = 1;
+
+          const panelGuideThree = new fabric.Line(
+            [pageTwoLeft + panelWidth, pageTop, pageTwoLeft + panelWidth, pageTop + workspaceHeight],
+            {
+              stroke: "#93c5fd",
+              strokeWidth: 1,
+              selectable: false,
+              evented: false,
+              hasControls: false,
+              name: "page-guide",
+            },
+          );
+          (panelGuideThree as unknown as { pageIndex: number }).pageIndex = 2;
+
+          const panelGuideFour = new fabric.Line(
+            [pageTwoLeft + panelWidth * 2, pageTop, pageTwoLeft + panelWidth * 2, pageTop + workspaceHeight],
+            {
+              stroke: "#93c5fd",
+              strokeWidth: 1,
+              selectable: false,
+              evented: false,
+              hasControls: false,
+              name: "page-guide",
+            },
+          );
+          (panelGuideFour as unknown as { pageIndex: number }).pageIndex = 2;
+
+          initialCanvas.add(pageOneFrame);
+          initialCanvas.add(pageTwoFrame);
+          initialCanvas.add(pageOneLabel);
+          initialCanvas.add(pageTwoLabel);
+          initialCanvas.add(panelGuideOne);
+          initialCanvas.add(panelGuideTwo);
+          initialCanvas.add(panelGuideThree);
+          initialCanvas.add(panelGuideFour);
+        }
+      }
+
+      syncCanvasClipToActivePage(initialCanvas, 1);
 
       setCanvas(initialCanvas);
       setContainer(initialContainer);
       setActivePage(1);
 
       let currentState = initialState.current;
-      if (!currentState) {
+      if (!currentState || !currentState.trim() || currentState.trim() === "{}") {
         try {
           currentState = JSON.stringify(
             initialCanvas.toJSON(JSON_KEYS)

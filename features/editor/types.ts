@@ -5,6 +5,7 @@ import * as material from "material-colors";
 export const JSON_KEYS = [
   "name",
   "pageIndex",
+  "placeholderId",
   "gradientAngle",
   "selectable",
   "hasControls",

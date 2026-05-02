@@ -46,6 +46,7 @@ function rect(
     hasControls?: boolean;
     name?: string;
     pageIndex?: number;
+    placeholderId?: string;
   },
 ) {
   return {
@@ -68,6 +69,7 @@ function rect(
     hasControls: options?.hasControls ?? (options?.selectable ?? false),
     name: options?.name,
     pageIndex: options?.pageIndex,
+    placeholderId: options?.placeholderId,
     scaleX: 1,
     scaleY: 1,
     angle: 0,
@@ -91,6 +93,7 @@ function text(
     hasControls?: boolean;
     name?: string;
     pageIndex?: number;
+    placeholderId?: string;
   },
 ) {
   return {
@@ -101,7 +104,6 @@ function text(
     left,
     top,
     width,
-    height: Math.max(40, Math.round(fontSize * 2.5)),
     fill,
     fontFamily,
     fontSize,
@@ -109,12 +111,14 @@ function text(
     lineHeight: 1.3,
     textAlign,
     text: value,
+    objectCaching: false,
     editable: options?.editable ?? true,
     selectable: options?.selectable ?? true,
     evented: options?.evented ?? (options?.selectable ?? true),
     hasControls: options?.hasControls ?? (options?.selectable ?? true),
     name: options?.name,
     pageIndex: options?.pageIndex,
+    placeholderId: options?.placeholderId,
     scaleX: 1,
     scaleY: 1,
     angle: 0,
@@ -153,6 +157,9 @@ function circle(
     selectable?: boolean;
     evented?: boolean;
     hasControls?: boolean;
+    name?: string;
+    pageIndex?: number;
+    placeholderId?: string;
   },
 ) {
   return {
@@ -170,6 +177,9 @@ function circle(
     selectable: options?.selectable ?? false,
     evented: options?.evented ?? (options?.selectable ?? false),
     hasControls: options?.hasControls ?? (options?.selectable ?? false),
+    name: options?.name,
+    pageIndex: options?.pageIndex,
+    placeholderId: options?.placeholderId,
     scaleX: 1,
     scaleY: 1,
     angle: 0,
@@ -195,23 +205,57 @@ function sectionHeader(
   ];
 }
 
-function placeholderBox(
+let placeholderCounter = 0;
+
+function imagePlaceholder(
   left: number,
   top: number,
   width: number,
   height: number,
   label: string,
+  options?: {
+    pageIndex?: number;
+    circle?: boolean;
+  },
 ) {
-  return [
-    rect(left, top, width, height, "#ffffff", 10, {
+  placeholderCounter += 1;
+  const placeholderId = `placeholder-${placeholderCounter}`;
+
+  const frame = options?.circle
+    ? circle(left, top, Math.min(width, height) / 2, "rgba(255,255,255,0.001)", {
+      stroke: "#38bdf8",
+      strokeWidth: 2,
+      strokeDashArray: [8, 6],
+      selectable: true,
+      evented: true,
+      hasControls: true,
+      name: "image-placeholder",
+      pageIndex: options.pageIndex,
+      placeholderId,
+    })
+    : rect(left, top, width, height, "rgba(255,255,255,0.001)", 10, {
       stroke: "#2563eb",
       strokeWidth: 2,
       strokeDashArray: [8, 6],
       selectable: true,
       evented: true,
       hasControls: true,
+      name: "image-placeholder",
+      pageIndex: options?.pageIndex,
+      placeholderId,
+    });
+
+  return [
+    frame,
+    text(`[${label}]`, left + 8, top + height / 2 - 10, width - 16, 14, "#1d4ed8", 700, "Arial", "center", {
+      editable: false,
+      selectable: false,
+      evented: false,
+      hasControls: false,
+      name: "placeholder-label",
+      pageIndex: options?.pageIndex,
+      placeholderId,
     }),
-    text(`[${label}]`, left + 8, top + height / 2 - 10, width - 16, 14, "#1d4ed8", 700, "Arial", "center"),
   ];
 }
 
@@ -241,6 +285,15 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
   const tableY = 92;
   const tableW = TRI_PANEL_W - 40;
   const rowH = 86;
+
+  const regTextLeft = frontMiddleX + 34;
+  const regTextW = TRI_PANEL_W - 68;
+  const regFeesTop = 106;
+  const qrSizePx = 176;
+  const regFeesReserve = 196;
+  const qrLeftCentered = frontMiddleX + TRI_PANEL_W / 2 - qrSizePx / 2;
+  const qrTop = regFeesTop + regFeesReserve + 14;
+  const regNotesTop = qrTop + qrSizePx + 14;
 
   const objects = [
     workspace(W_TRI, H_TRI, "#e5e7eb"),
@@ -344,20 +397,30 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
       hasControls: false,
     }),
 
-    rect(frontMiddleX + 20, 82, TRI_PANEL_W - 40, 560, "#0d55c9", 10, {
+    rect(frontMiddleX + 20, 82, TRI_PANEL_W - 40, 572, "#0d55c9", 10, {
       stroke: "#93c5fd",
       strokeWidth: 2,
     }),
+
     text(
-      "Registration Fee:\nIEEE Member            : Rs. 500/-\nNon IEEE Member        : Rs. 750/-\n(Refundable for IEEE membership enrollment)\nLast date for registration: 19th March 2026\nRegistration Link: https://forms.gle/TEMPLATE-LINK\n\nNote:\n• Registration confirmation by mail\n• Session timing: 9:30 AM - 4:00 PM\n• Registration is compulsory for all participants\n• Participation certificate provided by IEEE\n• Laptops are required for hands-on sessions",
-      frontMiddleX + 34,
-      106,
-      TRI_PANEL_W - 68,
+      "Registration Fee:\nIEEE Member : Rs. 500/-\nNon IEEE Member : Rs. 750/-\n(Refundable for IEEE membership enrollment)\nLast date for registration: 19th March 2026\nRegistration Link:\nhttps://forms.gle/TEMPLATE-LINK",
+      regTextLeft,
+      regFeesTop,
+      regTextW,
       14,
       "#ffffff",
       500,
     ),
-    ...placeholderBox(frontMiddleX + TRI_PANEL_W / 2 - 88, 276, 176, 176, "QR PLACEHOLDER"),
+    ...imagePlaceholder(qrLeftCentered, qrTop, qrSizePx, qrSizePx, "QR", { pageIndex: 1 }),
+    text(
+      "Note:\n• Registration confirmation by mail\n• Session timing: 9:30 AM - 4:00 PM\n• Registration is compulsory for all participants\n• Participation certificate provided by IEEE\n• Laptops are required for hands-on sessions",
+      regTextLeft,
+      regNotesTop,
+      regTextW,
+      14,
+      "#ffffff",
+      500,
+    ),
 
     rect(frontMiddleX + 92, 662, TRI_PANEL_W - 184, 40, "#ffffff", 20),
     text("ACCOUNT DETAIL", frontMiddleX + 102, 671, TRI_PANEL_W - 204, 18, "#0b4ca8", 700, "Arial", "center", {
@@ -402,13 +465,13 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
     ),
 
     // FRONT SIDE - Panel 3 (Cover)
-    ...placeholderBox(frontRightX + 18, 18, 130, 52, "LOGO 1"),
-    ...placeholderBox(frontRightX + 157, 18, 130, 52, "LOGO 2"),
-    ...placeholderBox(frontRightX + 296, 18, 130, 52, "LOGO 3"),
-    ...placeholderBox(frontRightX + 435, 18, 130, 52, "LOGO 4"),
+    ...imagePlaceholder(frontRightX + 18, 18, 130, 52, "LOGO 1", { pageIndex: 1 }),
+    ...imagePlaceholder(frontRightX + 157, 18, 130, 52, "LOGO 2", { pageIndex: 1 }),
+    ...imagePlaceholder(frontRightX + 296, 18, 130, 52, "LOGO 3", { pageIndex: 1 }),
+    ...imagePlaceholder(frontRightX + 435, 18, 130, 52, "LOGO 4", { pageIndex: 1 }),
 
-    text("IEEE Madras Section Sponsored", frontRightX + 34, 96, TRI_PANEL_W - 68, 34, "#111827", 700, "Arial", "center"),
-    text("Five Days Faculty Development Program on", frontRightX + 34, 144, TRI_PANEL_W - 68, 34, "#111827", 700, "Arial", "center"),
+    text("IEEE Madras Section", frontRightX + 34, 102, TRI_PANEL_W - 68, 22, "#111827", 700, "Arial", "center"),
+    text("Five Days Faculty Development Program on", frontRightX + 34, 136, TRI_PANEL_W - 68, 22, "#111827", 700, "Arial", "center"),
 
     rect(frontRightX + 40, 262, TRI_PANEL_W - 80, 188, "#fde047", 6, {
       stroke: "#facc15",
@@ -417,36 +480,32 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
     text(
       "DEMYSTIFYING GENERATIVE\nAI: FROM FOUNDATIONS TO\nFRONTIERS",
       frontRightX + 52,
-      284,
+      292,
       TRI_PANEL_W - 104,
-      44,
+      26,
       "#111827",
       800,
       "Arial",
       "center",
     ),
 
-    text("23rd - 27th March, 2026", frontRightX + 34, 474, TRI_PANEL_W - 68, 36, "#111827", 700, "Arial", "center"),
+    text("23rd - 27th March, 2026", frontRightX + 34, 474, TRI_PANEL_W - 68, 28, "#111827", 700, "Arial", "center"),
 
-    circle(frontRightX + 182, 552, 74, "#dbeafe", {
-      stroke: "#38bdf8",
-      strokeWidth: 3,
-      selectable: true,
-      evented: true,
-      hasControls: true,
-      strokeDashArray: [8, 6],
+    rect(frontRightX + 132, 552, TRI_PANEL_W - 264, 148, "#eff6ff", 12, {
+      stroke: "#bfdbfe",
+      strokeWidth: 2,
     }),
-    circle(frontRightX + 330, 552, 74, "#dbeafe", {
-      stroke: "#38bdf8",
-      strokeWidth: 3,
-      selectable: true,
-      evented: true,
-      hasControls: true,
-      strokeDashArray: [8, 6],
-    }),
-    line(frontRightX + 256, 624, frontRightX + 330, 624, "#38bdf8", 4),
-    text("[ICON A]", frontRightX + 190, 610, 58, 14, "#0369a1", 700, "Arial", "center"),
-    text("[ICON B]", frontRightX + 338, 610, 58, 14, "#0369a1", 700, "Arial", "center"),
+    text(
+      "Hands-on Sessions\nCase Studies\nInteractive Q&A",
+      frontRightX + 146,
+      586,
+      TRI_PANEL_W - 292,
+      18,
+      "#1e3a8a",
+      700,
+      "Arial",
+      "center",
+    ),
 
     text("Organized by", frontRightX + 34, 746, TRI_PANEL_W - 68, 28, "#111827", 700, "Arial", "center"),
     text("Department of Computing Technologies\nSchool of Computing\nin association with\nAdvanced Multilingual Computing Vertical", frontRightX + 34, 780, TRI_PANEL_W - 68, 17, "#111827", 500, "Arial", "center"),
@@ -454,11 +513,11 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
     text("SRM Institute of Science and Technology", frontRightX + 34, 968, TRI_PANEL_W - 68, 16, "#111827", 700, "Arial", "center"),
     text("Kattankulathur - 603203, Chengalpattu Dist., TN", frontRightX + 34, 992, TRI_PANEL_W - 68, 14, "#111827", 500, "Arial", "center"),
 
-    ...placeholderBox(frontRightX + 18, 1042, 100, 46, "LOGO A"),
-    ...placeholderBox(frontRightX + 127, 1042, 100, 46, "LOGO B"),
-    ...placeholderBox(frontRightX + 236, 1042, 100, 46, "LOGO C"),
-    ...placeholderBox(frontRightX + 345, 1042, 100, 46, "LOGO D"),
-    ...placeholderBox(frontRightX + 454, 1042, 110, 46, "LOGO E"),
+    ...imagePlaceholder(frontRightX + 18, 1042, 100, 46, "LOGO A", { pageIndex: 1 }),
+    ...imagePlaceholder(frontRightX + 127, 1042, 100, 46, "LOGO B", { pageIndex: 1 }),
+    ...imagePlaceholder(frontRightX + 236, 1042, 100, 46, "LOGO C", { pageIndex: 1 }),
+    ...imagePlaceholder(frontRightX + 345, 1042, 100, 46, "LOGO D", { pageIndex: 1 }),
+    ...imagePlaceholder(frontRightX + 454, 1042, 110, 46, "LOGO E", { pageIndex: 1 }),
 
     // BACK SIDE - Panel 4 (About SRM)
     text("About SRM", backLeftX + 36, 42, TRI_PANEL_W - 72, 36, "#ffffff", 800, "Arial", "center"),
@@ -483,22 +542,24 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
     ),
 
     // BACK SIDE - Panel 5 (Department + FDP)
-    text("About the Computing Technologies", backMiddleX + 30, 34, TRI_PANEL_W - 60, 32, "#111827", 800),
+    // Two-line title as separate boxes so the body `top` never collides with wrapped heading metrics.
+    text("About the Computing", backMiddleX + 30, 34, TRI_PANEL_W - 60, 28, "#111827", 800),
+    text("Technologies", backMiddleX + 30, 72, TRI_PANEL_W - 60, 28, "#111827", 800),
     text(
       "The Department of Computing Technologies (CTECH) fosters cutting-edge innovation and interdisciplinary education in Computer Science and Engineering. The department contributes to national and international research while nurturing students for impactful careers.",
       backMiddleX + 30,
-      86,
+      130,
       TRI_PANEL_W - 60,
       14,
       "#334155",
       500,
     ),
 
-    text("About the FDP", backMiddleX + 30, 406, TRI_PANEL_W - 60, 32, "#111827", 800),
+    text("About the FDP", backMiddleX + 30, 432, TRI_PANEL_W - 60, 28, "#111827", 800),
     text(
       "The Faculty Development Program on AI to Generative AI explores concepts, techniques and research pathways from foundational AI to practical GenAI systems.\n\nDay 1 : Intro to AI and Generative AI\nDay 2 : Retrieval-Augmented Generation\nDay 3 : GenAI for agriculture and healthcare\nDay 4 : Multimodal AI and agentic systems\nDay 5 : Research problem formulation, proposal writing and funding paths",
       backMiddleX + 30,
-      458,
+      478,
       TRI_PANEL_W - 60,
       14,
       "#334155",
@@ -560,15 +621,11 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
     text("Proposal Writing, Funding & Impact", tableX + tableW * 0.57 + 8, tableY + 404, tableW * 0.43 - 16, 12, "#e2e8f0", 600, "Arial", "center"),
 
     text("Eminent Speakers", backRightX + 34, 640, TRI_PANEL_W - 68, 30, "#ffffff", 800, "Arial", "center"),
-    ...placeholderBox(backRightX + 26, 688, 54, 54, "ICON"),
-    ...placeholderBox(backRightX + 26, 758, 54, 54, "ICON"),
-    ...placeholderBox(backRightX + 26, 828, 54, 54, "ICON"),
-    ...placeholderBox(backRightX + 26, 898, 54, 54, "ICON"),
     text(
       "Dr. Nancy Jane - Assistant Professor\nDr. D. Thenmozhi - Associate Professor\nDr. B. Bharathi - Associate Professor\nDr. Subaellatha C N - Professor\nMs. Monagapathi V - Senior Associate Engineer\nMr. Luvk Yannan - Product Manager",
-      backRightX + 94,
-      698,
-      TRI_PANEL_W - 120,
+      backRightX + 44,
+      694,
+      TRI_PANEL_W - 88,
       13,
       "#e2e8f0",
       500,

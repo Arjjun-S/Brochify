@@ -28,7 +28,8 @@ export function Logo({ className, iconClassName, textClassName, showText = true,
         src="/icon-logo.png" 
         alt="Brochify" 
         width={40} 
-        height={40} 
+        height={40}
+        sizes="40px"
         className={cn("h-10 w-10 object-contain drop-shadow-sm", iconClassName)}
         priority 
       />

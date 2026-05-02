@@ -19,6 +19,14 @@ export async function handleGeneratePdf(req: NextRequest) {
     const watermarkText = typeof body?.watermarkText === "string" ? body.watermarkText.trim() : "";
     const template = typeof body?.template === "string" ? body.template : "";
 
+    const spreadPagesRaw = body?.spreadPages;
+    const spreadPages =
+      typeof spreadPagesRaw === "number"
+      && Number.isFinite(spreadPagesRaw)
+      && spreadPagesRaw >= 1
+        ? Math.min(24, Math.floor(spreadPagesRaw))
+        : 1;
+
     const isPoster = template === "posterFlyer";
     const pageWidth = isPoster ? "210mm" : "260mm";
     const pageHeight = isPoster ? "297mm" : "180mm";
@@ -26,6 +34,37 @@ export async function handleGeneratePdf(req: NextRequest) {
     if (!html.trim()) {
       return NextResponse.json({ error: "html is required." }, { status: 400 });
     }
+
+    const multiSpreadCss =
+      !isPoster && spreadPages > 1
+        ? `
+                    .pdf-export-sheet {
+                        width: ${pageWidth};
+                        height: ${pageHeight};
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: #ffffff;
+                        page-break-after: always;
+                        break-after: page;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    .pdf-export-sheet:last-of-type {
+                        page-break-after: auto;
+                        break-after: auto;
+                    }
+                    .pdf-export-sheet img {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: contain;
+                        display: block;
+                    }
+                `
+        : "";
 
     const safeWatermark = watermarkText ? escapeHtml(watermarkText.slice(0, 160)) : "";
     const watermarkMarkup = safeWatermark
@@ -64,6 +103,7 @@ export async function handleGeneratePdf(req: NextRequest) {
               <link rel="stylesheet" href="${FONT_PDF_STYLESHEET_HREF}" />
                 <style>
                     ${css}
+                    ${multiSpreadCss}
                     @page {
                         size: ${pageWidth} ${pageHeight};
                         margin: 0;
@@ -120,9 +160,10 @@ export async function handleGeneratePdf(req: NextRequest) {
     console.log("Generating PDF...");
     await page.setViewport({ width: 1200, height: 800 });
 
+    const singleSizedPdf = isPoster || spreadPages <= 1;
+
     const pdfBuffer = await page.pdf({
-      width: pageWidth,
-      height: pageHeight,
+      ...(singleSizedPdf ? { width: pageWidth, height: pageHeight } : {}),
       printBackground: true,
       preferCSSPageSize: true,
     });

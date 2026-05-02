@@ -1,5 +1,7 @@
 import { fabric } from "fabric";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
+
+import { refreshFabricTextEditingAnchor, syncCanvasClipToActivePage } from "@/features/editor/utils";
 
 interface UseAutoResizeProps {
   canvas: fabric.Canvas | null;
@@ -7,9 +9,35 @@ interface UseAutoResizeProps {
   activePage?: number;
 }
 
+function shouldDeferViewport(canvas: fabric.Canvas | null): boolean {
+  if (!canvas) {
+    return false;
+  }
+
+  if (canvas.isDrawingMode) {
+    return true;
+  }
+
+  const active = canvas.getActiveObject();
+  if (!active || (active.type !== "textbox" && active.type !== "i-text")) {
+    return false;
+  }
+
+  return !!(active as fabric.IText).isEditing;
+}
+
 export const useAutoResize = ({ canvas, container, activePage = 1 }: UseAutoResizeProps) => {
+  const deferredViewportRef = useRef(false);
+
   const autoZoom = useCallback(() => {
     if (!canvas || !container) return;
+
+    if (shouldDeferViewport(canvas)) {
+      deferredViewportRef.current = true;
+      return;
+    }
+
+    deferredViewportRef.current = false;
 
     const width = container.offsetWidth;
     const height = container.offsetHeight;
@@ -49,7 +77,7 @@ export const useAutoResize = ({ canvas, container, activePage = 1 }: UseAutoResi
 
     const zoom = zoomRatio * scale;
 
-    canvas.setViewportTransform(fabric.iMatrix.concat());
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
     canvas.zoomToPoint(new fabric.Point(center.left, center.top), zoom);
 
     const workspaceCenter = zoomTarget.getCenterPoint();
@@ -57,41 +85,78 @@ export const useAutoResize = ({ canvas, container, activePage = 1 }: UseAutoResi
 
     if (
       canvas.width === undefined ||
-      canvas.height === undefined ||
-      !viewportTransform
+      canvas.height === undefined
     ) {
       return;
     }
 
+    const safeViewport = Array.isArray(viewportTransform) && viewportTransform.length >= 6
+      ? viewportTransform
+      : [zoom, 0, 0, zoom, 0, 0];
+
+    const scaleX = typeof safeViewport[0] === "number" ? safeViewport[0] : zoom;
+    const skewX = typeof safeViewport[1] === "number" ? safeViewport[1] : 0;
+    const skewY = typeof safeViewport[2] === "number" ? safeViewport[2] : 0;
+    const scaleY = typeof safeViewport[3] === "number" ? safeViewport[3] : zoom;
+
     const nextViewportTransform: [number, number, number, number, number, number] = [
-      viewportTransform[0],
-      viewportTransform[1],
-      viewportTransform[2],
-      viewportTransform[3],
-      canvas.width / 2 - workspaceCenter.x * viewportTransform[0],
-      canvas.height / 2 - workspaceCenter.y * viewportTransform[3],
+      scaleX,
+      skewX,
+      skewY,
+      scaleY,
+      canvas.width / 2 - workspaceCenter.x * scaleX,
+      canvas.height / 2 - workspaceCenter.y * scaleY,
     ];
 
     canvas.setViewportTransform(nextViewportTransform);
 
-    zoomTarget.clone((cloned: fabric.Rect) => {
-      canvas.clipPath = cloned;
-      canvas.requestRenderAll();
-    });
+    syncCanvasClipToActivePage(canvas, pageIndex);
+    refreshFabricTextEditingAnchor(canvas);
+    canvas.requestRenderAll();
   }, [canvas, container, activePage]);
 
   useEffect(() => {
+    if (!canvas) {
+      return;
+    }
+
+    const flushDeferredViewport = () => {
+      if (!deferredViewportRef.current || shouldDeferViewport(canvas)) {
+        return;
+      }
+
+      deferredViewportRef.current = false;
+      autoZoom();
+    };
+
+    canvas.on("mouse:down", flushDeferredViewport);
+    canvas.on("selection:cleared", flushDeferredViewport);
+    canvas.on("selection:updated", flushDeferredViewport);
+
+    return () => {
+      canvas.off("mouse:down", flushDeferredViewport);
+      canvas.off("selection:cleared", flushDeferredViewport);
+      canvas.off("selection:updated", flushDeferredViewport);
+    };
+  }, [canvas, autoZoom]);
+
+  useEffect(() => {
     let resizeObserver: ResizeObserver | null = null;
+    let frame = 0;
 
     if (canvas && container) {
       resizeObserver = new ResizeObserver(() => {
-        autoZoom();
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          autoZoom();
+        });
       });
 
       resizeObserver.observe(container);
     }
 
     return () => {
+      cancelAnimationFrame(frame);
       if (resizeObserver) {
         resizeObserver.disconnect();
       }

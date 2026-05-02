@@ -2,6 +2,7 @@ import { fabric } from "fabric";
 import { useEffect, useRef } from "react";
 
 import { JSON_KEYS } from "@/features/editor/types";
+import { finalizeFabricTextObjectsAfterLoad, sanitizeCanvasState } from "@/features/editor/utils";
 
 interface UseLoadStateProps {
   autoZoom: () => void;
@@ -39,7 +40,17 @@ export const useLoadState = ({
         return;
       }
 
-      canvas.loadFromJSON(data as Record<string, unknown>, () => {
+      const parsedState = sanitizeCanvasState(data);
+      if (!parsedState) {
+        initialized.current = true;
+        autoZoom();
+        return;
+      }
+
+      canvas.loadFromJSON(parsedState as Record<string, unknown>, () => {
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        finalizeFabricTextObjectsAfterLoad(canvas);
+
         let currentState: string;
         try {
           currentState = JSON.stringify(

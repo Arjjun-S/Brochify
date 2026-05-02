@@ -1,5 +1,8 @@
 import { fabric } from "fabric";
-import { useEffect } from "react";
+import debounce from "lodash.debounce";
+import { useEffect, useMemo, useRef } from "react";
+
+import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
 
 interface UseCanvasEventsProps {
   save: () => void;
@@ -14,38 +17,73 @@ export const useCanvasEvents = ({
   setSelectedObjects,
   clearSelectionCallback,
 }: UseCanvasEventsProps) => {
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
+  const queuePersist = useMemo(
+    () =>
+      debounce(
+        () => {
+          saveRef.current();
+        },
+        240,
+        { maxWait: 900 },
+      ),
+    [],
+  );
+
   useEffect(() => {
-    if (canvas) {
-      canvas.on("object:added", () => save());
-      canvas.on("object:removed", () => save());
-      canvas.on("object:modified", () => save());
-      canvas.on("selection:created", (e) => {
-        setSelectedObjects(e.selected || []);
-      });
-      canvas.on("selection:updated", (e) => {
-        setSelectedObjects(e.selected || []);
-      });
-      canvas.on("selection:cleared", () => {
-        setSelectedObjects([]);
-        clearSelectionCallback?.();
-      });
+    if (!canvas) {
+      return;
     }
 
+    const onSelectionCreated = (e: { selected?: fabric.Object[] }) => {
+      setSelectedObjects(e.selected || []);
+    };
+
+    const onSelectionUpdated = (e: { selected?: fabric.Object[] }) => {
+      setSelectedObjects(e.selected || []);
+    };
+
+    const onSelectionCleared = () => {
+      setSelectedObjects([]);
+      clearSelectionCallback?.();
+    };
+
+    const onTextEditingEntered = () => {
+      refreshFabricTextEditingAnchor(canvas);
+      requestAnimationFrame(() => refreshFabricTextEditingAnchor(canvas));
+    };
+
+    const onTextSelectionChanged = () => {
+      refreshFabricTextEditingAnchor(canvas);
+    };
+
+    canvas.on("object:added", queuePersist);
+    canvas.on("object:removed", queuePersist);
+    canvas.on("object:modified", queuePersist);
+    canvas.on("selection:created", onSelectionCreated);
+    canvas.on("selection:updated", onSelectionUpdated);
+    canvas.on("selection:cleared", onSelectionCleared);
+    canvas.on("text:editing:entered", onTextEditingEntered);
+    canvas.on("text:selection:changed", onTextSelectionChanged);
+
     return () => {
-      if (canvas) {
-        canvas.off("object:added");
-        canvas.off("object:removed");
-        canvas.off("object:modified");
-        canvas.off("selection:created");
-        canvas.off("selection:updated");
-        canvas.off("selection:cleared");
-      }
+      queuePersist.cancel();
+      canvas.off("object:added", queuePersist);
+      canvas.off("object:removed", queuePersist);
+      canvas.off("object:modified", queuePersist);
+      canvas.off("selection:created", onSelectionCreated);
+      canvas.off("selection:updated", onSelectionUpdated);
+      canvas.off("selection:cleared", onSelectionCleared);
+      canvas.off("text:editing:entered", onTextEditingEntered);
+      canvas.off("text:selection:changed", onTextSelectionChanged);
     };
   },
   [
-    save,
     canvas,
+    queuePersist,
     clearSelectionCallback,
-    setSelectedObjects // No need for this, this is from setState
+    setSelectedObjects,
   ]);
 };
