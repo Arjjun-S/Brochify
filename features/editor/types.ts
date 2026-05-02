@@ -109,7 +109,10 @@ export type ActiveTool =
   | "settings"
   | "ai"
   | "remove-bg"
-  | "templates";
+  | "templates"
+  | "elements"
+  | "logos"
+  | "certificate-templates";
 
 export type BrochureType = "trifold" | "poster";
 
