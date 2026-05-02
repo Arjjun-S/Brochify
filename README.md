@@ -13,11 +13,31 @@ AI-Powered University Brochure Builder.
 2. Set up environment variables in `.env.local`:
 
    ```env
+   DATABASE_URL="mysql://user:password@localhost:3306/brochify"
+   SESSION_SECRET=replace_with_secure_random_value
    OPENROUTER_API_KEY=your_key
    NEXT_PUBLIC_FAL_API_KEY=your_key
    ```
 
-3. Run development server:
+3. Apply Prisma schema to your database:
+
+   ```bash
+   npm run prisma:push
+   ```
+
+4. If your database already has these tables, baseline the initial Prisma migration:
+
+   ```bash
+   npx prisma migrate resolve --applied 20260502084500_init
+   ```
+
+5. For fresh environments, apply tracked migrations:
+
+   ```bash
+   npm run prisma:deploy
+   ```
+
+6. Run development server:
    ```bash
    npm run dev
    ```

@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  faculty
+}
+
+enum ReviewStatus {
+  draft
+  pending
+  approved
+  rejected
+}
+
+model User {
+  id                   Int           @id @default(autoincrement())
+  username             String        @unique @db.VarChar(64)
+  password             String?       @db.VarChar(255)
+  passwordHash         String?       @map("password_hash") @db.VarChar(255)
+  role                 UserRole
+  createdAt            DateTime      @default(now()) @map("created_at")
+  createdBrochures     Brochure[]    @relation("BrochureCreator")
+  assignedBrochures    Brochure[]    @relation("BrochureAssignee")
+  createdCertificates  Certificate[] @relation("CertificateCreator")
+  assignedCertificates Certificate[] @relation("CertificateAssignee")
+
+  @@map("users")
+}
+
+model Brochure {
+  id                Int          @id @default(autoincrement())
+  title             String       @db.VarChar(255)
+  description       String       @db.Text
+  content           Json
+  createdBy         Int          @map("created_by")
+  assignedAdminId   Int          @map("assigned_admin")
+  status            ReviewStatus @default(draft)
+  rejectionReason   String?      @map("rejection_reason") @db.Text
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  creator           User         @relation("BrochureCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  assignedAdminUser User         @relation("BrochureAssignee", fields: [assignedAdminId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdBy])
+  @@index([assignedAdminId])
+  @@map("brochures")
+}
+
+model Certificate {
+  id                Int          @id @default(autoincrement())
+  title             String       @db.VarChar(255)
+  description       String       @db.Text
+  content           Json
+  createdBy         Int          @map("created_by")
+  assignedAdminId   Int          @map("assigned_admin")
+  status            ReviewStatus @default(draft)
+  rejectionReason   String?      @map("rejection_reason") @db.Text
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  creator           User         @relation("CertificateCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  assignedAdminUser User         @relation("CertificateAssignee", fields: [assignedAdminId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdBy])
+  @@index([assignedAdminId])
+  @@map("certificates")
+}

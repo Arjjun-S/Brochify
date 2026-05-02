@@ -1,788 +1,688 @@
 import bcrypt from "bcryptjs";
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
+import { Prisma } from "@prisma/client";
 import { createEmptyBrochureData, normalizeBrochureData, normalizeFontFamilyValue } from "@/lib/domains/brochure";
 import { createEmptyCertificateEditorState, normalizeCertificateEditorState } from "@/lib/domains/certificate";
-import { pool } from "@/lib/server/db";
+import { prisma } from "@/lib/server/prisma";
 import type {
-	BrochureRecord,
-	BrochureStatus,
-	CertificateRecord,
-	CertificateStatus,
-	EditorFormLineStyle,
-	EditorState,
-	SessionUser,
-	UserRole,
+  BrochureRecord,
+  BrochureStatus,
+  CertificateRecord,
+  CertificateStatus,
+  EditorFormLineStyle,
+  EditorState,
+  SessionUser,
+  UserRole,
 } from "@/lib/server/types";
 
 const TEMPLATE_IDS = ["whiteBlue", "beigeDust", "softBlue", "tealGloss", "yellowDust"] as const;
 
 const DEFAULT_FORM_LINE_STYLES: Record<string, EditorFormLineStyle> = {
-	"registration.notes": { fontSize: 13 },
+  "registration.notes": { fontSize: 13 },
 };
 
-type UserRow = RowDataPacket & {
-	id: number;
-	username: string;
-	password_hash: string;
-	role: UserRole;
-};
+type BrochureWithRelations = Prisma.BrochureGetPayload<{
+  include: {
+    creator: { select: { username: true } };
+    assignedAdminUser: { select: { username: true } };
+  };
+}>;
 
-type AdminRow = RowDataPacket & {
-	id: number;
-	username: string;
-};
+type CertificateWithRelations = Prisma.CertificateGetPayload<{
+  include: {
+    creator: { select: { username: true } };
+    assignedAdminUser: { select: { username: true } };
+  };
+}>;
 
-type BrochureRow = RowDataPacket & {
-	id: number;
-	title: string;
-	description: string;
-	content: unknown;
-	createdBy: number;
-	createdByUsername: string;
-	assignedAdminId: number;
-	assignedAdminUsername: string | null;
-	status: BrochureStatus;
-	rejectionReason: string | null;
-	createdAt: Date | string;
-	updatedAt: Date | string;
-};
-
-type CertificateRow = RowDataPacket & {
-	id: number;
-	title: string;
-	description: string;
-	content: unknown;
-	createdBy: number;
-	createdByUsername: string;
-	assignedAdminId: number;
-	assignedAdminUsername: string | null;
-	status: CertificateStatus;
-	rejectionReason: string | null;
-	createdAt: Date | string;
-	updatedAt: Date | string;
-};
-
-let schemaReadyPromise: Promise<void> | null = null;
+let databaseReadyPromise: Promise<void> | null = null;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function createEmptyEditorState(): EditorState {
-	return {
-		brochureData: createEmptyBrochureData(),
-		selectedLogos: ["srm", "ieee", "ctech"],
-		segmentPositions: {},
-		overlayItems: [],
-		template: "whiteBlue",
-		hiddenSegments: [],
-		formLineStyles: { ...DEFAULT_FORM_LINE_STYLES },
-	};
+  return {
+    brochureData: createEmptyBrochureData(),
+    selectedLogos: ["srm", "ieee", "ctech"],
+    segmentPositions: {},
+    overlayItems: [],
+    template: "whiteBlue",
+    hiddenSegments: [],
+    formLineStyles: { ...DEFAULT_FORM_LINE_STYLES },
+  };
 }
 
 function parseJsonContent(raw: unknown): unknown {
-	if (typeof raw === "string") {
-		try {
-			return JSON.parse(raw);
-		} catch {
-			return null;
-		}
-	}
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
 
-	return raw;
+  return raw;
+}
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 function normalizeEditorState(raw: unknown): EditorState {
-	const fallback = createEmptyEditorState();
-	const source = parseJsonContent(raw);
+  const fallback = createEmptyEditorState();
+  const source = parseJsonContent(raw);
 
-	if (!isRecord(source)) {
-		return fallback;
-	}
+  if (!isRecord(source)) {
+    return fallback;
+  }
 
-	const template =
-		typeof source.template === "string" && TEMPLATE_IDS.includes(source.template as (typeof TEMPLATE_IDS)[number])
-			? (source.template as EditorState["template"])
-			: fallback.template;
+  const template =
+    typeof source.template === "string" && TEMPLATE_IDS.includes(source.template as (typeof TEMPLATE_IDS)[number])
+      ? (source.template as EditorState["template"])
+      : fallback.template;
 
-	const selectedLogos = Array.isArray(source.selectedLogos)
-		? source.selectedLogos.filter((item): item is string => typeof item === "string")
-		: fallback.selectedLogos;
+  const selectedLogos = Array.isArray(source.selectedLogos)
+    ? source.selectedLogos.filter((item): item is string => typeof item === "string")
+    : fallback.selectedLogos;
 
-	const hiddenSegments = Array.isArray(source.hiddenSegments)
-		? source.hiddenSegments.filter((item): item is string => typeof item === "string")
-		: fallback.hiddenSegments;
+  const hiddenSegments = Array.isArray(source.hiddenSegments)
+    ? source.hiddenSegments.filter((item): item is string => typeof item === "string")
+    : fallback.hiddenSegments;
 
-	const formLineStyles = isRecord(source.formLineStyles)
-		? Object.entries(source.formLineStyles).reduce<Record<string, EditorFormLineStyle>>((acc, [key, value]) => {
-				if (!isRecord(value)) {
-					return acc;
-				}
+  const formLineStyles = isRecord(source.formLineStyles)
+    ? Object.entries(source.formLineStyles).reduce<Record<string, EditorFormLineStyle>>((acc, [key, value]) => {
+        if (!isRecord(value)) {
+          return acc;
+        }
 
-				acc[key] = {
-					...(typeof value.fontFamily === "string" ? { fontFamily: normalizeFontFamilyValue(value.fontFamily) } : {}),
-					...(typeof value.fontSize === "number" ? { fontSize: value.fontSize } : {}),
-					...(typeof value.color === "string" ? { color: value.color } : {}),
-					...(value.align === "left" || value.align === "center" || value.align === "right" || value.align === "justify"
-						? { align: value.align }
-						: {}),
-				};
+        acc[key] = {
+          ...(typeof value.fontFamily === "string" ? { fontFamily: normalizeFontFamilyValue(value.fontFamily) } : {}),
+          ...(typeof value.fontSize === "number" ? { fontSize: value.fontSize } : {}),
+          ...(typeof value.color === "string" ? { color: value.color } : {}),
+          ...(value.align === "left" || value.align === "center" || value.align === "right" || value.align === "justify"
+            ? { align: value.align }
+            : {}),
+        };
 
-				return acc;
-			}, { ...DEFAULT_FORM_LINE_STYLES })
-		: fallback.formLineStyles;
+        return acc;
+      }, { ...DEFAULT_FORM_LINE_STYLES })
+    : fallback.formLineStyles;
 
-	const segmentPositions = isRecord(source.segmentPositions)
-		? (source.segmentPositions as EditorState["segmentPositions"])
-		: fallback.segmentPositions;
+  const segmentPositions = isRecord(source.segmentPositions)
+    ? (source.segmentPositions as EditorState["segmentPositions"])
+    : fallback.segmentPositions;
 
-	const overlayItems = Array.isArray(source.overlayItems)
-		? (source.overlayItems as EditorState["overlayItems"])
-		: fallback.overlayItems;
+  const overlayItems = Array.isArray(source.overlayItems)
+    ? (source.overlayItems as EditorState["overlayItems"])
+    : fallback.overlayItems;
 
-	return {
-		brochureData: normalizeBrochureData(source.brochureData as Record<string, unknown>),
-		selectedLogos,
-		segmentPositions,
-		overlayItems,
-		template,
-		hiddenSegments,
-		formLineStyles,
-	};
+  return {
+    brochureData: normalizeBrochureData(source.brochureData as Record<string, unknown>),
+    selectedLogos,
+    segmentPositions,
+    overlayItems,
+    template,
+    hiddenSegments,
+    formLineStyles,
+  };
 }
 
-function mapBrochureRow(row: BrochureRow): BrochureRecord {
-	return {
-		id: row.id,
-		title: row.title,
-		description: row.description,
-		content: normalizeEditorState(row.content),
-		createdBy: row.createdBy,
-		createdByUsername: row.createdByUsername,
-		assignedAdminId: row.assignedAdminId,
-		assignedAdminUsername: row.assignedAdminUsername,
-		status: row.status,
-		rejectionReason: row.rejectionReason,
-		createdAt: new Date(row.createdAt).toISOString(),
-		updatedAt: new Date(row.updatedAt ?? row.createdAt).toISOString(),
-	};
+function mapBrochureRow(row: BrochureWithRelations): BrochureRecord {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    content: normalizeEditorState(row.content),
+    createdBy: row.createdBy,
+    createdByUsername: row.creator.username,
+    assignedAdminId: row.assignedAdminId,
+    assignedAdminUsername: row.assignedAdminUser?.username ?? null,
+    status: row.status as BrochureStatus,
+    rejectionReason: row.rejectionReason,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
-function mapCertificateRow(row: CertificateRow): CertificateRecord {
-	return {
-		id: row.id,
-		title: row.title,
-		description: row.description,
-		content: normalizeCertificateEditorState(row.content),
-		createdBy: row.createdBy,
-		createdByUsername: row.createdByUsername,
-		assignedAdminId: row.assignedAdminId,
-		assignedAdminUsername: row.assignedAdminUsername,
-		status: row.status,
-		rejectionReason: row.rejectionReason,
-		createdAt: new Date(row.createdAt).toISOString(),
-		updatedAt: new Date(row.updatedAt ?? row.createdAt).toISOString(),
-	};
+function mapCertificateRow(row: CertificateWithRelations): CertificateRecord {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    content: normalizeCertificateEditorState(row.content),
+    createdBy: row.createdBy,
+    createdByUsername: row.creator.username,
+    assignedAdminId: row.assignedAdminId,
+    assignedAdminUsername: row.assignedAdminUser?.username ?? null,
+    status: row.status as CertificateStatus,
+    rejectionReason: row.rejectionReason,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
-async function columnExists(tableName: string, columnName: string): Promise<boolean> {
-	const [rows] = await pool.query<RowDataPacket[]>(
-		`
-			SELECT COUNT(*) AS total
-			FROM information_schema.COLUMNS
-			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
-		`,
-		[tableName, columnName],
-	);
+async function backfillLegacyPasswordColumns(): Promise<void> {
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [{ passwordHash: null }, { password: null }],
+    },
+    select: {
+      id: true,
+      password: true,
+      passwordHash: true,
+    },
+  });
 
-	return Number(rows[0]?.total ?? 0) > 0;
-}
+  if (users.length === 0) {
+    return;
+  }
 
-async function addColumnIfMissing(tableName: string, columnName: string, definitionSql: string): Promise<void> {
-	const exists = await columnExists(tableName, columnName);
-	if (exists) {
-		return;
-	}
-
-	await pool.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definitionSql}`);
-}
-
-async function initSchema(): Promise<void> {
-	await pool.query(`
-		CREATE TABLE IF NOT EXISTS users (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			username VARCHAR(64) NOT NULL UNIQUE,
-			password VARCHAR(255) NULL,
-			password_hash VARCHAR(255) NOT NULL,
-			role ENUM('admin', 'faculty') NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-	`);
-
-	// Backward-compat migration from legacy schema that used `password` instead of `password_hash`.
-	await addColumnIfMissing("users", "password", "VARCHAR(255) NULL AFTER username");
-	await addColumnIfMissing("users", "password_hash", "VARCHAR(255) NULL AFTER password");
-	await addColumnIfMissing("users", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
-	await pool.query("UPDATE users SET password_hash = password WHERE password_hash IS NULL AND password IS NOT NULL");
-	await pool.query("UPDATE users SET password = password_hash WHERE password IS NULL AND password_hash IS NOT NULL");
-	await pool.query("UPDATE users SET password_hash = '' WHERE password_hash IS NULL");
-
-	await pool.query(`
-		CREATE TABLE IF NOT EXISTS brochures (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			title VARCHAR(255) NOT NULL,
-			description TEXT NOT NULL,
-			content JSON NOT NULL,
-			created_by INT NOT NULL,
-			assigned_admin INT NOT NULL,
-			status ENUM('draft', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'draft',
-			rejection_reason TEXT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			CONSTRAINT fk_brochure_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
-			CONSTRAINT fk_brochure_assigned_admin FOREIGN KEY (assigned_admin) REFERENCES users(id) ON DELETE CASCADE,
-			INDEX idx_brochure_status (status),
-			INDEX idx_brochure_created_by (created_by),
-			INDEX idx_brochure_assigned_admin (assigned_admin)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-	`);
-
-	await addColumnIfMissing("brochures", "rejection_reason", "TEXT NULL AFTER status");
-	await addColumnIfMissing(
-		"brochures",
-		"updated_at",
-		"TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
-	);
-
-	await pool.query(`
-		CREATE TABLE IF NOT EXISTS certificates (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			title VARCHAR(255) NOT NULL,
-			description TEXT NOT NULL,
-			content JSON NOT NULL,
-			created_by INT NOT NULL,
-			assigned_admin INT NOT NULL,
-			status ENUM('draft', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'draft',
-			rejection_reason TEXT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			CONSTRAINT fk_certificate_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
-			CONSTRAINT fk_certificate_assigned_admin FOREIGN KEY (assigned_admin) REFERENCES users(id) ON DELETE CASCADE,
-			INDEX idx_certificate_status (status),
-			INDEX idx_certificate_created_by (created_by),
-			INDEX idx_certificate_assigned_admin (assigned_admin)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-	`);
-
-	await addColumnIfMissing("certificates", "rejection_reason", "TEXT NULL AFTER status");
-	await addColumnIfMissing(
-		"certificates",
-		"updated_at",
-		"TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
-	);
-
-	await seedUsersIfMissing();
+  await prisma.$transaction(
+    users.map((user) => {
+      const normalizedHash = user.passwordHash ?? user.password ?? "";
+      const normalizedPassword = user.password ?? user.passwordHash ?? "";
+      return prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: normalizedHash,
+          password: normalizedPassword,
+        },
+      });
+    }),
+  );
 }
 
 async function seedUsersIfMissing(): Promise<void> {
-	const [countRows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM users");
-	const totalUsers = Number(countRows[0]?.total ?? 0);
-	if (totalUsers > 0) {
-		return;
-	}
+  const totalUsers = await prisma.user.count();
+  if (totalUsers > 0) {
+    return;
+  }
 
-	const adminHash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD || "admin123", 10);
-	const facultyHash = await bcrypt.hash(process.env.SEED_FACULTY_PASSWORD || "faculty123", 10);
+  const adminHash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD || "admin123", 10);
+  const facultyHash = await bcrypt.hash(process.env.SEED_FACULTY_PASSWORD || "faculty123", 10);
 
-	await pool.query(
-		"INSERT INTO users (username, password, password_hash, role) VALUES (?, ?, ?, 'admin'), (?, ?, ?, 'faculty')",
-		[
-			process.env.SEED_ADMIN_USERNAME || "admin",
-			adminHash,
-			adminHash,
-			process.env.SEED_FACULTY_USERNAME || "faculty",
-			facultyHash,
-			facultyHash,
-		],
-	);
+  await prisma.user.createMany({
+    data: [
+      {
+        username: process.env.SEED_ADMIN_USERNAME || "admin",
+        password: adminHash,
+        passwordHash: adminHash,
+        role: "admin",
+      },
+      {
+        username: process.env.SEED_FACULTY_USERNAME || "faculty",
+        password: facultyHash,
+        passwordHash: facultyHash,
+        role: "faculty",
+      },
+    ],
+    skipDuplicates: true,
+  });
 }
 
-async function ensureSchema(): Promise<void> {
-	if (!schemaReadyPromise) {
-		schemaReadyPromise = initSchema();
-	}
+function wrapSchemaError(error: unknown): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
+    throw new Error("Database tables are missing. Run Prisma migrations with npm run prisma:migrate or npm run prisma:push.");
+  }
 
-	await schemaReadyPromise;
-	await seedUsersIfMissing();
+  throw error;
+}
+
+async function initDatabase(): Promise<void> {
+  try {
+    await backfillLegacyPasswordColumns();
+    await seedUsersIfMissing();
+  } catch (error) {
+    wrapSchemaError(error);
+  }
+}
+
+async function ensureDatabase(): Promise<void> {
+  if (!databaseReadyPromise) {
+    databaseReadyPromise = initDatabase();
+  }
+
+  await databaseReadyPromise;
 }
 
 export async function listAdmins(): Promise<Array<{ id: number; username: string }>> {
-	await ensureSchema();
-	const [rows] = await pool.query<AdminRow[]>(
-		"SELECT id, username FROM users WHERE role = 'admin' ORDER BY username ASC",
-	);
-	return rows.map((row) => ({ id: row.id, username: row.username }));
+  await ensureDatabase();
+
+  const rows = await prisma.user.findMany({
+    where: { role: "admin" },
+    select: {
+      id: true,
+      username: true,
+    },
+    orderBy: {
+      username: "asc",
+    },
+  });
+
+  return rows;
 }
 
 export async function verifyUserCredentials(
-	username: string,
-	password: string,
-	role: UserRole,
+  username: string,
+  password: string,
+  role: UserRole,
 ): Promise<SessionUser | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const [rows] = await pool.query<UserRow[]>(
-		"SELECT id, username, password_hash, role FROM users WHERE username = ? AND role = ? LIMIT 1",
-		[username, role],
-	);
+  const user = await prisma.user.findFirst({
+    where: {
+      username,
+      role,
+    },
+    select: {
+      id: true,
+      username: true,
+      passwordHash: true,
+      role: true,
+    },
+  });
 
-	const user = rows[0];
-	if (!user) {
-		return null;
-	}
+  if (!user?.passwordHash) {
+    return null;
+  }
 
-	const isValid = await bcrypt.compare(password, user.password_hash);
-	if (!isValid) {
-		return null;
-	}
+  const isValid = await bcrypt.compare(password, user.passwordHash);
+  if (!isValid) {
+    return null;
+  }
 
-	return {
-		userId: user.id,
-		username: user.username,
-		role: user.role,
-	};
+  return {
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+  };
 }
 
 type ListBrochureOptions = {
-	status?: BrochureStatus;
+  status?: BrochureStatus;
 };
 
 type ListCertificateOptions = {
-	status?: CertificateStatus;
+  status?: CertificateStatus;
 };
 
 function isValidStatus(status: string | undefined): status is BrochureStatus {
-	return status === "draft" || status === "pending" || status === "approved" || status === "rejected";
+  return status === "draft" || status === "pending" || status === "approved" || status === "rejected";
 }
 
 export async function listBrochuresForUser(user: SessionUser, options?: ListBrochureOptions): Promise<BrochureRecord[]> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const whereClauses: string[] = [];
-	const values: Array<number | string> = [];
+  const where: Prisma.BrochureWhereInput =
+    user.role === "faculty" ? { createdBy: user.userId } : { assignedAdminId: user.userId };
 
-	if (user.role === "faculty") {
-		whereClauses.push("b.created_by = ?");
-		values.push(user.userId);
-	} else {
-		whereClauses.push("b.assigned_admin = ?");
-		values.push(user.userId);
-	}
+  if (options?.status && isValidStatus(options.status)) {
+    where.status = options.status;
+  }
 
-	if (options?.status && isValidStatus(options.status)) {
-		whereClauses.push("b.status = ?");
-		values.push(options.status);
-	}
+  const rows = await prisma.brochure.findMany({
+    where,
+    include: {
+      creator: {
+        select: { username: true },
+      },
+      assignedAdminUser: {
+        select: { username: true },
+      },
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  });
 
-	const [rows] = await pool.query<BrochureRow[]>(
-		`
-			SELECT
-				b.id,
-				b.title,
-				b.description,
-				b.content,
-				b.created_by AS createdBy,
-				creator.username AS createdByUsername,
-				b.assigned_admin AS assignedAdminId,
-				admin.username AS assignedAdminUsername,
-				b.status,
-				b.rejection_reason AS rejectionReason,
-				b.created_at AS createdAt,
-				b.updated_at AS updatedAt
-			FROM brochures b
-			INNER JOIN users creator ON creator.id = b.created_by
-			LEFT JOIN users admin ON admin.id = b.assigned_admin
-			WHERE ${whereClauses.join(" AND ")}
-			ORDER BY b.updated_at DESC
-		`,
-		values,
-	);
-
-	return rows.map(mapBrochureRow);
+  return rows.map(mapBrochureRow);
 }
 
 export async function getBrochureByIdForUser(id: number, user: SessionUser): Promise<BrochureRecord | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const [rows] = await pool.query<BrochureRow[]>(
-		`
-			SELECT
-				b.id,
-				b.title,
-				b.description,
-				b.content,
-				b.created_by AS createdBy,
-				creator.username AS createdByUsername,
-				b.assigned_admin AS assignedAdminId,
-				admin.username AS assignedAdminUsername,
-				b.status,
-				b.rejection_reason AS rejectionReason,
-				b.created_at AS createdAt,
-				b.updated_at AS updatedAt
-			FROM brochures b
-			INNER JOIN users creator ON creator.id = b.created_by
-			LEFT JOIN users admin ON admin.id = b.assigned_admin
-			WHERE b.id = ? AND ${user.role === "faculty" ? "b.created_by = ?" : "b.assigned_admin = ?"}
-			LIMIT 1
-		`,
-		[id, user.userId],
-	);
+  const row = await prisma.brochure.findFirst({
+    where: {
+      id,
+      ...(user.role === "faculty" ? { createdBy: user.userId } : { assignedAdminId: user.userId }),
+    },
+    include: {
+      creator: {
+        select: { username: true },
+      },
+      assignedAdminUser: {
+        select: { username: true },
+      },
+    },
+  });
 
-	const row = rows[0];
-	return row ? mapBrochureRow(row) : null;
+  return row ? mapBrochureRow(row) : null;
 }
 
 export async function createBrochureDraft(input: {
-	title: string;
-	description: string;
-	createdBy: number;
-	assignedAdminId: number;
+  title: string;
+  description: string;
+  createdBy: number;
+  assignedAdminId: number;
 }): Promise<number> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const content = JSON.stringify(createEmptyEditorState());
-	const [result] = await pool.query<ResultSetHeader>(
-		`
-			INSERT INTO brochures (title, description, content, created_by, assigned_admin, status)
-			VALUES (?, ?, ?, ?, ?, 'draft')
-		`,
-		[input.title, input.description, content, input.createdBy, input.assignedAdminId],
-	);
+  const created = await prisma.brochure.create({
+    data: {
+      title: input.title,
+      description: input.description,
+      content: toPrismaJson(createEmptyEditorState()),
+      createdBy: input.createdBy,
+      assignedAdminId: input.assignedAdminId,
+      status: "draft",
+    },
+    select: {
+      id: true,
+    },
+  });
 
-	return result.insertId;
+  return created.id;
 }
 
 export async function updateBrochureContent(
-	id: number,
-	user: SessionUser,
-	content: unknown,
+  id: number,
+  user: SessionUser,
+  content: unknown,
 ): Promise<BrochureRecord | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const existing = await getBrochureByIdForUser(id, user);
-	if (!existing) {
-		return null;
-	}
+  const existing = await getBrochureByIdForUser(id, user);
+  if (!existing) {
+    return null;
+  }
 
-	const normalizedContent = normalizeEditorState(content);
+  const normalizedContent = normalizeEditorState(content);
 
-	await pool.query(
-		`
-			UPDATE brochures
-			SET content = ?
-			WHERE id = ?
-		`,
-		[JSON.stringify(normalizedContent), id],
-	);
+  await prisma.brochure.update({
+    where: { id },
+    data: {
+      content: toPrismaJson(normalizedContent),
+    },
+  });
 
-	return getBrochureByIdForUser(id, user);
+  return getBrochureByIdForUser(id, user);
 }
 
 export async function deleteBrochureForFaculty(id: number, user: SessionUser): Promise<boolean> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	if (user.role !== "faculty") {
-		return false;
-	}
+  if (user.role !== "faculty") {
+    return false;
+  }
 
-	const [result] = await pool.query<ResultSetHeader>(
-		`
-			DELETE FROM brochures
-			WHERE id = ? AND created_by = ?
-		`,
-		[id, user.userId],
-	);
+  const result = await prisma.brochure.deleteMany({
+    where: {
+      id,
+      createdBy: user.userId,
+    },
+  });
 
-	return result.affectedRows > 0;
+  return result.count > 0;
 }
 
 export async function submitBrochureForReview(
-	id: number,
-	user: SessionUser,
-	content: unknown,
+  id: number,
+  user: SessionUser,
+  content: unknown,
 ): Promise<BrochureRecord | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	if (user.role !== "faculty") {
-		return null;
-	}
+  if (user.role !== "faculty") {
+    return null;
+  }
 
-	const normalizedContent = normalizeEditorState(content);
-	const [result] = await pool.query<ResultSetHeader>(
-		`
-			UPDATE brochures
-			SET content = ?, status = 'pending', rejection_reason = NULL
-			WHERE id = ? AND created_by = ?
-		`,
-		[JSON.stringify(normalizedContent), id, user.userId],
-	);
+  const normalizedContent = normalizeEditorState(content);
+  const result = await prisma.brochure.updateMany({
+    where: {
+      id,
+      createdBy: user.userId,
+    },
+    data: {
+      content: toPrismaJson(normalizedContent),
+      status: "pending",
+      rejectionReason: null,
+    },
+  });
 
-	if (result.affectedRows === 0) {
-		return null;
-	}
+  if (result.count === 0) {
+    return null;
+  }
 
-	return getBrochureByIdForUser(id, user);
+  return getBrochureByIdForUser(id, user);
 }
 
 export async function decideBrochure(
-	id: number,
-	user: SessionUser,
-	decision: "approved" | "rejected",
-	content?: unknown,
-	rejectionReason?: string | null,
+  id: number,
+  user: SessionUser,
+  decision: "approved" | "rejected",
+  content?: unknown,
+  rejectionReason?: string | null,
 ): Promise<BrochureRecord | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	if (user.role !== "admin") {
-		return null;
-	}
+  if (user.role !== "admin") {
+    return null;
+  }
 
-	const normalizedContent = content === undefined ? null : normalizeEditorState(content);
+  const data: Prisma.BrochureUpdateManyMutationInput = {
+    status: decision,
+    rejectionReason: decision === "rejected" ? (rejectionReason?.trim() || null) : null,
+  };
 
-	const [result] = await pool.query<ResultSetHeader>(
-		`
-			UPDATE brochures
-			SET status = ?, content = COALESCE(?, content), rejection_reason = ?
-			WHERE id = ? AND assigned_admin = ?
-		`,
-		[
-			decision,
-			normalizedContent ? JSON.stringify(normalizedContent) : null,
-			decision === "rejected" ? (rejectionReason?.trim() || null) : null,
-			id,
-			user.userId,
-		],
-	);
+  if (content !== undefined) {
+    data.content = toPrismaJson(normalizeEditorState(content));
+  }
 
-	if (result.affectedRows === 0) {
-		return null;
-	}
+  const result = await prisma.brochure.updateMany({
+    where: {
+      id,
+      assignedAdminId: user.userId,
+    },
+    data,
+  });
 
-	return getBrochureByIdForUser(id, user);
+  if (result.count === 0) {
+    return null;
+  }
+
+  return getBrochureByIdForUser(id, user);
 }
 
 export async function listCertificatesForUser(
-	user: SessionUser,
-	options?: ListCertificateOptions,
+  user: SessionUser,
+  options?: ListCertificateOptions,
 ): Promise<CertificateRecord[]> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const whereClauses: string[] = [];
-	const values: Array<number | string> = [];
+  const where: Prisma.CertificateWhereInput =
+    user.role === "faculty" ? { createdBy: user.userId } : { assignedAdminId: user.userId };
 
-	if (user.role === "faculty") {
-		whereClauses.push("c.created_by = ?");
-		values.push(user.userId);
-	} else {
-		whereClauses.push("c.assigned_admin = ?");
-		values.push(user.userId);
-	}
+  if (options?.status && isValidStatus(options.status)) {
+    where.status = options.status;
+  }
 
-	if (options?.status && isValidStatus(options.status)) {
-		whereClauses.push("c.status = ?");
-		values.push(options.status);
-	}
+  const rows = await prisma.certificate.findMany({
+    where,
+    include: {
+      creator: {
+        select: { username: true },
+      },
+      assignedAdminUser: {
+        select: { username: true },
+      },
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  });
 
-	const [rows] = await pool.query<CertificateRow[]>(
-		`
-			SELECT
-				c.id,
-				c.title,
-				c.description,
-				c.content,
-				c.created_by AS createdBy,
-				creator.username AS createdByUsername,
-				c.assigned_admin AS assignedAdminId,
-				admin.username AS assignedAdminUsername,
-				c.status,
-				c.rejection_reason AS rejectionReason,
-				c.created_at AS createdAt,
-				c.updated_at AS updatedAt
-			FROM certificates c
-			INNER JOIN users creator ON creator.id = c.created_by
-			LEFT JOIN users admin ON admin.id = c.assigned_admin
-			WHERE ${whereClauses.join(" AND ")}
-			ORDER BY c.updated_at DESC
-		`,
-		values,
-	);
-
-	return rows.map(mapCertificateRow);
+  return rows.map(mapCertificateRow);
 }
 
 export async function getCertificateByIdForUser(
-	id: number,
-	user: SessionUser,
+  id: number,
+  user: SessionUser,
 ): Promise<CertificateRecord | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const [rows] = await pool.query<CertificateRow[]>(
-		`
-			SELECT
-				c.id,
-				c.title,
-				c.description,
-				c.content,
-				c.created_by AS createdBy,
-				creator.username AS createdByUsername,
-				c.assigned_admin AS assignedAdminId,
-				admin.username AS assignedAdminUsername,
-				c.status,
-				c.rejection_reason AS rejectionReason,
-				c.created_at AS createdAt,
-				c.updated_at AS updatedAt
-			FROM certificates c
-			INNER JOIN users creator ON creator.id = c.created_by
-			LEFT JOIN users admin ON admin.id = c.assigned_admin
-			WHERE c.id = ? AND ${user.role === "faculty" ? "c.created_by = ?" : "c.assigned_admin = ?"}
-			LIMIT 1
-		`,
-		[id, user.userId],
-	);
+  const row = await prisma.certificate.findFirst({
+    where: {
+      id,
+      ...(user.role === "faculty" ? { createdBy: user.userId } : { assignedAdminId: user.userId }),
+    },
+    include: {
+      creator: {
+        select: { username: true },
+      },
+      assignedAdminUser: {
+        select: { username: true },
+      },
+    },
+  });
 
-	const row = rows[0];
-	return row ? mapCertificateRow(row) : null;
+  return row ? mapCertificateRow(row) : null;
 }
 
 export async function createCertificateDraft(input: {
-	title: string;
-	description: string;
-	createdBy: number;
-	assignedAdminId: number;
-	content?: unknown;
+  title: string;
+  description: string;
+  createdBy: number;
+  assignedAdminId: number;
+  content?: unknown;
 }): Promise<number> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const normalizedContent = normalizeCertificateEditorState(
-		input.content === undefined ? createEmptyCertificateEditorState() : input.content,
-	);
+  const normalizedContent = normalizeCertificateEditorState(
+    input.content === undefined ? createEmptyCertificateEditorState() : input.content,
+  );
 
-	const [result] = await pool.query<ResultSetHeader>(
-		`
-			INSERT INTO certificates (title, description, content, created_by, assigned_admin, status)
-			VALUES (?, ?, ?, ?, ?, 'draft')
-		`,
-		[input.title, input.description, JSON.stringify(normalizedContent), input.createdBy, input.assignedAdminId],
-	);
+  const created = await prisma.certificate.create({
+    data: {
+      title: input.title,
+      description: input.description,
+      content: toPrismaJson(normalizedContent),
+      createdBy: input.createdBy,
+      assignedAdminId: input.assignedAdminId,
+      status: "draft",
+    },
+    select: {
+      id: true,
+    },
+  });
 
-	return result.insertId;
+  return created.id;
 }
 
 export async function updateCertificateContent(
-	id: number,
-	user: SessionUser,
-	content: unknown,
+  id: number,
+  user: SessionUser,
+  content: unknown,
 ): Promise<CertificateRecord | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	const existing = await getCertificateByIdForUser(id, user);
-	if (!existing) {
-		return null;
-	}
+  const existing = await getCertificateByIdForUser(id, user);
+  if (!existing) {
+    return null;
+  }
 
-	const normalizedContent = normalizeCertificateEditorState(content);
+  const normalizedContent = normalizeCertificateEditorState(content);
 
-	await pool.query(
-		`
-			UPDATE certificates
-			SET content = ?
-			WHERE id = ?
-		`,
-		[JSON.stringify(normalizedContent), id],
-	);
+  await prisma.certificate.update({
+    where: { id },
+    data: {
+      content: toPrismaJson(normalizedContent),
+    },
+  });
 
-	return getCertificateByIdForUser(id, user);
+  return getCertificateByIdForUser(id, user);
 }
 
 export async function deleteCertificateForFaculty(id: number, user: SessionUser): Promise<boolean> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	if (user.role !== "faculty") {
-		return false;
-	}
+  if (user.role !== "faculty") {
+    return false;
+  }
 
-	const [result] = await pool.query<ResultSetHeader>(
-		`
-			DELETE FROM certificates
-			WHERE id = ? AND created_by = ?
-		`,
-		[id, user.userId],
-	);
+  const result = await prisma.certificate.deleteMany({
+    where: {
+      id,
+      createdBy: user.userId,
+    },
+  });
 
-	return result.affectedRows > 0;
+  return result.count > 0;
 }
 
 export async function submitCertificateForReview(
-	id: number,
-	user: SessionUser,
-	content: unknown,
+  id: number,
+  user: SessionUser,
+  content: unknown,
 ): Promise<CertificateRecord | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	if (user.role !== "faculty") {
-		return null;
-	}
+  if (user.role !== "faculty") {
+    return null;
+  }
 
-	const normalizedContent = normalizeCertificateEditorState(content);
-	const [result] = await pool.query<ResultSetHeader>(
-		`
-			UPDATE certificates
-			SET content = ?, status = 'pending', rejection_reason = NULL
-			WHERE id = ? AND created_by = ?
-		`,
-		[JSON.stringify(normalizedContent), id, user.userId],
-	);
+  const normalizedContent = normalizeCertificateEditorState(content);
+  const result = await prisma.certificate.updateMany({
+    where: {
+      id,
+      createdBy: user.userId,
+    },
+    data: {
+      content: toPrismaJson(normalizedContent),
+      status: "pending",
+      rejectionReason: null,
+    },
+  });
 
-	if (result.affectedRows === 0) {
-		return null;
-	}
+  if (result.count === 0) {
+    return null;
+  }
 
-	return getCertificateByIdForUser(id, user);
+  return getCertificateByIdForUser(id, user);
 }
 
 export async function decideCertificate(
-	id: number,
-	user: SessionUser,
-	decision: "approved" | "rejected",
-	content?: unknown,
-	rejectionReason?: string | null,
+  id: number,
+  user: SessionUser,
+  decision: "approved" | "rejected",
+  content?: unknown,
+  rejectionReason?: string | null,
 ): Promise<CertificateRecord | null> {
-	await ensureSchema();
+  await ensureDatabase();
 
-	if (user.role !== "admin") {
-		return null;
-	}
+  if (user.role !== "admin") {
+    return null;
+  }
 
-	const normalizedContent = content === undefined ? null : normalizeCertificateEditorState(content);
+  const data: Prisma.CertificateUpdateManyMutationInput = {
+    status: decision,
+    rejectionReason: decision === "rejected" ? (rejectionReason?.trim() || null) : null,
+  };
 
-	const [result] = await pool.query<ResultSetHeader>(
-		`
-			UPDATE certificates
-			SET status = ?, content = COALESCE(?, content), rejection_reason = ?
-			WHERE id = ? AND assigned_admin = ?
-		`,
-		[
-			decision,
-			normalizedContent ? JSON.stringify(normalizedContent) : null,
-			decision === "rejected" ? (rejectionReason?.trim() || null) : null,
-			id,
-			user.userId,
-		],
-	);
+  if (content !== undefined) {
+    data.content = toPrismaJson(normalizeCertificateEditorState(content));
+  }
 
-	if (result.affectedRows === 0) {
-		return null;
-	}
+  const result = await prisma.certificate.updateMany({
+    where: {
+      id,
+      assignedAdminId: user.userId,
+    },
+    data,
+  });
 
-	return getCertificateByIdForUser(id, user);
+  if (result.count === 0) {
+    return null;
+  }
+
+  return getCertificateByIdForUser(id, user);
 }

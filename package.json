@@ -7,11 +7,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "temp:bootstrap": "sh ./temp_init/scripts/bootstrap-placeholders.sh",
     "temp:verify": "sh ./temp_init/scripts/verify-structure.sh"
   },
   "dependencies": {
     "@fal-ai/client": "^1.9.4",
+    "@prisma/client": "^6.19.3",
     "@types/papaparse": "^5.5.2",
     "autoprefixer": "^10.4.27",
     "axios": "^1.13.6",
@@ -20,7 +26,6 @@
     "framer-motion": "^12.38.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
-    "mysql2": "^3.22.0",
     "next": "^16.2.4",
     "puppeteer": "^24.39.1",
     "qrcode.react": "^4.2.0",
@@ -39,6 +44,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^16.2.4",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
