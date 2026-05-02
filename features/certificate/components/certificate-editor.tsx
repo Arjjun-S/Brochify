@@ -26,6 +26,9 @@ import { FilterSidebar } from "@/features/editor/components/filter-sidebar";
 import { DrawSidebar } from "@/features/editor/components/draw-sidebar";
 import { AiSidebar } from "@/features/editor/components/ai-sidebar";
 import { TemplateSidebar } from "@/features/editor/components/template-sidebar";
+import { ElementsSidebar } from "@/features/editor/components/elements-sidebar";
+import { LogoSidebar } from "@/features/editor/components/logo-sidebar";
+import { CertificateTemplateSidebar } from "@/features/editor/components/certificate-template-sidebar";
 import { RemoveBgSidebar } from "@/features/editor/components/remove-bg-sidebar";
 import { SettingsSidebar } from "@/features/editor/components/settings-sidebar";
 import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
@@ -167,6 +170,7 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
         <Sidebar
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
+          editorType="certificate"
         />
         <ShapeSidebar
           editor={editor}
@@ -219,6 +223,21 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
           onChangeActiveTool={onChangeActiveTool}
         />
         <AiSidebar
+          editor={editor}
+          activeTool={activeTool}
+          onChangeActiveTool={onChangeActiveTool}
+        />
+        <CertificateTemplateSidebar
+          editor={editor}
+          activeTool={activeTool}
+          onChangeActiveTool={onChangeActiveTool}
+        />
+        <ElementsSidebar
+          editor={editor}
+          activeTool={activeTool}
+          onChangeActiveTool={onChangeActiveTool}
+        />
+        <LogoSidebar
           editor={editor}
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
