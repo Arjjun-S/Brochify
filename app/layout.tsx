@@ -15,6 +15,7 @@ import {
   Space_Grotesk,
 } from "next/font/google";
 import { FONT_PRELOAD_STYLESHEET_HREF } from "@/lib/domains/brochure";
+import { QueryProvider } from "@/components/query-provider";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -59,7 +60,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${manrope.variable} ${dmSans.variable} ${spaceGrotesk.variable} ${plusJakartaSans.variable} ${sora.variable} ${poppins.variable} ${ibmPlexSans.variable} ${bebasNeue.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${fraunces.variable} ${libreBaskerville.variable} font-sans antialiased`}
       >
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

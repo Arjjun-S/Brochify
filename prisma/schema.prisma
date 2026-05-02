@@ -30,6 +30,7 @@ model User {
   assignedBrochures    Brochure[]    @relation("BrochureAssignee")
   createdCertificates  Certificate[] @relation("CertificateCreator")
   assignedCertificates Certificate[] @relation("CertificateAssignee")
+  designProjects       DesignProject[] @relation("DesignProjectCreator")
 
   @@map("users")
 }
@@ -72,4 +73,23 @@ model Certificate {
   @@index([createdBy])
   @@index([assignedAdminId])
   @@map("certificates")
+}
+
+model DesignProject {
+  id            Int      @id @default(autoincrement())
+  name          String   @db.VarChar(255)
+  json          String   @db.LongText
+  width         Int      @default(900)
+  height        Int      @default(1200)
+  thumbnailUrl  String?  @map("thumbnail_url") @db.VarChar(512)
+  isTemplate    Boolean  @default(false) @map("is_template")
+  isPro         Boolean  @default(false) @map("is_pro")
+  createdBy     Int      @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  creator       User     @relation("DesignProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([createdBy])
+  @@index([isTemplate])
+  @@map("design_projects")
 }

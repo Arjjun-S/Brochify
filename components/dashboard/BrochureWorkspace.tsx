@@ -9,6 +9,7 @@ import {
   FileBadge2,
   LogOut,
   MoonStar,
+  Palette,
   PlusCircle,
   Search,
   Settings2,
@@ -359,6 +360,22 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
                     <div>
                       <p className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>Poster / Flyer</p>
                       <p className={cn("mt-0.5 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>Single page portrait layout</p>
+                    </div>
+                  </Link>
+                  <Link
+                    href="/faculty/design/create"
+                    onClick={() => setCreateOpen(false)}
+                    className={cn(
+                      "flex items-start gap-4 rounded-2xl p-3 transition",
+                      isDark ? "hover:bg-slate-800" : "hover:bg-slate-50",
+                    )}
+                  >
+                    <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", isDark ? "bg-violet-900/50 text-violet-400" : "bg-violet-50 text-violet-600")}>
+                      <Palette className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>Canvas Editor</p>
+                      <p className={cn("mt-0.5 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>Free-form design with Fabric.js</p>
                     </div>
                   </Link>
                 </motion.div>
