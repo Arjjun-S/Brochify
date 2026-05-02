@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SelectBox } from "@/components/ui/SelectBox";
 
 type AdminOption = {
   id: number;
@@ -103,26 +104,24 @@ export default function FacultyCreateBrochureForm() {
               />
             </label>
 
-            <label className="block">
+            <div className="block">
               <span className="mb-1 block text-sm font-medium text-slate-700">Select Admin</span>
-              <select
+              <SelectBox
                 value={assignedAdminId}
-                onChange={(event) => setAssignedAdminId(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm"
-                required
-              >
-                {admins.length === 0 && <option value="">No admins found</option>}
-                {admins.map((admin) => (
-                  <option key={admin.id} value={admin.id}>
-                    {admin.username}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={setAssignedAdminId}
+                options={
+                  admins.length > 0 
+                    ? admins.map(a => ({ label: a.username, value: String(a.id) }))
+                    : [{ label: "No admins found", value: "" }]
+                }
+                placeholder="Select Admin"
+                disabled={admins.length === 0}
+              />
+            </div>
 
             {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
                 type="submit"
                 disabled={submitting}
@@ -132,7 +131,7 @@ export default function FacultyCreateBrochureForm() {
               </button>
 
               <Link
-                href="/faculty/brochure"
+                href="/faculty/brochures"
                 className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Cancel

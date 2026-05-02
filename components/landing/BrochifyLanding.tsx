@@ -283,12 +283,6 @@ export default function BrochifyLanding() {
                       >
                         Open studio <ArrowRight className="h-4 w-4 opacity-90" aria-hidden />
                       </Link>
-                      <Link
-                        href={loginNext("/faculty/brochures/create")}
-                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-white/10 hover:border-white/20"
-                      >
-                        New brochure
-                      </Link>
                     </div>
                   </motion.div>
                 </div>
