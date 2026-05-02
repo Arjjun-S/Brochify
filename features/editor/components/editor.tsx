@@ -28,6 +28,7 @@ import { FilterSidebar } from "@/features/editor/components/filter-sidebar";
 import { DrawSidebar } from "@/features/editor/components/draw-sidebar";
 import { AiSidebar } from "@/features/editor/components/ai-sidebar";
 import { TemplateSidebar } from "@/features/editor/components/template-sidebar";
+import { LogoSidebar } from "@/features/editor/components/logo-sidebar";
 import { RemoveBgSidebar } from "@/features/editor/components/remove-bg-sidebar";
 import { SettingsSidebar } from "@/features/editor/components/settings-sidebar";
 import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
@@ -146,6 +147,7 @@ export const Editor = ({ initialData, brochureId, brochureType }: EditorProps) =
         <Sidebar
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
+          editorType="brochure"
         />
         <ShapeSidebar
           editor={editor}
@@ -192,6 +194,11 @@ export const Editor = ({ initialData, brochureId, brochureType }: EditorProps) =
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
           brochureType={brochureType}
+        />
+        <LogoSidebar
+          editor={editor}
+          activeTool={activeTool}
+          onChangeActiveTool={onChangeActiveTool}
         />
         <FilterSidebar
           editor={editor}
