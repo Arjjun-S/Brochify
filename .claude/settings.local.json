@@ -4,7 +4,13 @@
       "Bash(npx tsc *)",
       "Bash(npm install *)",
       "Bash(npx prisma *)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(curl -s http://localhost:3000/api/logos)",
+      "Bash(node -e \"const {prisma} = require\\('./lib/server/prisma'\\); console.log\\(typeof prisma\\)\")",
+      "Bash(curl -s http://localhost:3000/api/certificate)",
+      "Bash(rm -rf .next node_modules/.cache)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3003/api/assets?type=badge)"
     ]
   }
 }

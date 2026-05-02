@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "utfs.io" },
       { protocol: "https", hostname: "replicate.delivery" },
+      { protocol: "https", hostname: "res.cloudinary.com" },
     ],
   },
   serverExternalPackages: ["jsdom"],
