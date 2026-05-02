@@ -102,10 +102,15 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
         return;
       }
 
+      const activeObject = canvas.getActiveObject();
+      const isClickOnObject = activeObject && activeObject.containsPoint(new fabric.Point(e.offsetX, e.offsetY));
+
+      // Pan gesture: middle mouse, Alt+left click, Space+left click, or left click on empty canvas (not on an object)
       const panGesture =
         e.button === 1
         || (e.button === 0 && e.altKey)
-        || (e.button === 0 && spaceHeld);
+        || (e.button === 0 && spaceHeld)
+        || (e.button === 0 && !isClickOnObject);
 
       if (!panGesture) {
         return;

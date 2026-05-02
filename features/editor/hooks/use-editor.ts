@@ -38,6 +38,7 @@ import { useCanvasEvents } from "@/features/editor/hooks/use-canvas-events";
 import { useViewportInteractions } from "@/features/editor/hooks/use-viewport-interactions";
 import { useWindowEvents } from "@/features/editor/hooks/use-window-events";
 import { useLoadState } from "@/features/editor/hooks/use-load-state";
+import { CERTIFICATE_PAGE_WIDTH, CERTIFICATE_PAGE_HEIGHT } from "@/lib/domains/certificate";
 
 const IDENTITY_MATRIX: [number, number, number, number, number, number] = [1, 0, 0, 1, 0, 0];
 
@@ -723,6 +724,49 @@ const buildEditor = ({
       canvas.renderAll();
       save();
     },
+    addBackgroundImage: (value: string) => {
+      fabric.Image.fromURL(
+        value,
+        (image) => {
+          const workspace = getWorkspace() as fabric.Rect | undefined;
+          if (!workspace) {
+            return;
+          }
+
+          const workspaceWidth = workspace.width ?? CERTIFICATE_PAGE_WIDTH;
+          const workspaceHeight = workspace.height ?? CERTIFICATE_PAGE_HEIGHT;
+          const imageWidth = image.width || 1;
+          const imageHeight = image.height || 1;
+
+          const coverScale = Math.max(
+            workspaceWidth / imageWidth,
+            workspaceHeight / imageHeight,
+          );
+
+          image.set({
+            originX: "center",
+            originY: "center",
+            left: (workspace.left ?? 0) + workspaceWidth / 2,
+            top: (workspace.top ?? 0) + workspaceHeight / 2,
+            scaleX: coverScale,
+            scaleY: coverScale,
+            selectable: false,
+            evented: false,
+            hasControls: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            lockRotation: true,
+            lockScalingX: true,
+            lockScalingY: true,
+            lockUniScaling: true,
+          });
+
+          image.sendToBack();
+          canvas.renderAll();
+        },
+        { crossOrigin: "anonymous" },
+      );
+    },
     enableDrawingMode: () => {
       canvas.discardActiveObject();
       canvas.renderAll();
@@ -1403,11 +1447,15 @@ export const useEditor = ({
         height: workspaceHeight || 600,
         name: "clip",
         fill: shouldBootstrapTrifoldPages ? "#e5e7eb" : "white",
+        stroke: "#e2e8f0",
+        strokeWidth: 1,
         selectable: false,
         hasControls: false,
         shadow: new fabric.Shadow({
-          color: "rgba(0,0,0,0.8)",
-          blur: 5,
+          color: "rgba(0,0,0,0.15)",
+          blur: 8,
+          offsetX: 0,
+          offsetY: 2,
         }),
       });
 

@@ -233,6 +233,7 @@ export interface Editor {
   zoomOut: () => void;
   getWorkspace: () => fabric.Object | undefined;
   changeBackground: (value: string) => void;
+  addBackgroundImage: (value: string) => void;
   changeSize: (value: { width: number; height: number }) => void;
   enableDrawingMode: () => void;
   disableDrawingMode: () => void;

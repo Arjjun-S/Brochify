@@ -34,7 +34,7 @@ export const CertificateTemplateSidebar = ({ editor, activeTool, onChangeActiveT
   const onSelectTemplate = async (url: string) => {
     const ok = await confirm();
     if (ok) {
-      editor?.addImage(url);
+      editor?.addBackgroundImage(url);
     }
   };
 
