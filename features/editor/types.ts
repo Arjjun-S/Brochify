@@ -207,6 +207,7 @@ export interface Editor {
   savePng: () => void;
   saveJpg: () => void;
   saveSvg: () => void;
+  savePdf: (options?: { watermarkText?: string | null; template?: string }) => Promise<void>;
   saveJson: () => void;
   loadJson: (json: string) => void;
   onUndo: () => void;

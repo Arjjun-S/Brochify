@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { 
-  ActiveTool, 
-  Editor, 
+import {
+  ActiveTool,
+  Editor,
 } from "@/features/editor/types";
 import { ToolSidebarClose } from "@/features/editor/components/tool-sidebar-close";
 import { ToolSidebarHeader } from "@/features/editor/components/tool-sidebar-header";
@@ -22,16 +22,14 @@ export const OpacitySidebar = ({
   activeTool,
   onChangeActiveTool,
 }: OpacitySidebarProps) => {
-  const initialValue = editor?.getActiveOpacity() || 1;
   const selectedObject = useMemo(() => editor?.selectedObjects[0], [editor?.selectedObjects]);
-
-  const [opacity, setOpacity] = useState(initialValue);
-
-  useEffect(() => {
-    if (selectedObject) {
-      setOpacity(selectedObject.get("opacity") || 1);
-    }
-  }, [selectedObject]);
+  const selectedOpacity =
+    typeof selectedObject?.get("opacity") === "number"
+      ? (selectedObject.get("opacity") as number)
+      : 1;
+  const sliderKey = selectedObject
+    ? `${selectedObject.type}-${selectedObject.left ?? 0}-${selectedObject.top ?? 0}-${selectedOpacity}`
+    : "none";
 
   const onClose = () => {
     onChangeActiveTool("select");
@@ -39,7 +37,6 @@ export const OpacitySidebar = ({
 
   const onChange = (value: number) => {
     editor?.changeOpacity(value);
-    setOpacity(value);
   };
 
   return (
@@ -56,7 +53,8 @@ export const OpacitySidebar = ({
       <ScrollArea>
         <div className="p-4 space-y-4 border-b">
           <Slider
-            value={[opacity]}
+            key={sliderKey}
+            defaultValue={[selectedOpacity]}
             onValueChange={(values) => onChange(values[0])}
             max={1}
             min={0}

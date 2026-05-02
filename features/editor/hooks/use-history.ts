@@ -28,8 +28,13 @@ export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
   const save = useCallback((skip = false) => {
     if (!canvas) return;
 
-    const currentState = canvas.toJSON(JSON_KEYS);
-    const json = JSON.stringify(currentState);
+    let json: string;
+    try {
+      const currentState = canvas.toJSON(JSON_KEYS);
+      json = JSON.stringify(currentState);
+    } catch {
+      return;
+    }
 
     if (!skip && !skipSave.current) {
       canvasHistory.current.push(json);
@@ -55,9 +60,19 @@ export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
       canvas?.clear().renderAll();
 
       const previousIndex = historyIndex - 1;
-      const previousState = JSON.parse(
-        canvasHistory.current[previousIndex]
-      );
+      const previousSerializedState = canvasHistory.current[previousIndex];
+      if (!previousSerializedState) {
+        skipSave.current = false;
+        return;
+      }
+
+      let previousState: unknown;
+      try {
+        previousState = JSON.parse(previousSerializedState);
+      } catch {
+        skipSave.current = false;
+        return;
+      }
 
       canvas?.loadFromJSON(previousState, () => {
         canvas.renderAll();
@@ -73,9 +88,19 @@ export const useHistory = ({ canvas, saveCallback }: UseHistoryProps) => {
       canvas?.clear().renderAll();
 
       const nextIndex = historyIndex + 1;
-      const nextState = JSON.parse(
-        canvasHistory.current[nextIndex]
-      );
+      const nextSerializedState = canvasHistory.current[nextIndex];
+      if (!nextSerializedState) {
+        skipSave.current = false;
+        return;
+      }
+
+      let nextState: unknown;
+      try {
+        nextState = JSON.parse(nextSerializedState);
+      } catch {
+        skipSave.current = false;
+        return;
+      }
 
       canvas?.loadFromJSON(nextState, () => {
         canvas.renderAll();

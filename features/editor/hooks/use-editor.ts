@@ -99,6 +99,47 @@ const buildEditor = ({
     autoZoom();
   };
 
+  const savePdf = async (options?: { watermarkText?: string | null; template?: string }) => {
+    const exportOptions = {
+      ...generateSaveOptions(),
+      format: "png" as const,
+    };
+
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    const imageDataUrl = canvas.toDataURL(exportOptions);
+    autoZoom();
+
+    const response = await fetch("/api/v1/brochure/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        html: `
+          <div style=\"width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:white;\">
+            <img src=\"${imageDataUrl}\" alt=\"Design export\" style=\"width:100%;height:100%;object-fit:contain;display:block;\" />
+          </div>
+        `,
+        css: "",
+        watermarkText: options?.watermarkText ?? null,
+        template: options?.template ?? "",
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(payload.error || "Failed to export PDF");
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `brochure-${Date.now()}.pdf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(anchor);
+  };
+
   const saveJson = async () => {
     const dataUrl = canvas.toJSON(JSON_KEYS);
 
@@ -129,7 +170,7 @@ const buildEditor = ({
 
     if (!center) return;
 
-    // @ts-ignore
+    // @ts-expect-error Fabric typing mismatch.
     canvas._centerObject(object, center);
   };
 
@@ -143,6 +184,7 @@ const buildEditor = ({
     savePng,
     saveJpg,
     saveSvg,
+    savePdf,
     saveJson,
     loadJson,
     canUndo,
@@ -252,7 +294,7 @@ const buildEditor = ({
     changeFontSize: (value: number) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
-          // @ts-ignore
+          // @ts-expect-error Fabric typing mismatch.
           // Faulty TS library, fontSize exists.
           object.set({ fontSize: value });
         }
@@ -266,7 +308,7 @@ const buildEditor = ({
         return FONT_SIZE;
       }
 
-      // @ts-ignore
+      // @ts-expect-error Fabric typing mismatch.
       // Faulty TS library, fontSize exists.
       const value = selectedObject.get("fontSize") || FONT_SIZE;
 
@@ -275,7 +317,7 @@ const buildEditor = ({
     changeTextAlign: (value: string) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
-          // @ts-ignore
+          // @ts-expect-error Fabric typing mismatch.
           // Faulty TS library, textAlign exists.
           object.set({ textAlign: value });
         }
@@ -289,7 +331,7 @@ const buildEditor = ({
         return "left";
       }
 
-      // @ts-ignore
+      // @ts-expect-error Fabric typing mismatch.
       // Faulty TS library, textAlign exists.
       const value = selectedObject.get("textAlign") || "left";
 
@@ -298,7 +340,7 @@ const buildEditor = ({
     changeFontUnderline: (value: boolean) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
-          // @ts-ignore
+          // @ts-expect-error Fabric typing mismatch.
           // Faulty TS library, underline exists.
           object.set({ underline: value });
         }
@@ -312,7 +354,7 @@ const buildEditor = ({
         return false;
       }
 
-      // @ts-ignore
+      // @ts-expect-error Fabric typing mismatch.
       // Faulty TS library, underline exists.
       const value = selectedObject.get("underline") || false;
 
@@ -321,7 +363,7 @@ const buildEditor = ({
     changeFontLinethrough: (value: boolean) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
-          // @ts-ignore
+          // @ts-expect-error Fabric typing mismatch.
           // Faulty TS library, linethrough exists.
           object.set({ linethrough: value });
         }
@@ -335,7 +377,7 @@ const buildEditor = ({
         return false;
       }
 
-      // @ts-ignore
+      // @ts-expect-error Fabric typing mismatch.
       // Faulty TS library, linethrough exists.
       const value = selectedObject.get("linethrough") || false;
 
@@ -344,7 +386,7 @@ const buildEditor = ({
     changeFontStyle: (value: string) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
-          // @ts-ignore
+          // @ts-expect-error Fabric typing mismatch.
           // Faulty TS library, fontStyle exists.
           object.set({ fontStyle: value });
         }
@@ -358,7 +400,7 @@ const buildEditor = ({
         return "normal";
       }
 
-      // @ts-ignore
+      // @ts-expect-error Fabric typing mismatch.
       // Faulty TS library, fontStyle exists.
       const value = selectedObject.get("fontStyle") || "normal";
 
@@ -367,7 +409,7 @@ const buildEditor = ({
     changeFontWeight: (value: number) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
-          // @ts-ignore
+          // @ts-expect-error Fabric typing mismatch.
           // Faulty TS library, fontWeight exists.
           object.set({ fontWeight: value });
         }
@@ -403,7 +445,7 @@ const buildEditor = ({
       setFontFamily(value);
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
-          // @ts-ignore
+          // @ts-expect-error Fabric typing mismatch.
           // Faulty TS library, fontFamily exists.
           object.set({ fontFamily: value });
         }
@@ -542,7 +584,7 @@ const buildEditor = ({
         return FONT_WEIGHT;
       }
 
-      // @ts-ignore
+      // @ts-expect-error Fabric typing mismatch.
       // Faulty TS library, fontWeight exists.
       const value = selectedObject.get("fontWeight") || FONT_WEIGHT;
 
@@ -555,7 +597,7 @@ const buildEditor = ({
         return fontFamily;
       }
 
-      // @ts-ignore
+      // @ts-expect-error Fabric typing mismatch.
       // Faulty TS library, fontFamily exists.
       const value = selectedObject.get("fontFamily") || fontFamily;
 
@@ -633,15 +675,15 @@ export const useEditor = ({
 
   useWindowEvents();
 
-  const { 
+  const {
     save, 
     canRedo, 
     canUndo, 
     undo, 
     redo,
-    canvasHistory,
+    canvasHistory: canvasHistoryRef,
     setHistoryIndex,
-  } = useHistory({ 
+  } = useHistory({
     canvas,
     saveCallback
   });
@@ -673,7 +715,7 @@ export const useEditor = ({
     canvas,
     autoZoom,
     initialState,
-    canvasHistory,
+    canvasHistory: canvasHistoryRef,
     setHistoryIndex,
   });
 
@@ -764,14 +806,25 @@ export const useEditor = ({
       setCanvas(initialCanvas);
       setContainer(initialContainer);
 
-      const currentState = JSON.stringify(
-        initialCanvas.toJSON(JSON_KEYS)
-      );
-      canvasHistory.current = [currentState];
+      let currentState = initialState.current;
+      if (!currentState) {
+        try {
+          currentState = JSON.stringify(
+            initialCanvas.toJSON(JSON_KEYS)
+          );
+        } catch {
+          currentState = JSON.stringify({
+            version: "5.3.0",
+            objects: [],
+          });
+        }
+      }
+
+      canvasHistoryRef.current = [currentState];
       setHistoryIndex(0);
     },
     [
-      canvasHistory, // No need, this is from useRef
+      canvasHistoryRef, // No need, this is from useRef
       setHistoryIndex, // No need, this is from useState
     ]
   );

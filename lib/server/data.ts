@@ -429,7 +429,7 @@ export async function deleteBrochureForFaculty(id: number, user: SessionUser): P
 export async function submitBrochureForReview(
   id: number,
   user: SessionUser,
-  content: unknown,
+  content?: unknown,
 ): Promise<BrochureRecord | null> {
   await ensureDatabase();
 
@@ -437,17 +437,21 @@ export async function submitBrochureForReview(
     return null;
   }
 
-  const normalizedContent = normalizeEditorState(content);
+  const data: Prisma.BrochureUpdateManyMutationInput = {
+    status: "pending",
+    rejectionReason: null,
+  };
+
+  if (content !== undefined) {
+    data.content = toPrismaJson(normalizeEditorState(content));
+  }
+
   const result = await prisma.brochure.updateMany({
     where: {
       id,
       createdBy: user.userId,
     },
-    data: {
-      content: toPrismaJson(normalizedContent),
-      status: "pending",
-      rejectionReason: null,
-    },
+    data,
   });
 
   if (result.count === 0) {

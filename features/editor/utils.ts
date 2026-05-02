@@ -2,14 +2,28 @@ import { uuid } from "uuidv4";
 import { fabric } from "fabric";
 import type { RGBColor } from "react-color";
 
-export function transformText(objects: any) {
+type JsonObjectNode = {
+  type?: string;
+  objects?: JsonObjectNode[];
+};
+
+type FabricFilterCtor = new (
+  options?: Record<string, unknown>,
+) => fabric.IBaseFilter;
+
+const filtersRegistry = fabric.Image.filters as unknown as Record<string, FabricFilterCtor | undefined>;
+
+export function transformText(objects: JsonObjectNode[] | undefined) {
   if (!objects) return;
 
-  objects.forEach((item: any) => {
+  objects.forEach((item) => {
     if (item.objects) {
       transformText(item.objects);
-    } else {
-      item.type === "text" && (item.type === "textbox");
+      return;
+    }
+
+    if (item.type === "text") {
+      item.type = "textbox";
     }
   });
 };
@@ -39,22 +53,20 @@ export function rgbaObjectToString(rgba: RGBColor | "transparent") {
 };
 
 export const createFilter = (value: string) => {
-  let effect;
+  let effect: fabric.IBaseFilter | null;
 
   switch (value) {
     case "greyscale":
       effect = new fabric.Image.filters.Grayscale();
       break;
     case "polaroid":
-      // @ts-ignore
-      effect = new fabric.Image.filters.Polaroid();
+      effect = filtersRegistry.Polaroid ? new filtersRegistry.Polaroid() : null;
       break;
     case "sepia":
       effect = new fabric.Image.filters.Sepia();
       break;
     case "kodachrome":
-      // @ts-ignore
-      effect = new fabric.Image.filters.Kodachrome();
+      effect = filtersRegistry.Kodachrome ? new filtersRegistry.Kodachrome() : null;
       break;
     case "contrast":
       effect = new fabric.Image.filters.Contrast({ contrast: 0.3 });
@@ -63,16 +75,13 @@ export const createFilter = (value: string) => {
       effect = new fabric.Image.filters.Brightness({ brightness: 0.8 });
       break;
     case "brownie":
-      // @ts-ignore
-      effect = new fabric.Image.filters.Brownie();
+      effect = filtersRegistry.Brownie ? new filtersRegistry.Brownie() : null;
       break;
     case "vintage":
-      // @ts-ignore
-      effect = new fabric.Image.filters.Vintage();
+      effect = filtersRegistry.Vintage ? new filtersRegistry.Vintage() : null;
       break;
     case "technicolor":
-      // @ts-ignore
-      effect = new fabric.Image.filters.Technicolor();
+      effect = filtersRegistry.Technicolor ? new filtersRegistry.Technicolor() : null;
       break;
     case "pixelate":
       effect = new fabric.Image.filters.Pixelate();
@@ -94,30 +103,31 @@ export const createFilter = (value: string) => {
       });
       break;
     case "removecolor":
-      // @ts-ignore
-      effect = new fabric.Image.filters.RemoveColor({
+      effect = filtersRegistry.RemoveColor
+        ? new filtersRegistry.RemoveColor({
         threshold: 0.2,
         distance: 0.5
-      });
+          })
+        : null;
       break;
     case "blacknwhite":
-      // @ts-ignore
-      effect = new fabric.Image.filters.BlackWhite();
+      effect = filtersRegistry.BlackWhite ? new filtersRegistry.BlackWhite() : null;
       break;
     case "vibrance":
-      // @ts-ignore
-      effect = new fabric.Image.filters.Vibrance({ 
+      effect = filtersRegistry.Vibrance
+        ? new filtersRegistry.Vibrance({
         vibrance: 1,
-      });
+          })
+        : null;
       break;
     case "blendcolor":
-      effect = new fabric.Image.filters.BlendColor({ 
+      effect = new fabric.Image.filters.BlendColor({
         color: "#00ff00",
         mode: "multiply",
       });
       break;
     case "huerotate":
-      effect = new fabric.Image.filters.HueRotation({ 
+      effect = new fabric.Image.filters.HueRotation({
         rotation: 0.5,
       });
       break;
@@ -125,10 +135,12 @@ export const createFilter = (value: string) => {
       effect = new fabric.Image.filters.Resize();
       break;
     case "gamma":
-      // @ts-ignore
-      effect = new fabric.Image.filters.Gamma({
+      effect = filtersRegistry.Gamma
+        ? new filtersRegistry.Gamma({
         gamma: [1, 0.5, 2.1]
-      });
+          })
+        : null;
+      break;
     case "saturation":
       effect = new fabric.Image.filters.Saturation({
         saturation: 0.7,
@@ -136,7 +148,7 @@ export const createFilter = (value: string) => {
       break;
     default:
       effect = null;
-      return;
+      break;
   };
 
   return effect;

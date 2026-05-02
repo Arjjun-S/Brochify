@@ -4,6 +4,7 @@ import { CiFileOn } from "react-icons/ci";
 import { BsCloudCheck, BsCloudSlash } from "react-icons/bs";
 import { useFilePicker } from "use-file-picker";
 import { useMutationState } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   Download,
@@ -30,13 +31,30 @@ import {
 interface NavbarProps {
   id: string;
   editor: Editor | undefined;
+  brochureId?: number;
   activeTool: ActiveTool;
   onChangeActiveTool: (tool: ActiveTool) => void;
 }
 
+type ReviewStatus = "draft" | "pending" | "approved" | "rejected";
+
+type WorkflowState = {
+  status: ReviewStatus;
+  rejectionReason: string | null;
+  template: string;
+};
+
+const workflowStatusClassMap: Record<ReviewStatus, string> = {
+  draft: "border-slate-300 bg-slate-100 text-slate-700",
+  pending: "border-amber-300 bg-amber-100 text-amber-700",
+  approved: "border-emerald-300 bg-emerald-100 text-emerald-700",
+  rejected: "border-rose-300 bg-rose-100 text-rose-700",
+};
+
 export const Navbar = ({
   id,
   editor,
+  brochureId,
   activeTool,
   onChangeActiveTool,
 }: NavbarProps) => {
@@ -53,9 +71,197 @@ export const Navbar = ({
   const isError = currentStatus === "error";
   const isPending = currentStatus === "pending";
 
+  const [sessionRole, setSessionRole] = useState<"admin" | "faculty" | null>(null);
+  const [workflow, setWorkflow] = useState<WorkflowState | null>(null);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [workflowBusy, setWorkflowBusy] = useState<"submit" | "approve" | "reject" | "export" | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+
+  const canShowWorkflow = Number.isFinite(brochureId);
+
+  const watermarkText = useMemo(() => {
+    if (!canShowWorkflow) {
+      return null;
+    }
+    return workflow?.status === "approved" ? null : "Made with Brochify - Not Approved";
+  }, [canShowWorkflow, workflow?.status]);
+
+  useEffect(() => {
+    if (!canShowWorkflow || !brochureId) {
+      setWorkflow(null);
+      setWorkflowError(null);
+      return;
+    }
+
+    let active = true;
+
+    const loadWorkflowContext = async () => {
+      setWorkflowLoading(true);
+      setWorkflowError(null);
+
+      try {
+        const [sessionResponse, brochureResponse] = await Promise.all([
+          fetch("/api/auth/session", { cache: "no-store" }),
+          fetch(`/api/brochure/${brochureId}`, { cache: "no-store" }),
+        ]);
+
+        const sessionPayload = (await sessionResponse.json()) as {
+          user?: { role?: "admin" | "faculty" };
+          error?: string;
+        };
+        const brochurePayload = (await brochureResponse.json()) as {
+          brochure?: {
+            status?: ReviewStatus;
+            rejectionReason?: string | null;
+            content?: { template?: string };
+          };
+          error?: string;
+        };
+
+        if (!sessionResponse.ok) {
+          throw new Error(sessionPayload.error || "Failed to load session.");
+        }
+        if (!brochureResponse.ok || !brochurePayload.brochure?.status) {
+          throw new Error(brochurePayload.error || "Failed to load brochure workflow.");
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setSessionRole(sessionPayload.user?.role || null);
+        setWorkflow({
+          status: brochurePayload.brochure.status,
+          rejectionReason: brochurePayload.brochure.rejectionReason ?? null,
+          template: brochurePayload.brochure.content?.template || "",
+        });
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : "Failed to load workflow context.";
+        setWorkflowError(message);
+      } finally {
+        if (active) {
+          setWorkflowLoading(false);
+        }
+      }
+    };
+
+    void loadWorkflowContext();
+
+    return () => {
+      active = false;
+    };
+  }, [brochureId, canShowWorkflow]);
+
+  const runWorkflowAction = async (
+    kind: "submit" | "approve" | "reject",
+    endpoint: string,
+    body: Record<string, unknown>,
+  ) => {
+    if (!brochureId) {
+      return;
+    }
+
+    setWorkflowBusy(kind);
+    setWorkflowError(null);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const payload = (await response.json()) as {
+        brochure?: {
+          status?: ReviewStatus;
+          rejectionReason?: string | null;
+          content?: { template?: string };
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.brochure?.status) {
+        throw new Error(payload.error || "Workflow action failed.");
+      }
+
+      setWorkflow((current) => ({
+        status: payload.brochure?.status || current?.status || "draft",
+        rejectionReason: payload.brochure?.rejectionReason ?? null,
+        template: payload.brochure?.content?.template || current?.template || "",
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Workflow action failed.";
+      setWorkflowError(message);
+    } finally {
+      setWorkflowBusy(null);
+    }
+  };
+
+  const handleSubmitForReview = () => {
+    if (!brochureId) {
+      return;
+    }
+    void runWorkflowAction("submit", `/api/brochure/${brochureId}/submit`, {});
+  };
+
+  const handleApprove = () => {
+    if (!brochureId) {
+      return;
+    }
+    void runWorkflowAction("approve", `/api/brochure/${brochureId}/approve`, {});
+  };
+
+  const handleReject = () => {
+    if (!brochureId) {
+      return;
+    }
+
+    const reason = window.prompt("Enter rejection reason")?.trim() || "";
+    if (!reason) {
+      setWorkflowError("Rejection reason is required.");
+      return;
+    }
+
+    void runWorkflowAction("reject", `/api/brochure/${brochureId}/reject`, {
+      rejectionReason: reason,
+    });
+  };
+
+  const handlePdfExport = async () => {
+    if (!editor) {
+      return;
+    }
+
+    setWorkflowBusy("export");
+    setWorkflowError(null);
+
+    try {
+      await editor.savePdf({
+        watermarkText,
+        template: workflow?.template || "",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to export PDF.";
+      setWorkflowError(message);
+    } finally {
+      setWorkflowBusy(null);
+    }
+  };
+
+  const canSubmitForReview =
+    sessionRole === "faculty" &&
+    (workflow?.status === "draft" || workflow?.status === "rejected");
+
+  const canApproveOrReject =
+    sessionRole === "admin" &&
+    workflow?.status !== "approved";
+
   const { openFilePicker } = useFilePicker({
     accept: ".json",
-    onFilesSuccessfullySelected: ({ plainFiles }: any) => {
+    onFilesSuccessfullySelected: ({ plainFiles }: { plainFiles: File[] }) => {
       if (plainFiles && plainFiles.length > 0) {
         const file = plainFiles[0];
         const reader = new FileReader();
@@ -149,6 +355,65 @@ export const Navbar = ({
             </div>
           </div>
         )}
+
+        {canShowWorkflow && workflow && (
+          <div className="ml-3 flex items-center gap-x-2">
+            <span
+              className={cn(
+                "rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]",
+                workflowStatusClassMap[workflow.status],
+              )}
+            >
+              {workflow.status}
+            </span>
+
+            {canSubmitForReview && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={workflowBusy !== null}
+                onClick={handleSubmitForReview}
+              >
+                {workflowBusy === "submit" ? "Submitting..." : "Submit to Admin"}
+              </Button>
+            )}
+
+            {canApproveOrReject && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={workflowBusy !== null}
+                  onClick={handleApprove}
+                >
+                  {workflowBusy === "approve" ? "Approving..." : "Approve"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={workflowBusy !== null}
+                  onClick={handleReject}
+                >
+                  {workflowBusy === "reject" ? "Rejecting..." : "Reject"}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {canShowWorkflow && workflowLoading && (
+          <div className="ml-3 flex items-center gap-x-2 text-xs text-muted-foreground">
+            <Loader className="size-3 animate-spin" />
+            Loading workflow...
+          </div>
+        )}
+
+        {workflowError && (
+          <div className="ml-3 max-w-[360px] truncate text-xs text-rose-600" title={workflowError}>
+            {workflowError}
+          </div>
+        )}
+
         <div className="ml-auto flex items-center gap-x-4">
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -167,6 +432,22 @@ export const Navbar = ({
                   <p>JSON</p>
                   <p className="text-xs text-muted-foreground">
                     Save for later editing
+                  </p>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-x-2"
+                onClick={() => {
+                  void handlePdfExport();
+                }}
+              >
+                <CiFileOn className="size-8" />
+                <div>
+                  <p>PDF</p>
+                  <p className="text-xs text-muted-foreground">
+                    {workflow?.status === "approved"
+                      ? "Approved export (no watermark)"
+                      : "Exports with review watermark"}
                   </p>
                 </div>
               </DropdownMenuItem>

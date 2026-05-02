@@ -23,18 +23,27 @@ export const useAutoResize = ({ canvas, container }: UseAutoResizeProps) => {
       .getObjects()
       .find((object) => object.name === "clip");
 
-    // @ts-ignore
-    const scale = fabric.util.findScaleToFit(localWorkspace, {
-      width: width,
-      height: height,
-    });
+    // Workspace may be temporarily unavailable while loading JSON.
+    // In that case, keep the canvas sized but skip zoom math.
+    if (!localWorkspace) {
+      canvas.requestRenderAll();
+      return;
+    }
+
+    const workspaceWidth = localWorkspace.getScaledWidth();
+    const workspaceHeight = localWorkspace.getScaledHeight();
+
+    if (!workspaceWidth || !workspaceHeight) {
+      canvas.requestRenderAll();
+      return;
+    }
+
+    const scale = Math.min(width / workspaceWidth, height / workspaceHeight);
 
     const zoom = zoomRatio * scale;
 
     canvas.setViewportTransform(fabric.iMatrix.concat());
     canvas.zoomToPoint(new fabric.Point(center.left, center.top), zoom);
-
-    if (!localWorkspace) return;
 
     const workspaceCenter = localWorkspace.getCenterPoint();
     const viewportTransform = canvas.viewportTransform;
@@ -47,11 +56,16 @@ export const useAutoResize = ({ canvas, container }: UseAutoResizeProps) => {
       return;
     }
 
-    viewportTransform[4] = canvas.width / 2 - workspaceCenter.x * viewportTransform[0];
+    const nextViewportTransform: [number, number, number, number, number, number] = [
+      viewportTransform[0],
+      viewportTransform[1],
+      viewportTransform[2],
+      viewportTransform[3],
+      canvas.width / 2 - workspaceCenter.x * viewportTransform[0],
+      canvas.height / 2 - workspaceCenter.y * viewportTransform[3],
+    ];
 
-    viewportTransform[5] = canvas.height / 2 - workspaceCenter.y * viewportTransform[3];
-
-    canvas.setViewportTransform(viewportTransform);
+    canvas.setViewportTransform(nextViewportTransform);
 
     localWorkspace.clone((cloned: fabric.Rect) => {
       canvas.clipPath = cloned;

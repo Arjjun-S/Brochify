@@ -6,8 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useUpdateProject } from "@/features/projects/api/use-update-project";
 
-import { 
-  ActiveTool, 
+import {
+  ActiveTool,
   selectionDependentTools
 } from "@/features/editor/types";
 import { Navbar } from "@/features/editor/components/navbar";
@@ -38,23 +38,24 @@ interface EditorProps {
     width: number;
     height: number;
   };
+  brochureId?: number;
 }
 
-export const Editor = ({ initialData }: EditorProps) => {
+export const Editor = ({ initialData, brochureId }: EditorProps) => {
   const { mutate } = useUpdateProject(initialData.id);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSave = useCallback(
     debounce(
-      (values: { 
+      (values: {
         json: string,
         height: number,
         width: number,
       }) => {
         mutate(values);
-    },
-    500
-  ), [mutate]);
+      },
+      500
+    ), [mutate]);
 
   const [activeTool, setActiveTool] = useState<ActiveTool>("select");
 
@@ -84,7 +85,7 @@ export const Editor = ({ initialData }: EditorProps) => {
     if (tool === activeTool) {
       return setActiveTool("select");
     }
-    
+
     setActiveTool(tool);
   }, [activeTool, editor]);
 
@@ -112,6 +113,7 @@ export const Editor = ({ initialData }: EditorProps) => {
       <Navbar
         id={String(initialData.id)}
         editor={editor}
+        brochureId={brochureId}
         activeTool={activeTool}
         onChangeActiveTool={onChangeActiveTool}
       />

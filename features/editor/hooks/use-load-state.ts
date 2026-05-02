@@ -21,13 +21,34 @@ export const useLoadState = ({
   const initialized = useRef(false);
 
   useEffect(() => {
-    if (!initialized.current && initialState?.current && canvas) {
-      const data = JSON.parse(initialState.current);
+    if (!initialized.current && canvas) {
+      const rawState = initialState?.current;
 
-      canvas.loadFromJSON(data, () => {
-        const currentState = JSON.stringify(
-          canvas.toJSON(JSON_KEYS),
-        );
+      if (!rawState || !rawState.trim()) {
+        initialized.current = true;
+        autoZoom();
+        return;
+      }
+
+      let data: unknown;
+      try {
+        data = JSON.parse(rawState);
+      } catch {
+        initialized.current = true;
+        autoZoom();
+        return;
+      }
+
+      canvas.loadFromJSON(data as Record<string, unknown>, () => {
+        let currentState: string;
+        try {
+          currentState = JSON.stringify(
+            canvas.toJSON(JSON_KEYS),
+          );
+        } catch {
+          autoZoom();
+          return;
+        }
 
         canvasHistory.current = [currentState];
         setHistoryIndex(0);

@@ -46,6 +46,7 @@ model Brochure {
   rejectionReason   String?      @map("rejection_reason") @db.Text
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
+  designProject     DesignProject?
   creator           User         @relation("BrochureCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   assignedAdminUser User         @relation("BrochureAssignee", fields: [assignedAdminId], references: [id], onDelete: Cascade)
 
@@ -84,9 +85,11 @@ model DesignProject {
   thumbnailUrl  String?  @map("thumbnail_url") @db.VarChar(512)
   isTemplate    Boolean  @default(false) @map("is_template")
   isPro         Boolean  @default(false) @map("is_pro")
+  brochureId    Int?     @unique @map("brochure_id")
   createdBy     Int      @map("created_by")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
+  brochure      Brochure? @relation(fields: [brochureId], references: [id], onDelete: SetNull)
   creator       User     @relation("DesignProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
 
   @@index([createdBy])

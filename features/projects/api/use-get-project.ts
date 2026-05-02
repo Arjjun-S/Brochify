@@ -10,6 +10,10 @@ export type ResponseType = {
     thumbnailUrl: string | null;
     isTemplate: boolean;
     isPro: boolean;
+    brochureId: number | null;
+    reviewStatus: string | null;
+    rejectionReason: string | null;
+    brochureTemplate: string | null;
     createdAt: string;
     updatedAt: string;
   };

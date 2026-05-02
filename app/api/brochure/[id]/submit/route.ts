@@ -27,10 +27,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 
   try {
-    const body = (await request.json()) as { content?: unknown };
-    if (body.content === undefined) {
-      return NextResponse.json({ error: "content is required." }, { status: 400 });
-    }
+    const body = (await request.json().catch(() => ({}))) as { content?: unknown };
 
     const brochure = await submitBrochureForReview(brochureId, session, body.content);
     if (!brochure) {

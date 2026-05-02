@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { fabric } from "fabric";
 import { AlertTriangle } from "lucide-react";
 
 import { ActiveTool, Editor } from "@/features/editor/types";
@@ -25,9 +26,11 @@ export const RemoveBgSidebar = ({
   const mutation = useRemoveBg();
 
   const selectedObject = editor?.selectedObjects[0];
-
-  // @ts-ignore
-  const imageSrc = selectedObject?._originalElement?.currentSrc;
+  const imageObject = selectedObject as
+    | (fabric.Image & { _originalElement?: HTMLImageElement })
+    | undefined;
+  const imageSrc = imageObject?._originalElement?.currentSrc
+    || imageObject?._originalElement?.src;
 
   const onClose = () => {
     onChangeActiveTool("select");

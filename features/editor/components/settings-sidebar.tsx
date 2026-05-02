@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { ActiveTool, Editor } from "@/features/editor/types";
 import { ToolSidebarClose } from "@/features/editor/components/tool-sidebar-close";
@@ -26,36 +26,29 @@ export const SettingsSidebar = ({
 
   const initialWidth = useMemo(() => `${workspace?.width ?? 0}`, [workspace]);
   const initialHeight = useMemo(() => `${workspace?.height ?? 0}`, [workspace]);
-  const initialBackground = useMemo(() => workspace?.fill ?? "#ffffff", [workspace]);
+  const initialBackground = useMemo(
+    () => (typeof workspace?.fill === "string" ? workspace.fill : "#ffffff"),
+    [workspace],
+  );
 
-  const [width, setWidth] = useState(initialWidth);
-  const [height, setHeight] = useState(initialHeight);
-  const [background, setBackground] = useState(initialBackground);
-
-  useEffect(() => {
-    setWidth(initialWidth);
-    setHeight(initialHeight);
-    setBackground(initialBackground);
-  }, 
-  [
-    initialWidth,
-    initialHeight,
-    initialBackground
-  ]);
-
-  const changeWidth = (value: string) => setWidth(value);
-  const changeHeight = (value: string) => setHeight(value);
   const changeBackground = (value: string) => {
-    setBackground(value);
     editor?.changeBackground(value);
   };
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    const formData = new FormData(e.currentTarget);
+    const nextWidth = Number(formData.get("width"));
+    const nextHeight = Number(formData.get("height"));
+
+    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight)) {
+      return;
+    }
+
     editor?.changeSize({
-      width: parseInt(width, 10),
-      height: parseInt(height, 10),
+      width: nextWidth,
+      height: nextHeight,
     });
   }
 
@@ -81,10 +74,11 @@ export const SettingsSidebar = ({
               Height
             </Label>
             <Input
+              name="height"
               placeholder="Height"
-              value={height}
+              defaultValue={initialHeight}
+              key={`height-${initialHeight}`}
               type="number"
-              onChange={(e) => changeHeight(e.target.value)}
             />
           </div>
           <div className="space-y-2">
@@ -92,10 +86,11 @@ export const SettingsSidebar = ({
               Width
             </Label>
             <Input
+              name="width"
               placeholder="Width"
-              value={width}
+              defaultValue={initialWidth}
+              key={`width-${initialWidth}`}
               type="number"
-              onChange={(e) => changeWidth(e.target.value)}
             />
           </div>
           <Button type="submit" className="w-full">
@@ -104,7 +99,7 @@ export const SettingsSidebar = ({
         </form>
         <div className="p-4">
           <ColorPicker
-            value={background as string} // We dont support gradients or patterns
+            value={initialBackground} // We dont support gradients or patterns
             onChange={changeBackground}
           />
         </div>

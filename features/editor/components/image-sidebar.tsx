@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRef } from "react";
 import { AlertTriangle, Loader, Upload } from "lucide-react";
 
@@ -87,10 +88,12 @@ export const ImageSidebar = ({ editor, activeTool, onChangeActiveTool }: ImageSi
                     key={image.id}
                     className="relative w-full h-[100px] group hover:opacity-75 transition bg-muted rounded-sm overflow-hidden border"
                   >
-                    <img
+                    <Image
                       src={image?.urls?.small || image?.urls?.thumb}
                       alt={image.alt_description || "Image"}
-                      className="object-cover w-full h-full"
+                      fill
+                      sizes="(max-width: 768px) 50vw, 180px"
+                      className="object-cover"
                       loading="lazy"
                     />
                     <div
