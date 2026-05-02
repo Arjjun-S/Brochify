@@ -41,7 +41,7 @@ export const Sidebar = ({
         {editorType === "certificate" && (
           <SidebarItem
             icon={FileText}
-            label="Cert Tmpl"
+            label="Templates"
             isActive={activeTool === "certificate-templates"}
             onClick={() => onChangeActiveTool("certificate-templates")}
           />
