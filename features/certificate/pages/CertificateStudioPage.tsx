@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
+import { readSheet } from "read-excel-file/browser";
 import BrochureOverlay from "@/components/studio/canvas/BrochureOverlay";
 import {
   FONT_OPTIONS,
@@ -304,11 +304,35 @@ export default function CertificateStudioPage({ session, certificate }: Certific
       return;
     }
 
-    if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls")) {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const firstSheet = workbook.SheetNames[0];
-      const rows = (XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" }) || []) as BulkRowRecord[];
+    if (lowerName.endsWith(".xlsx")) {
+      const matrix = await readSheet(file);
+
+      if (matrix.length === 0) {
+        setBulkRows([]);
+        validateBulkRows([]);
+        return;
+      }
+
+      const [headerRow, ...dataRows] = matrix;
+      const seenHeaders = new Map<string, number>();
+      const headers = headerRow.map((cell, index) => {
+        const base = `${cell ?? ""}`.trim() || `column_${index + 1}`;
+        const count = (seenHeaders.get(base) || 0) + 1;
+        seenHeaders.set(base, count);
+        return count > 1 ? `${base}_${count}` : base;
+      });
+
+      const rows = dataRows
+        .filter((row) => row.some((cell) => `${cell ?? ""}`.trim() !== ""))
+        .map((row) => {
+          const record: BulkRowRecord = {};
+          headers.forEach((header, index) => {
+            const cell = row[index];
+            record[header] = cell instanceof Date ? cell.toISOString().slice(0, 10) : (cell ?? "");
+          });
+          return record;
+        });
+
       setBulkRows(rows);
       validateBulkRows(rows);
       return;
@@ -936,7 +960,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                     <span className="text-xs font-semibold text-slate-600">Upload CSV, XLSX, or JSON</span>
                     <input
                       type="file"
-                      accept=".csv,.xlsx,.xls,.json"
+                      accept=".csv,.xlsx,.json"
                       className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                       onChange={async (event) => {
                         const input = event.currentTarget;
