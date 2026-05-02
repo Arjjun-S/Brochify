@@ -14,7 +14,7 @@ import type {
   UserRole,
 } from "@/lib/server/types";
 
-const TEMPLATE_IDS = ["whiteBlue", "beigeDust", "softBlue", "tealGloss", "yellowDust"] as const;
+const TEMPLATE_IDS = ["whiteBlue", "beigeDust", "softBlue", "tealGloss", "yellowDust", "posterFlyer"] as const;
 
 const DEFAULT_FORM_LINE_STYLES: Record<string, EditorFormLineStyle> = {
   "registration.notes": { fontSize: 13 },
@@ -40,13 +40,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function createEmptyEditorState(): EditorState {
+function createEmptyEditorState(template: EditorState["template"] = "whiteBlue"): EditorState {
   return {
     brochureData: createEmptyBrochureData(),
     selectedLogos: ["srm", "ieee", "ctech"],
     segmentPositions: {},
     overlayItems: [],
-    template: "whiteBlue",
+    template,
     hiddenSegments: [],
     formLineStyles: { ...DEFAULT_FORM_LINE_STYLES },
   };
@@ -364,6 +364,7 @@ export async function createBrochureDraft(input: {
   description: string;
   createdBy: number;
   assignedAdminId: number;
+  template?: EditorState["template"];
 }): Promise<number> {
   await ensureDatabase();
 
@@ -371,7 +372,7 @@ export async function createBrochureDraft(input: {
     data: {
       title: input.title,
       description: input.description,
-      content: toPrismaJson(createEmptyEditorState()),
+      content: toPrismaJson(createEmptyEditorState(input.template)),
       createdBy: input.createdBy,
       assignedAdminId: input.assignedAdminId,
       status: "draft",

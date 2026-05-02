@@ -273,10 +273,10 @@ export default function FacultyCertificateCreatePage() {
                 onChange={setAssignedAdminId}
                 options={
                   loadingAdmins 
-                    ? [{ label: "Loading admins...", value: "" }]
+                    ? [{ label: "Loading admins...", value: "__loading__" }]
                     : admins.length > 0
                       ? admins.map(a => ({ label: a.username, value: String(a.id) }))
-                      : [{ label: "No admins available", value: "" }]
+                      : [{ label: "No admins available", value: "__none__" }]
                 }
                 className={cn(
                   isDark ? "border-slate-700 bg-slate-900 text-slate-200" : "border-slate-200 bg-white text-slate-700"

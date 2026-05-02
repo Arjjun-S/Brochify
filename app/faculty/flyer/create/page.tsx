@@ -14,7 +14,7 @@ type AdminOption = {
   username: string;
 };
 
-export default function FacultyBrochureCreatePage() {
+export default function FacultyFlyerCreatePage() {
   const router = useRouter();
   const { isDark, theme, setTheme } = useThemePreference();
   const [admins, setAdmins] = useState<AdminOption[]>([]);
@@ -55,13 +55,18 @@ export default function FacultyBrochureCreatePage() {
       const response = await fetch("/api/brochure", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, assignedAdminId: Number(assignedAdminId) }),
+        body: JSON.stringify({ 
+          title, 
+          description, 
+          assignedAdminId: Number(assignedAdminId),
+          template: "posterFlyer",
+        }),
       });
       const data = (await response.json()) as { id?: number; error?: string };
-      if (!response.ok || !data.id) throw new Error(data.error || "Failed to create brochure.");
+      if (!response.ok || !data.id) throw new Error(data.error || "Failed to create flyer.");
       router.replace(`/faculty/brochures/${data.id}/details`);
     } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : "Failed to create brochure.";
+      const message = submitError instanceof Error ? submitError.message : "Failed to create flyer.";
       setError(message);
       setSubmitting(false);
     }
@@ -105,10 +110,10 @@ export default function FacultyBrochureCreatePage() {
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-700">
               <PlusCircle className="h-3.5 w-3.5" />
-              New Brochure
+              New Poster / Flyer
             </p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Create Brochure</h1>
-            <p className="mt-1 text-sm text-slate-600">Fill in the details below to get started with your brochure.</p>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Create Poster</h1>
+            <p className="mt-1 text-sm text-slate-600">Fill in the details below to get started with your poster design.</p>
           </div>
           <Link
             href="/faculty/brochure"
@@ -129,7 +134,7 @@ export default function FacultyBrochureCreatePage() {
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="Enter brochure title"
+                placeholder="Enter poster title"
                 className={cn(
                   "w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition",
                   isDark ? "border-slate-700 bg-slate-900 text-slate-200 focus:border-indigo-500" : "border-slate-200 bg-white text-slate-700 focus:border-indigo-400",
@@ -143,7 +148,7 @@ export default function FacultyBrochureCreatePage() {
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Describe your brochure"
+                placeholder="Describe your poster"
                 className={cn(
                   "h-28 w-full rounded-2xl border px-3 py-2.5 text-sm outline-none transition",
                   isDark ? "border-slate-700 bg-slate-900 text-slate-200 focus:border-indigo-500" : "border-slate-200 bg-white text-slate-700 focus:border-indigo-400",

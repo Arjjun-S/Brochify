@@ -4,7 +4,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { Search, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 
-export type BrochureTemplate = "whiteBlue" | "beigeDust" | "softBlue" | "tealGloss" | "yellowDust";
+export type BrochureTemplate = "whiteBlue" | "beigeDust" | "softBlue" | "tealGloss" | "yellowDust" | "posterFlyer";
 
 type LogoOption = {
   id: string;
@@ -89,6 +89,11 @@ export default function CanvasSidebar({
       id: "yellowDust" as BrochureTemplate,
       label: "Yellow Dust",
       stops: ["#ffffff", "#fdf2b8", "#ffffff"],
+    },
+    {
+      id: "posterFlyer" as BrochureTemplate,
+      label: "Poster Layout",
+      stops: ["#2e1065", "#4c1d95", "#3b0764"],
     },
   ];
 

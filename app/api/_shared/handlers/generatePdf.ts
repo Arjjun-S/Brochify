@@ -17,6 +17,11 @@ export async function handleGeneratePdf(req: NextRequest) {
     const html = typeof body?.html === "string" ? body.html : "";
     const css = typeof body?.css === "string" ? body.css : "";
     const watermarkText = typeof body?.watermarkText === "string" ? body.watermarkText.trim() : "";
+    const template = typeof body?.template === "string" ? body.template : "";
+
+    const isPoster = template === "posterFlyer";
+    const pageWidth = isPoster ? "210mm" : "260mm";
+    const pageHeight = isPoster ? "297mm" : "180mm";
 
     if (!html.trim()) {
       return NextResponse.json({ error: "html is required." }, { status: 400 });
@@ -60,7 +65,7 @@ export async function handleGeneratePdf(req: NextRequest) {
                 <style>
                     ${css}
                     @page {
-                        size: 260mm 180mm;
+                        size: ${pageWidth} ${pageHeight};
                         margin: 0;
                     }
                     body {
@@ -116,8 +121,8 @@ export async function handleGeneratePdf(req: NextRequest) {
     await page.setViewport({ width: 1200, height: 800 });
 
     const pdfBuffer = await page.pdf({
-      width: "260mm",
-      height: "180mm",
+      width: pageWidth,
+      height: pageHeight,
       printBackground: true,
       preferCSSPageSize: true,
     });
@@ -128,7 +133,7 @@ export async function handleGeneratePdf(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="brochure-${Date.now()}.pdf"`,
+        "Content-Disposition": `attachment; filename="${isPoster ? "poster" : "brochure"}-${Date.now()}.pdf"`,
       },
     });
   } catch (error: unknown) {

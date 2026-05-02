@@ -11,7 +11,7 @@ export type SessionUser = {
 	role: UserRole;
 };
 
-export type BrochureTemplateId = "whiteBlue" | "beigeDust" | "softBlue" | "tealGloss" | "yellowDust";
+export type BrochureTemplateId = "whiteBlue" | "beigeDust" | "softBlue" | "tealGloss" | "yellowDust" | "posterFlyer";
 
 export type EditorFormLineStyle = {
 	fontFamily?: string;

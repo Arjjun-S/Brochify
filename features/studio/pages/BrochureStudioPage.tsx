@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties } from "react";
 import PageOne from "@/components/studio/canvas/PageOne";
 import PageTwo from "@/components/studio/canvas/PageTwo";
+import PosterPage from "@/components/studio/canvas/PosterPage";
 import GuidedFlowPanel from "@/components/studio/editor/GuidedFlowPanel";
 import CanvasSidebar from "@/components/studio/editor/CanvasSidebar";
 import LoadingOverlay from "@/components/shared/feedback/LoadingOverlay";
@@ -57,8 +58,7 @@ import type { BrochureRecord, BrochureStatus, SessionUser } from "@/lib/server/t
 import { SelectBox } from "@/components/ui/SelectBox";
 import { Logo } from "@/components/ui/Logo";
 
-const PAGE_WIDTH = 983;
-const PAGE_HEIGHT = 680;
+const getPageDimensions = (t: BrochureTemplate) => t === "posterFlyer" ? { width: 794, height: 1123, count: 1 } : { width: 983, height: 680, count: 2 };
 const PAGE_GAP = 24;
 const PAGE_TYPING_TARGET_MS = 5000;
 const COLUMN_TYPING_TARGET_MS = Math.round(PAGE_TYPING_TARGET_MS / 3);
@@ -201,6 +201,22 @@ const TEMPLATE_THEMES: Record<BrochureTemplate, { pageStyle: CSSProperties; pale
       surfaceBorder: "#f1e2a1",
       accent: "#8a6a0f",
       mutedText: "#5f5640",
+    },
+  },
+  posterFlyer: {
+    pageStyle: {
+      backgroundImage: "linear-gradient(180deg, #1e1b4b 0%, #312e81 100%)",
+      backgroundColor: "#1e1b4b",
+    },
+    palette: {
+      primary: "#4f46e5",
+      secondary: "#818cf8",
+      primaryText: "#ffffff",
+      surface: "#1e1b4b",
+      strongSurface: "#312e81",
+      surfaceBorder: "#4338ca",
+      accent: "#facc15",
+      mutedText: "#94a3b8",
     },
   },
 };
@@ -678,13 +694,14 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
     if (!node) return;
 
     const resizeObserver = new ResizeObserver(([entry]) => {
-      const nextScale = Math.min(1.1, Math.max(0.7, (entry.contentRect.width - 24) / PAGE_WIDTH));
+      const { width: pageWidth } = getPageDimensions(template);
+      const nextScale = Math.min(1.1, Math.max(0.7, (entry.contentRect.width - 24) / pageWidth));
       setPreviewScale(nextScale);
     });
 
     resizeObserver.observe(node);
     return () => resizeObserver.disconnect();
-  }, []);
+  }, [template]);
 
   const normalizeSnapshot = useCallback((snapshot?: Partial<EditorSnapshot> | null): EditorSnapshot | null => {
     if (!snapshot || !snapshot.brochureData) {
@@ -1108,7 +1125,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
       styles += exportCleanupCss;
 
       const origin = window.location.origin;
-      const pages = element.querySelectorAll(".brochure-page");
+      const pages = element.querySelectorAll(".brochure-page, .brochure-page-poster");
       let pagesHtml = "";
       pages.forEach((page) => {
         const clone = page.cloneNode(true) as HTMLElement;
@@ -1130,12 +1147,14 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
         pagesHtml += clone.outerHTML;
       });
 
+      const isPoster = template === "posterFlyer";
+
       const html = `
         <html>
         <head>
           <style>
             ${styles}
-            .brochure-page {
+            .brochure-page, .brochure-page-poster {
               box-shadow: none !important;
               transform: none !important;
               margin: 0 !important;
@@ -1161,6 +1180,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
           html,
           css: styles,
           watermarkText: reviewStatus === "approved" ? null : "Made with Brochify - Not Approved",
+          template,
         }),
       });
 
@@ -1173,7 +1193,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `brochure-${Date.now()}.pdf`;
+      anchor.download = `${isPoster ? "poster" : "brochure"}-${Date.now()}.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
       window.URL.revokeObjectURL(url);
@@ -1251,7 +1271,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
     });
   }, [pushWith]);
 
-  const handleSegmentMove = (id: string, position: SegmentPosition) => {
+  const handleSegmentMove = useCallback((id: string, position: SegmentPosition) => {
     setSegmentPositions((prev) => {
       const previousPosition = prev[id];
       if (JSON.stringify(previousPosition ?? {}) === JSON.stringify(position)) {
@@ -1283,7 +1303,7 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
 
       return next;
     });
-  };
+  }, [brochureData, formLineStyles, hiddenSegments, overlayItems, pushWith, selectedLogos, template]);
 
   const updateOverlayItem = (id: string, patch: Partial<OverlayItem>) => {
     setOverlayItems((prev) => {
@@ -1375,8 +1395,9 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
   ) => {
     const asset = assets.find((item) => item.id === assetId);
     if (!asset) return;
-    const x = Math.max(0, Math.min(PAGE_WIDTH - 180, position.x));
-    const y = Math.max(0, Math.min(PAGE_HEIGHT - 120, position.y));
+    const { width: pageWidth, height: pageHeight } = getPageDimensions(template);
+    const x = Math.max(0, Math.min(pageWidth - 180, position.x));
+    const y = Math.max(0, Math.min(pageHeight - 120, position.y));
     const nextItem = createImageOverlay(page, asset, { x, y });
     setOverlayItems((prev) => {
       const next = [...prev, nextItem];
@@ -1500,8 +1521,9 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
       let updatedOverlays: OverlayItem[] = [];
       setOverlayItems((prev) => {
         const baseSize = 220;
-        const startX = Math.max(24, (PAGE_WIDTH - baseSize) / 2);
-        const startY = Math.max(24, (PAGE_HEIGHT - baseSize) / 2);
+        const { width: pageWidth, height: pageHeight } = getPageDimensions(template);
+        const startX = Math.max(24, (pageWidth - baseSize) / 2);
+        const startY = Math.max(24, (pageHeight - baseSize) / 2);
         const next = [...prev];
 
         uploads.forEach((asset, index) => {
@@ -1711,8 +1733,9 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
   };
 
   const effectiveScale = Math.min(1.35, Math.max(0.4, previewScale * zoomFactor));
-  const previewHeight = (PAGE_HEIGHT * 2 + PAGE_GAP) * effectiveScale;
-  const previewWidth = PAGE_WIDTH * effectiveScale;
+  const { width: pageWidth, height: pageHeight, count: pageCount } = getPageDimensions(template);
+  const previewHeight = (pageHeight * pageCount + (pageCount === 2 ? PAGE_GAP : 0)) * effectiveScale;
+  const previewWidth = pageWidth * effectiveScale;
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex >= 0 && historyIndex < history.length - 1;
 
@@ -2201,8 +2224,9 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
                 const rect = wrapper.getBoundingClientRect();
                 const localX = (event.clientX - rect.left) / effectiveScale;
                 const localY = (event.clientY - rect.top) / effectiveScale;
-                const page = localY > PAGE_HEIGHT + PAGE_GAP / 2 ? 2 : 1;
-                const yInPage = page === 2 ? localY - (PAGE_HEIGHT + PAGE_GAP) : localY;
+                const { height: pageHeight, count: pageCount } = getPageDimensions(template);
+                const page = pageCount === 2 && localY > pageHeight + PAGE_GAP / 2 ? 2 : 1;
+                const yInPage = page === 2 ? localY - (pageHeight + PAGE_GAP) : localY;
 
                 setActivePage(page);
                 addImageOverlayAtPoint(assetId, page, { x: localX - 90, y: yInPage - 60 });
@@ -2216,82 +2240,124 @@ export default function BrochureStudioPage({ brochure, session, autoAnimate = fa
                   <div
                     id="brochure-preview"
                     className="preview-stage"
-                    style={{ width: PAGE_WIDTH, transform: `scale(${effectiveScale})`, transformOrigin: "top left" }}
+                    style={{ width: getPageDimensions(template).width, transform: `scale(${effectiveScale})`, transformOrigin: "top left" }}
                   >
                     <div ref={pageOneRef}>
-                      <PageOne
-                        data={canvasBrochureData}
-                        selectedLogos={selectedLogos}
-                        onEdit={(path, value) => handleFieldChange(path, value)}
-                        activeTypingPath={activeTypingPath}
-                        segmentPositions={segmentPositions}
-                        onSegmentMove={handleSegmentMove}
-                        onSegmentInteractionStart={handleCanvasInteractionStart}
-                        onSegmentInteractionEnd={handleCanvasInteractionEnd}
-                        selectedSegmentId={selectedSegmentId}
-                        onSelectSegment={(id) => {
-                          setSelectedElement({ kind: "segment", id, page: 1 });
-                          setSelectedFormLineKey(null);
-                          setEditingFormLineKey(null);
-                        }}
-                        overlayItems={overlayItems.filter((item) => item.page === 1)}
-                        selectedOverlayId={selectedOverlayId}
-                        onSelectOverlay={(id) => {
-                          setSelectedElement(id ? { kind: "overlay", id, page: 1 } : null);
-                          setSelectedFormLineKey(null);
-                          setEditingFormLineKey(null);
-                        }}
-                        onUpdateOverlay={updateOverlayItem}
-                        onOverlayInteractionStart={handleCanvasInteractionStart}
-                        onOverlayInteractionEnd={handleCanvasInteractionEnd}
-                        logoCatalog={logoCatalog}
-                        canvasScale={effectiveScale}
-                        pageStyle={TEMPLATE_THEMES[template].pageStyle}
-                        palette={TEMPLATE_THEMES[template].palette}
-                        hiddenSegments={hiddenSegments}
-                        formLineStyles={formLineStyles}
-                        activeEditingLineKey={editingFormLineKey}
-                        onBeginEditLine={handleBeginEditLine}
-                        onEndEditLine={handleEndEditLine}
-                      />
+                      {template === "posterFlyer" ? (
+                        <PosterPage
+                          data={canvasBrochureData}
+                          selectedLogos={selectedLogos}
+                          onEdit={(path, value) => handleFieldChange(path, value)}
+                          activeTypingPath={activeTypingPath}
+                          segmentPositions={segmentPositions}
+                          onSegmentMove={handleSegmentMove}
+                          onSegmentInteractionStart={handleCanvasInteractionStart}
+                          onSegmentInteractionEnd={handleCanvasInteractionEnd}
+                          selectedSegmentId={selectedSegmentId}
+                          onSelectSegment={(id) => {
+                            setSelectedElement({ kind: "segment", id, page: 1 });
+                            setSelectedFormLineKey(null);
+                            setEditingFormLineKey(null);
+                          }}
+                          overlayItems={overlayItems.filter((item) => item.page === 1)}
+                          selectedOverlayId={selectedOverlayId}
+                          onSelectOverlay={(id) => {
+                            setSelectedElement(id ? { kind: "overlay", id, page: 1 } : null);
+                            setSelectedFormLineKey(null);
+                            setEditingFormLineKey(null);
+                          }}
+                          onUpdateOverlay={updateOverlayItem}
+                          onOverlayInteractionStart={handleCanvasInteractionStart}
+                          onOverlayInteractionEnd={handleCanvasInteractionEnd}
+                          logoCatalog={logoCatalog}
+                          canvasScale={effectiveScale}
+                          pageStyle={TEMPLATE_THEMES[template].pageStyle}
+                          palette={TEMPLATE_THEMES[template].palette}
+                          hiddenSegments={hiddenSegments}
+                          formLineStyles={formLineStyles}
+                          activeEditingLineKey={editingFormLineKey}
+                          onBeginEditLine={handleBeginEditLine}
+                          onEndEditLine={handleEndEditLine}
+                        />
+                      ) : (
+                        <PageOne
+                          data={canvasBrochureData}
+                          selectedLogos={selectedLogos}
+                          onEdit={(path, value) => handleFieldChange(path, value)}
+                          activeTypingPath={activeTypingPath}
+                          segmentPositions={segmentPositions}
+                          onSegmentMove={handleSegmentMove}
+                          onSegmentInteractionStart={handleCanvasInteractionStart}
+                          onSegmentInteractionEnd={handleCanvasInteractionEnd}
+                          selectedSegmentId={selectedSegmentId}
+                          onSelectSegment={(id) => {
+                            setSelectedElement({ kind: "segment", id, page: 1 });
+                            setSelectedFormLineKey(null);
+                            setEditingFormLineKey(null);
+                          }}
+                          overlayItems={overlayItems.filter((item) => item.page === 1)}
+                          selectedOverlayId={selectedOverlayId}
+                          onSelectOverlay={(id) => {
+                            setSelectedElement(id ? { kind: "overlay", id, page: 1 } : null);
+                            setSelectedFormLineKey(null);
+                            setEditingFormLineKey(null);
+                          }}
+                          onUpdateOverlay={updateOverlayItem}
+                          onOverlayInteractionStart={handleCanvasInteractionStart}
+                          onOverlayInteractionEnd={handleCanvasInteractionEnd}
+                          logoCatalog={logoCatalog}
+                          canvasScale={effectiveScale}
+                          pageStyle={TEMPLATE_THEMES[template].pageStyle}
+                          palette={TEMPLATE_THEMES[template].palette}
+                          hiddenSegments={hiddenSegments}
+                          formLineStyles={formLineStyles}
+                          activeEditingLineKey={editingFormLineKey}
+                          onBeginEditLine={handleBeginEditLine}
+                          onEndEditLine={handleEndEditLine}
+                        />
+                      )}
                     </div>
-                    <div style={{ height: PAGE_GAP }} />
-                    <div ref={pageTwoRef}>
-                      <PageTwo
-                        data={canvasBrochureData}
-                        selectedLogos={selectedLogos}
-                        onEdit={(path, value) => handleFieldChange(path, value)}
-                        activeTypingPath={activeTypingPath}
-                        segmentPositions={segmentPositions}
-                        onSegmentMove={handleSegmentMove}
-                        onSegmentInteractionStart={handleCanvasInteractionStart}
-                        onSegmentInteractionEnd={handleCanvasInteractionEnd}
-                        selectedSegmentId={selectedSegmentId}
-                        onSelectSegment={(id) => {
-                          setSelectedElement({ kind: "segment", id, page: 2 });
-                          setSelectedFormLineKey(null);
-                          setEditingFormLineKey(null);
-                        }}
-                        overlayItems={overlayItems.filter((item) => item.page === 2)}
-                        selectedOverlayId={selectedOverlayId}
-                        onSelectOverlay={(id) => {
-                          setSelectedElement(id ? { kind: "overlay", id, page: 2 } : null);
-                          setSelectedFormLineKey(null);
-                          setEditingFormLineKey(null);
-                        }}
-                        onUpdateOverlay={updateOverlayItem}
-                        onOverlayInteractionStart={handleCanvasInteractionStart}
-                        onOverlayInteractionEnd={handleCanvasInteractionEnd}
-                        canvasScale={effectiveScale}
-                        pageStyle={TEMPLATE_THEMES[template].pageStyle}
-                        palette={TEMPLATE_THEMES[template].palette}
-                        hiddenSegments={hiddenSegments}
-                        formLineStyles={formLineStyles}
-                        activeEditingLineKey={editingFormLineKey}
-                        onBeginEditLine={handleBeginEditLine}
-                        onEndEditLine={handleEndEditLine}
-                      />
-                    </div>
+                    {template !== "posterFlyer" && (
+                      <>
+                        <div style={{ height: PAGE_GAP }} />
+                        <div ref={pageTwoRef}>
+                          <PageTwo
+                            data={canvasBrochureData}
+                            selectedLogos={selectedLogos}
+                            onEdit={(path, value) => handleFieldChange(path, value)}
+                            activeTypingPath={activeTypingPath}
+                            segmentPositions={segmentPositions}
+                            onSegmentMove={handleSegmentMove}
+                            onSegmentInteractionStart={handleCanvasInteractionStart}
+                            onSegmentInteractionEnd={handleCanvasInteractionEnd}
+                            selectedSegmentId={selectedSegmentId}
+                            onSelectSegment={(id) => {
+                              setSelectedElement({ kind: "segment", id, page: 2 });
+                              setSelectedFormLineKey(null);
+                              setEditingFormLineKey(null);
+                            }}
+                            overlayItems={overlayItems.filter((item) => item.page === 2)}
+                            selectedOverlayId={selectedOverlayId}
+                            onSelectOverlay={(id) => {
+                              setSelectedElement(id ? { kind: "overlay", id, page: 2 } : null);
+                              setSelectedFormLineKey(null);
+                              setEditingFormLineKey(null);
+                            }}
+                            onUpdateOverlay={updateOverlayItem}
+                            onOverlayInteractionStart={handleCanvasInteractionStart}
+                            onOverlayInteractionEnd={handleCanvasInteractionEnd}
+                            canvasScale={effectiveScale}
+                            pageStyle={TEMPLATE_THEMES[template].pageStyle}
+                            palette={TEMPLATE_THEMES[template].palette}
+                            hiddenSegments={hiddenSegments}
+                            formLineStyles={formLineStyles}
+                            activeEditingLineKey={editingFormLineKey}
+                            onBeginEditLine={handleBeginEditLine}
+                            onEndEditLine={handleEndEditLine}
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

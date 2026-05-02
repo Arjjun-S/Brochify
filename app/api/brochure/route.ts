@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSessionFromRequest } from "@/lib/server/auth";
 import { createBrochureDraft, listBrochuresForUser } from "@/lib/server/data";
-import type { BrochureStatus } from "@/lib/server/types";
+import type { BrochureStatus, BrochureTemplateId, EditorState } from "@/lib/server/types";
+
+const BROCHURE_TEMPLATE_IDS: BrochureTemplateId[] = [
+  "whiteBlue",
+  "beigeDust",
+  "softBlue",
+  "tealGloss",
+  "yellowDust",
+  "posterFlyer",
+];
+
+function parseBrochureTemplate(value: unknown): EditorState["template"] | undefined {
+  if (typeof value !== "string") return undefined;
+  return BROCHURE_TEMPLATE_IDS.includes(value as BrochureTemplateId)
+    ? (value as BrochureTemplateId)
+    : undefined;
+}
 
 function isValidStatus(status: string | null): status is BrochureStatus {
   return status === "draft" || status === "pending" || status === "approved" || status === "rejected";
@@ -36,6 +52,7 @@ export async function POST(request: NextRequest) {
       title?: string;
       description?: string;
       assignedAdminId?: number;
+      template?: string;
     };
 
     const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -59,6 +76,7 @@ export async function POST(request: NextRequest) {
       description,
       createdBy: session.userId,
       assignedAdminId,
+      template: parseBrochureTemplate(body.template),
     });
 
     return NextResponse.json({ id: brochureId }, { status: 201 });

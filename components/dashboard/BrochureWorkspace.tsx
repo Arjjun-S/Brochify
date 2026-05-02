@@ -14,6 +14,9 @@ import {
   Settings2,
   SunMedium,
   Trash2,
+  ChevronRight,
+  AlignLeft,
+  Square,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/ui/cn";
@@ -85,6 +88,7 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [switchOpen, setSwitchOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const loadBrochures = useCallback(async () => {
     setLoading(true);
@@ -295,15 +299,72 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
       {/* Main Content */}
       <div className="px-6 py-8 md:px-10">
         {/* Create Button Section */}
-        <div className="mb-6 flex justify-end">
-          <Link
-            href="/faculty/brochure/create"
-            className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold uppercase tracking-[0.14em] text-white transition hover:brightness-105 shadow-[0_8px_20px_-8px_rgba(0,42,130,0.5)]"
-            style={{ backgroundColor: "#002A82" }}
-          >
-            <PlusCircle className="h-4 w-4" />
-            Create
-          </Link>
+        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className={cn("text-3xl font-black tracking-tight", isDark ? "text-slate-100" : "text-slate-900")}>Workspace</h1>
+            <p className={cn("mt-1 text-sm", isDark ? "text-slate-400" : "text-slate-600")}>Manage and create your brochures and flyers.</p>
+          </div>
+          <div className="relative z-20">
+            <button
+              type="button"
+              onClick={() => setCreateOpen(!createOpen)}
+              className="inline-flex w-full md:w-auto items-center justify-between gap-3 rounded-2xl px-6 py-3.5 text-sm font-bold uppercase tracking-[0.14em] text-white transition hover:brightness-105 shadow-[0_8px_20px_-8px_rgba(0,42,130,0.5)] bg-gradient-to-r from-[#002A82] to-[#001850]"
+            >
+              <span className="inline-flex items-center gap-2">
+                <PlusCircle className="h-5 w-5" />
+                Create New
+              </span>
+              <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", createOpen && "rotate-90")} />
+            </button>
+
+            <AnimatePresence>
+              {createOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className={cn(
+                    "absolute right-0 top-full mt-3 w-64 rounded-3xl border p-2 shadow-2xl",
+                    isDark ? "border-slate-700 bg-[#111827]" : "border-slate-200 bg-white",
+                  )}
+                >
+                  <Link
+                    href="/faculty/brochure/create"
+                    onClick={() => setCreateOpen(false)}
+                    className={cn(
+                      "flex items-start gap-4 rounded-2xl p-3 transition",
+                      isDark ? "hover:bg-slate-800" : "hover:bg-slate-50",
+                    )}
+                  >
+                    <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", isDark ? "bg-indigo-900/50 text-indigo-400" : "bg-indigo-50 text-indigo-600")}>
+                      <AlignLeft className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>Trifold Brochure</p>
+                      <p className={cn("mt-0.5 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>Standard 3-panel folded design</p>
+                    </div>
+                  </Link>
+                  <Link
+                    href="/faculty/flyer/create"
+                    onClick={() => setCreateOpen(false)}
+                    className={cn(
+                      "flex items-start gap-4 rounded-2xl p-3 transition",
+                      isDark ? "hover:bg-slate-800" : "hover:bg-slate-50",
+                    )}
+                  >
+                    <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", isDark ? "bg-fuchsia-900/50 text-fuchsia-400" : "bg-fuchsia-50 text-fuchsia-600")}>
+                      <Square className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>Poster / Flyer</p>
+                      <p className={cn("mt-0.5 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>Single page portrait layout</p>
+                    </div>
+                  </Link>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Search and Filters */}
@@ -392,66 +453,77 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.28, delay: Math.min(index * 0.05, 0.25) }}
                     className={cn(
-                      "overflow-hidden rounded-3xl border shadow-sm",
-                      isDark ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white",
+                      "group relative overflow-hidden rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-xl",
+                      isDark ? "border-slate-700 bg-slate-800/50 hover:bg-slate-800" : "border-slate-200 bg-white hover:border-indigo-200",
                     )}
                   >
-                    {/* Preview Header */}
-                    <div className={cn(
-                      "flex items-center justify-between border-b px-4 py-3",
-                      isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-50",
-                    )}>
-                      <div className="flex items-center gap-2">
+                    {/* Inner glowing effect */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100 dark:to-white/5 pointer-events-none" />
+
+                    <div className="relative p-5">
+                      <div className="mb-4 flex items-start justify-between gap-4">
                         <div className={cn(
-                          "h-8 w-8 rounded-lg flex items-center justify-center",
-                          isDark ? "bg-indigo-900" : "bg-indigo-100",
+                          "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-colors duration-300",
+                          isDark ? "bg-indigo-900/50 text-indigo-400 group-hover:bg-indigo-900" : "bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100"
                         )}>
-                          <FileBadge2 className={cn("h-4 w-4", isDark ? "text-indigo-300" : "text-indigo-600")} />
+                          {brochure.title.toLowerCase().includes("flyer") || brochure.title.toLowerCase().includes("poster") ? (
+                            <Square className="h-6 w-6" />
+                          ) : (
+                            <AlignLeft className="h-6 w-6" />
+                          )}
                         </div>
-                        <span className={cn("text-sm font-semibold", isDark ? "text-slate-200" : "text-slate-700")}>{brochure.title}</span>
-                      </div>
-                      <span className={cn(
-                        "shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.15em]",
-                        statusBadgeClassMap[brochure.status],
-                      )}>
-                        {statusLabel}
-                      </span>
-                    </div>
-
-                    {/* Content */}
-                    <div className="space-y-3 p-4">
-                      {brochure.description.trim().length > 0 && (
-                        <p className={cn("line-clamp-2 text-sm", isDark ? "text-slate-400" : "text-slate-600")}>{brochure.description}</p>
-                      )}
-
-                      <div className="flex items-center gap-3 text-xs text-slate-500">
-                        <span className="inline-flex items-center gap-1.5">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          {formatRelativeTime(brochure.updatedAt || brochure.createdAt)}
+                        <span className={cn(
+                          "shrink-0 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.15em] shadow-sm",
+                          statusBadgeClassMap[brochure.status],
+                        )}>
+                          {statusLabel}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2 pt-1">
+                      <h3 className={cn("mb-2 text-lg font-bold tracking-tight line-clamp-1", isDark ? "text-slate-100" : "text-slate-900")}>
+                        {brochure.title}
+                      </h3>
+                      
+                      {brochure.description.trim().length > 0 ? (
+                        <p className={cn("mb-4 line-clamp-2 text-sm leading-relaxed min-h-[40px]", isDark ? "text-slate-400" : "text-slate-500")}>
+                          {brochure.description}
+                        </p>
+                      ) : (
+                        <p className={cn("mb-4 text-sm italic min-h-[40px]", isDark ? "text-slate-500" : "text-slate-400")}>
+                          No description provided
+                        </p>
+                      )}
+
+                      <div className="mb-5 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                        <CalendarDays className="h-4 w-4 opacity-70" />
+                        Edited {formatRelativeTime(brochure.updatedAt || brochure.createdAt)}
+                      </div>
+
+                      <div className="flex items-center gap-2">
                         <Link
                           href={openStudioHref}
                           className={cn(
-                            "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition",
-                            isDark ? "border-slate-700 text-slate-200 hover:bg-slate-800" : "border-slate-300 text-slate-700 hover:bg-slate-100",
+                            "flex-1 inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-bold transition-all duration-300",
+                            isDark 
+                              ? "bg-indigo-600 text-white hover:bg-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[0_0_20px_rgba(79,70,229,0.5)]" 
+                              : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800"
                           )}
                         >
-                          Open
+                          Open in Studio
                         </Link>
                         <button
                           type="button"
                           onClick={() => void handleDeleteBrochure(brochure.id)}
                           disabled={deletingBrochureId === brochure.id}
                           className={cn(
-                            "inline-flex items-center justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60",
-                            isDark ? "border-rose-700 bg-rose-950 text-rose-400 hover:bg-rose-900" : "border-rose-300 bg-rose-50 text-rose-700",
+                            "inline-flex shrink-0 items-center justify-center rounded-xl border p-2.5 transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-50",
+                            isDark 
+                              ? "border-slate-600 text-slate-400 hover:border-rose-500/50 hover:bg-rose-500/10 hover:text-rose-400" 
+                              : "border-slate-200 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
                           )}
+                          title="Delete brochure"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          {deletingBrochureId === brochure.id ? "Deleting" : "Delete"}
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
