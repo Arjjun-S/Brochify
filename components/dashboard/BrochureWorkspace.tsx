@@ -24,6 +24,7 @@ import { cn } from "@/lib/ui/cn";
 import { useThemePreference } from "./useThemePreference";
 import { SelectBox } from "@/components/ui/SelectBox";
 import { Logo } from "@/components/ui/Logo";
+import { CANVAS_PRESETS, type BrochureType } from "@/features/editor/types";
 import type { BrochureRecord, BrochureStatus, SessionUser } from "@/lib/server/types";
 
 type BrochureStatusFilter = "all" | BrochureStatus;
@@ -90,6 +91,7 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [switchOpen, setSwitchOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [creatingType, setCreatingType] = useState<BrochureType | null>(null);
 
   const loadBrochures = useCallback(async () => {
     setLoading(true);
@@ -130,6 +132,31 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.replace("/login");
+  };
+
+  const handleCreateDesign = async (type: BrochureType) => {
+    setCreatingType(type);
+    setError(null);
+    try {
+      const preset = CANVAS_PRESETS[type];
+      const response = await fetch("/api/design-projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `Untitled ${preset.label}`,
+          json: "",
+          width: preset.width,
+          height: preset.height,
+        }),
+      });
+      const data = (await response.json()) as { data?: { id: number }; error?: string };
+      if (!response.ok || !data.data?.id) throw new Error(data.error || "Failed to create project.");
+      router.push(`/editor/${data.data.id}?type=${type}`);
+    } catch (createError) {
+      const message = createError instanceof Error ? createError.message : "Failed to create project.";
+      setError(message);
+      setCreatingType(null);
+    }
   };
 
   const filteredBrochures = useMemo(() => {
@@ -330,11 +357,13 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
                     isDark ? "border-slate-700 bg-[#111827]" : "border-slate-200 bg-white",
                   )}
                 >
-                  <Link
-                    href="/faculty/brochure/create"
-                    onClick={() => setCreateOpen(false)}
+                  <button
+                    type="button"
+                    disabled={creatingType !== null}
+                    onClick={() => { setCreateOpen(false); void handleCreateDesign("trifold"); }}
                     className={cn(
-                      "flex items-start gap-4 rounded-2xl p-3 transition",
+                      "flex w-full items-start gap-4 rounded-2xl p-3 transition text-left",
+                      creatingType === "trifold" ? "opacity-60 cursor-wait" : "",
                       isDark ? "hover:bg-slate-800" : "hover:bg-slate-50",
                     )}
                   >
@@ -342,15 +371,19 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
                       <AlignLeft className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>Trifold Brochure</p>
+                      <p className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>
+                        {creatingType === "trifold" ? "Creating..." : "Trifold Brochure"}
+                      </p>
                       <p className={cn("mt-0.5 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>Standard 3-panel folded design</p>
                     </div>
-                  </Link>
-                  <Link
-                    href="/faculty/flyer/create"
-                    onClick={() => setCreateOpen(false)}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={creatingType !== null}
+                    onClick={() => { setCreateOpen(false); void handleCreateDesign("poster"); }}
                     className={cn(
-                      "flex items-start gap-4 rounded-2xl p-3 transition",
+                      "flex w-full items-start gap-4 rounded-2xl p-3 transition text-left",
+                      creatingType === "poster" ? "opacity-60 cursor-wait" : "",
                       isDark ? "hover:bg-slate-800" : "hover:bg-slate-50",
                     )}
                   >
@@ -358,10 +391,12 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
                       <Square className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>Poster / Flyer</p>
+                      <p className={cn("text-sm font-bold", isDark ? "text-slate-200" : "text-slate-800")}>
+                        {creatingType === "poster" ? "Creating..." : "Poster / Flyer"}
+                      </p>
                       <p className={cn("mt-0.5 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>Single page portrait layout</p>
                     </div>
-                  </Link>
+                  </button>
                   <Link
                     href="/faculty/design/create"
                     onClick={() => setCreateOpen(false)}

@@ -8,7 +8,8 @@ import { useUpdateProject } from "@/features/projects/api/use-update-project";
 
 import {
   ActiveTool,
-  selectionDependentTools
+  selectionDependentTools,
+  type BrochureType,
 } from "@/features/editor/types";
 import { Navbar } from "@/features/editor/components/navbar";
 import { Footer } from "@/features/editor/components/footer";
@@ -39,9 +40,10 @@ interface EditorProps {
     height: number;
   };
   brochureId?: number;
+  brochureType?: BrochureType;
 }
 
-export const Editor = ({ initialData, brochureId }: EditorProps) => {
+export const Editor = ({ initialData, brochureId, brochureType }: EditorProps) => {
   const { mutate } = useUpdateProject(initialData.id);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,7 +59,8 @@ export const Editor = ({ initialData, brochureId }: EditorProps) => {
       500
     ), [mutate]);
 
-  const [activeTool, setActiveTool] = useState<ActiveTool>("select");
+  const isNewProject = !initialData.json || initialData.json === "" || initialData.json === "{}";
+  const [activeTool, setActiveTool] = useState<ActiveTool>(isNewProject ? "templates" : "select");
 
   const onClearSelection = useCallback(() => {
     if (selectionDependentTools.includes(activeTool)) {
@@ -166,6 +169,7 @@ export const Editor = ({ initialData, brochureId }: EditorProps) => {
           editor={editor}
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
+          brochureType={brochureType}
         />
         <FilterSidebar
           editor={editor}
@@ -197,7 +201,6 @@ export const Editor = ({ initialData, brochureId }: EditorProps) => {
             editor={editor}
             activeTool={activeTool}
             onChangeActiveTool={onChangeActiveTool}
-            key={JSON.stringify(editor?.canvas.getActiveObject())}
           />
           <div className="flex-1 h-[calc(100%-124px)] bg-muted" ref={containerRef}>
             <canvas ref={canvasRef} />

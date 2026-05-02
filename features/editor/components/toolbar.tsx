@@ -45,30 +45,26 @@ export const Toolbar = ({
   activeTool,
   onChangeActiveTool,
 }: ToolbarProps) => {
-  const initialFillColor = editor?.getActiveFillColor();
-  const initialStrokeColor = editor?.getActiveStrokeColor();
-  const initialFontFamily = editor?.getActiveFontFamily();
-  const initialFontWeight = editor?.getActiveFontWeight() || FONT_WEIGHT;
-  const initialFontStyle = editor?.getActiveFontStyle();
-  const initialFontLinethrough = editor?.getActiveFontLinethrough();
-  const initialFontUnderline = editor?.getActiveFontUnderline();
-  const initialTextAlign = editor?.getActiveTextAlign();
-  const initialFontSize = editor?.getActiveFontSize() || FONT_SIZE
-
-  const [properties, setProperties] = useState({
-    fillColor: initialFillColor,
-    strokeColor: initialStrokeColor,
-    fontFamily: initialFontFamily,
-    fontWeight: initialFontWeight,
-    fontStyle: initialFontStyle,
-    fontLinethrough: initialFontLinethrough,
-    fontUnderline: initialFontUnderline,
-    textAlign: initialTextAlign,
-    fontSize: initialFontSize,
-  });
-
   const selectedObject = editor?.selectedObjects?.[0];
-  const selectedObjectType = editor?.selectedObjects?.[0]?.type;
+  const selectedObjectType = selectedObject?.type;
+
+  const [, forceRefresh] = useState(0);
+
+  const properties = {
+    fillColor: editor?.getActiveFillColor(),
+    strokeColor: editor?.getActiveStrokeColor(),
+    fontFamily: editor?.getActiveFontFamily(),
+    fontWeight: editor?.getActiveFontWeight() || FONT_WEIGHT,
+    fontStyle: editor?.getActiveFontStyle(),
+    fontLinethrough: editor?.getActiveFontLinethrough(),
+    fontUnderline: editor?.getActiveFontUnderline(),
+    textAlign: editor?.getActiveTextAlign(),
+    fontSize: editor?.getActiveFontSize() || FONT_SIZE,
+  };
+
+  const refreshToolbar = () => {
+    forceRefresh((value) => value + 1);
+  };
 
   const isText = isTextType(selectedObjectType);
   const isImage = selectedObjectType === "image";
@@ -79,10 +75,7 @@ export const Toolbar = ({
     }
 
     editor?.changeFontSize(value);
-    setProperties((current) => ({
-      ...current,
-      fontSize: value,
-    }));
+    refreshToolbar();
   };
 
   const onChangeTextAlign = (value: string) => {
@@ -91,10 +84,7 @@ export const Toolbar = ({
     }
 
     editor?.changeTextAlign(value);
-    setProperties((current) => ({
-      ...current,
-      textAlign: value,
-    }));
+    refreshToolbar();
   };
 
   const toggleBold = () => {
@@ -105,10 +95,7 @@ export const Toolbar = ({
     const newValue = properties.fontWeight > 500 ? 500 : 700;
 
     editor?.changeFontWeight(newValue);
-    setProperties((current) => ({
-      ...current,
-      fontWeight: newValue,
-    }));
+    refreshToolbar();
   };
 
   const toggleItalic = () => {
@@ -120,10 +107,7 @@ export const Toolbar = ({
     const newValue = isItalic ? "normal" : "italic";
 
     editor?.changeFontStyle(newValue);
-    setProperties((current) => ({
-      ...current,
-      fontStyle: newValue,
-    }));
+    refreshToolbar();
   };
 
   const toggleLinethrough = () => {
@@ -134,10 +118,7 @@ export const Toolbar = ({
     const newValue = properties.fontLinethrough ? false : true;
 
     editor?.changeFontLinethrough(newValue);
-    setProperties((current) => ({
-      ...current,
-      fontLinethrough: newValue,
-    }));
+    refreshToolbar();
   };
 
   const toggleUnderline = () => {
@@ -148,10 +129,7 @@ export const Toolbar = ({
     const newValue = properties.fontUnderline ? false : true;
 
     editor?.changeFontUnderline(newValue);
-    setProperties((current) => ({
-      ...current,
-      fontUnderline: newValue,
-    }));
+    refreshToolbar();
   };
 
   if ((editor?.selectedObjects?.length ?? 0) === 0) {
@@ -391,7 +369,10 @@ export const Toolbar = ({
       <div className="flex items-center h-full justify-center">
         <Hint label="Bring forward" side="bottom" sideOffset={5}>
           <Button
-            onClick={() => editor?.bringForward()}
+            onClick={() => {
+              editor?.bringForward();
+              refreshToolbar();
+            }}
             size="icon"
             variant="ghost"
           >
@@ -402,7 +383,10 @@ export const Toolbar = ({
       <div className="flex items-center h-full justify-center">
         <Hint label="Send backwards" side="bottom" sideOffset={5}>
           <Button
-            onClick={() => editor?.sendBackwards()}
+            onClick={() => {
+              editor?.sendBackwards();
+              refreshToolbar();
+            }}
             size="icon"
             variant="ghost"
           >
@@ -428,6 +412,7 @@ export const Toolbar = ({
             onClick={() => {
               editor?.onCopy();
               editor?.onPaste();
+              refreshToolbar();
             }}
             size="icon"
             variant="ghost"
@@ -439,7 +424,10 @@ export const Toolbar = ({
       <div className="flex items-center h-full justify-center">
         <Hint label="Delete" side="bottom" sideOffset={5}>
           <Button
-            onClick={() => editor?.delete()}
+            onClick={() => {
+              editor?.delete();
+              refreshToolbar();
+            }}
             size="icon"
             variant="ghost"
             className="text-red-600"

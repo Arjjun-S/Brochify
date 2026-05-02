@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-type ResponseType = {
+export type ResponseType = {
   data: Array<{
     id: number;
     name: string;

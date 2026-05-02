@@ -1,12 +1,12 @@
 "use client";
 
-import { use } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Loader, TriangleAlert } from "lucide-react";
 
 import { useGetProject } from "@/features/projects/api/use-get-project";
+import type { BrochureType } from "@/features/editor/types";
 
 import { Button } from "@/components/ui/button";
 
@@ -22,25 +22,40 @@ const Editor = dynamic(
   },
 );
 
-interface EditorProjectIdPageProps {
-  params: Promise<{
-    projectId: string;
-  }>;
-}
-
-const EditorProjectIdPage = ({
-  params,
-}: EditorProjectIdPageProps) => {
+const EditorProjectIdPage = () => {
+  const params = useParams<{ projectId?: string | string[] }>();
   const searchParams = useSearchParams();
-  const { projectId } = use(params);
+  const projectIdParam = Array.isArray(params?.projectId)
+    ? params.projectId[0]
+    : params?.projectId;
+  const projectId = typeof projectIdParam === "string" ? projectIdParam : "";
+  const hasValidProjectId = projectId.length > 0;
   const rawBrochureId = searchParams.get("brochureId");
   const parsedBrochureId = Number.parseInt(rawBrochureId || "", 10);
+  const rawType = searchParams.get("type");
+  const brochureType = (rawType === "trifold" || rawType === "poster") ? rawType as BrochureType : undefined;
 
   const {
     data,
     isLoading,
     isError
   } = useGetProject(projectId);
+
+  if (!hasValidProjectId) {
+    return (
+      <div className="h-full flex flex-col gap-y-5 items-center justify-center">
+        <TriangleAlert className="size-6 text-muted-foreground" />
+        <p className="text-muted-foreground text-sm">
+          Invalid project URL
+        </p>
+        <Button asChild variant="secondary">
+          <Link href="/">
+            Back to Home
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   const project = data?.data;
   const hasValidProject =
@@ -101,7 +116,7 @@ const EditorProjectIdPage = ({
     );
   }
 
-  return <Editor initialData={project} brochureId={brochureId} />
+  return <Editor initialData={project} brochureId={brochureId} brochureType={brochureType} />
 };
 
 export default EditorProjectIdPage;

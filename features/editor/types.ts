@@ -109,6 +109,13 @@ export type ActiveTool =
   | "remove-bg"
   | "templates";
 
+export type BrochureType = "trifold" | "poster";
+
+export const CANVAS_PRESETS: Record<BrochureType, { width: number; height: number; label: string }> = {
+  trifold: { width: 1754, height: 1240, label: "Trifold Brochure" },
+  poster: { width: 1240, height: 1754, label: "Poster / Flyer" },
+};
+
 export const FILL_COLOR = "rgba(0,0,0,1)";
 export const STROKE_COLOR = "rgba(0,0,0,1)";
 export const STROKE_WIDTH = 2;
