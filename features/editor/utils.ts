@@ -443,6 +443,189 @@ function syncCanvasPageInteractionToActivePage(
   }
 }
 
+/** Deep-copy clip geometry so regrouping / JSON churn does not share disposed instances. */
+export function duplicateLogoGroupClipPath(src: fabric.Object): fabric.Object {
+  if (src.type === "rect") {
+    const r = src as fabric.Rect;
+    return new fabric.Rect({
+      left: r.left,
+      top: r.top,
+      originX: r.originX,
+      originY: r.originY,
+      width: r.width,
+      height: r.height,
+      scaleX: r.scaleX,
+      scaleY: r.scaleY,
+      angle: r.angle,
+      skewX: r.skewX,
+      skewY: r.skewY,
+      flipX: r.flipX,
+      flipY: r.flipY,
+      rx: r.rx,
+      ry: r.ry,
+    });
+  }
+
+  if (src.type === "circle") {
+    const c = src as fabric.Circle;
+    return new fabric.Circle({
+      left: c.left,
+      top: c.top,
+      originX: c.originX,
+      originY: c.originY,
+      radius: c.radius,
+      scaleX: c.scaleX,
+      scaleY: c.scaleY,
+      angle: c.angle,
+      skewX: c.skewX,
+      skewY: c.skewY,
+      flipX: c.flipX,
+      flipY: c.flipY,
+    });
+  }
+
+  return src;
+}
+
+/**
+ * Clip logo content to the dashed frame in **group** space. Image-level `clipPath` inside a Fabric
+ * group often misaligns (asymmetric crop with visible padding). Masking the group to the frame
+ * matches Canva-style frames and shows the full bitmap inside the rounded box.
+ *
+ * The frame object must stay in the group (invisible, no stroke) so the group's bounds stay the
+ * frame size—not the image-only box. Removing the frame collapses bounds and desyncs `clipPath`
+ * when the user scales the placeholder (logo appears clipped).
+ */
+export function applyLogoPlaceholderGroupClipPath(grp: fabric.Group) {
+  const hasImage = grp.getObjects().some((o) => o.name === "placeholder-image");
+  if (!hasImage) {
+    grp.set({ clipPath: undefined });
+    return;
+  }
+
+  const frame = grp.getObjects().find((o) => o.name === "image-placeholder-frame");
+
+  grp.getObjects().forEach((o) => {
+    if (o.name === "placeholder-image" && o.type === "image") {
+      (o as fabric.Image).set({ clipPath: undefined, dirty: true });
+    }
+  });
+
+  if (!frame) {
+    grp.set("dirty", true);
+    return;
+  }
+
+  if (frame.type === "circle") {
+    const c = frame as fabric.Circle;
+    grp.clipPath = new fabric.Circle({
+      left: c.left,
+      top: c.top,
+      originX: c.originX,
+      originY: c.originY,
+      radius: c.radius,
+      scaleX: c.scaleX,
+      scaleY: c.scaleY,
+      angle: c.angle,
+      skewX: c.skewX,
+      skewY: c.skewY,
+      flipX: c.flipX,
+      flipY: c.flipY,
+    });
+    c.set({
+      stroke: null,
+      strokeWidth: 0,
+      strokeDashArray: null,
+      fill: "rgba(255,255,255,0)",
+      evented: false,
+      selectable: false,
+      dirty: true,
+    });
+  }
+  else if (frame.type === "rect") {
+    const r = frame as fabric.Rect;
+    grp.clipPath = new fabric.Rect({
+      left: r.left,
+      top: r.top,
+      originX: r.originX,
+      originY: r.originY,
+      width: r.width,
+      height: r.height,
+      scaleX: r.scaleX,
+      scaleY: r.scaleY,
+      angle: r.angle,
+      skewX: r.skewX,
+      skewY: r.skewY,
+      flipX: r.flipX,
+      flipY: r.flipY,
+      rx: r.rx,
+      ry: r.ry,
+    });
+    r.set({
+      stroke: null,
+      strokeWidth: 0,
+      strokeDashArray: null,
+      fill: "rgba(255,255,255,0)",
+      evented: false,
+      selectable: false,
+      dirty: true,
+    });
+  }
+
+  grp.set("dirty", true);
+  grp.setCoords();
+}
+
+/**
+ * Hand-built template JSON used `Group.fromObject` (isAlreadyGrouped: true) with child `left`/`top`
+ * in "layout" space. Fabric expects center-relative coordinates in that path and skips `_calcBounds`,
+ * so the selection box and dashed frame desync. Rebuild those groups the same way as interactive code
+ * (`new fabric.Group(items)` without isAlreadyGrouped) so bounds and handles align.
+ */
+export function normalizeImagePlaceholderGroupsAfterLoad(canvas: fabric.Canvas) {
+  type GroupInternals = fabric.Group & {
+    _restoreObjectsState: () => fabric.Group;
+  };
+
+  const placeholders = canvas
+    .getObjects()
+    .map((obj, index) => ({ obj, index }))
+    .filter(
+      (entry): entry is { obj: fabric.Group; index: number } =>
+        entry.obj.type === "group" && entry.obj.name === "image-placeholder",
+    )
+    .sort((a, b) => b.index - a.index);
+
+  for (const { obj: grp, index } of placeholders) {
+    const items = grp.getObjects().slice();
+    if (items.length === 0) {
+      continue;
+    }
+
+    const placeholderId = (grp as unknown as { placeholderId?: string }).placeholderId;
+    const pageIndex = (grp as unknown as { pageIndex?: number }).pageIndex;
+    const preservedClip = grp.clipPath ? duplicateLogoGroupClipPath(grp.clipPath) : undefined;
+
+    (grp as unknown as GroupInternals)._restoreObjectsState();
+    canvas.remove(grp);
+
+    const newGroup = new fabric.Group(items, {
+      name: "image-placeholder",
+      subTargetCheck: false,
+    });
+
+    (newGroup as unknown as { placeholderId?: string }).placeholderId = placeholderId;
+    (newGroup as unknown as { pageIndex?: number }).pageIndex = pageIndex;
+
+    if (preservedClip && !items.some((o) => o.name === "image-placeholder-frame")) {
+      newGroup.clipPath = preservedClip;
+    }
+
+    canvas.insertAt(newGroup, index, false);
+    applyLogoPlaceholderGroupClipPath(newGroup);
+  }
+}
+
 /**
  * Reset Fabric text layout/cache after loadFromJSON. Prevents overlapping glyphs when JSON
  * carried a wrong `height` or when object caching retains stale measurements.
@@ -461,6 +644,8 @@ export function finalizeFabricTextObjectsAfterLoad(canvas: fabric.Canvas) {
     }
     textLike.setCoords();
   }));
+
+  normalizeImagePlaceholderGroupsAfterLoad(canvas);
 
   canvas.requestRenderAll();
 }

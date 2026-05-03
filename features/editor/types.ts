@@ -9,6 +9,7 @@ export const JSON_KEYS = [
   "gradientAngle",
   "selectable",
   "hasControls",
+  "subTargetCheck",
   "linkData",
   "editable",
   "extensionType",

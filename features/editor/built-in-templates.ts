@@ -221,20 +221,9 @@ function imagePlaceholder(
   placeholderCounter += 1;
   const placeholderId = `placeholder-${placeholderCounter}`;
 
-  const frame = options?.circle
-    ? circle(left, top, Math.min(width, height) / 2, "rgba(255,255,255,0.001)", {
+  if (options?.circle) {
+    const frame = circle(left, top, Math.min(width, height) / 2, "rgba(255,255,255,0.001)", {
       stroke: "#38bdf8",
-      strokeWidth: 2,
-      strokeDashArray: [8, 6],
-      selectable: true,
-      evented: true,
-      hasControls: true,
-      name: "image-placeholder",
-      pageIndex: options.pageIndex,
-      placeholderId,
-    })
-    : rect(left, top, width, height, "rgba(255,255,255,0.001)", 10, {
-      stroke: "#2563eb",
       strokeWidth: 2,
       strokeDashArray: [8, 6],
       selectable: true,
@@ -245,18 +234,61 @@ function imagePlaceholder(
       placeholderId,
     });
 
-  return [
-    frame,
-    text(`[${label}]`, left + 8, top + height / 2 - 10, width - 16, 14, "#1d4ed8", 700, "Arial", "center", {
-      editable: false,
-      selectable: false,
-      evented: false,
-      hasControls: false,
-      name: "placeholder-label",
-      pageIndex: options?.pageIndex,
-      placeholderId,
-    }),
-  ];
+    return [
+      frame,
+      text(`[${label}]`, left + 8, top + height / 2 - 10, width - 16, 14, "#1d4ed8", 700, "Arial", "center", {
+        editable: false,
+        selectable: false,
+        evented: false,
+        hasControls: false,
+        name: "placeholder-label",
+        pageIndex: options?.pageIndex,
+        placeholderId,
+      }),
+    ];
+  }
+
+  const frame = rect(0, 0, width, height, "rgba(255,255,255,0.001)", 10, {
+    stroke: "#2563eb",
+    strokeWidth: 2,
+    strokeDashArray: [8, 6],
+    selectable: false,
+    evented: false,
+    hasControls: false,
+    name: "image-placeholder-frame",
+    pageIndex: options?.pageIndex,
+    placeholderId,
+  });
+
+  const labelText = text(`[${label}]`, 8, height / 2 - 10, width - 16, 14, "#1d4ed8", 700, "Arial", "center", {
+    editable: false,
+    selectable: false,
+    evented: false,
+    hasControls: false,
+    name: "placeholder-label",
+    pageIndex: options?.pageIndex,
+    placeholderId,
+  });
+
+  return {
+    type: "group",
+    version: "5.3.0",
+    originX: "left",
+    originY: "top",
+    left,
+    top,
+    scaleX: 1,
+    scaleY: 1,
+    angle: 0,
+    objects: [frame, labelText],
+    selectable: true,
+    evented: true,
+    hasControls: true,
+    subTargetCheck: false,
+    name: "image-placeholder",
+    pageIndex: options?.pageIndex,
+    placeholderId,
+  };
 }
 
 // ─── Trifold Templates ──────────────────────────────────────────────────
@@ -411,7 +443,7 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
       "#ffffff",
       500,
     ),
-    ...imagePlaceholder(qrLeftCentered, qrTop, qrSizePx, qrSizePx, "QR", { pageIndex: 1 }),
+    imagePlaceholder(qrLeftCentered, qrTop, qrSizePx, qrSizePx, "QR", { pageIndex: 1 }),
     text(
       "Note:\n• Registration confirmation by mail\n• Session timing: 9:30 AM - 4:00 PM\n• Registration is compulsory for all participants\n• Participation certificate provided by IEEE\n• Laptops are required for hands-on sessions",
       regTextLeft,
@@ -465,10 +497,10 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
     ),
 
     // FRONT SIDE - Panel 3 (Cover)
-    ...imagePlaceholder(frontRightX + 18, 18, 130, 52, "LOGO 1", { pageIndex: 1 }),
-    ...imagePlaceholder(frontRightX + 157, 18, 130, 52, "LOGO 2", { pageIndex: 1 }),
-    ...imagePlaceholder(frontRightX + 296, 18, 130, 52, "LOGO 3", { pageIndex: 1 }),
-    ...imagePlaceholder(frontRightX + 435, 18, 130, 52, "LOGO 4", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 18, 18, 130, 52, "LOGO 1", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 157, 18, 130, 52, "LOGO 2", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 296, 18, 130, 52, "LOGO 3", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 435, 18, 130, 52, "LOGO 4", { pageIndex: 1 }),
 
     text("IEEE Madras Section", frontRightX + 34, 102, TRI_PANEL_W - 68, 22, "#111827", 700, "Arial", "center"),
     text("Five Days Faculty Development Program on", frontRightX + 34, 136, TRI_PANEL_W - 68, 22, "#111827", 700, "Arial", "center"),
@@ -513,11 +545,11 @@ function trifoldFdpTwoSide(): BuiltInTemplate {
     text("SRM Institute of Science and Technology", frontRightX + 34, 968, TRI_PANEL_W - 68, 16, "#111827", 700, "Arial", "center"),
     text("Kattankulathur - 603203, Chengalpattu Dist., TN", frontRightX + 34, 992, TRI_PANEL_W - 68, 14, "#111827", 500, "Arial", "center"),
 
-    ...imagePlaceholder(frontRightX + 18, 1042, 100, 46, "LOGO A", { pageIndex: 1 }),
-    ...imagePlaceholder(frontRightX + 127, 1042, 100, 46, "LOGO B", { pageIndex: 1 }),
-    ...imagePlaceholder(frontRightX + 236, 1042, 100, 46, "LOGO C", { pageIndex: 1 }),
-    ...imagePlaceholder(frontRightX + 345, 1042, 100, 46, "LOGO D", { pageIndex: 1 }),
-    ...imagePlaceholder(frontRightX + 454, 1042, 110, 46, "LOGO E", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 18, 1042, 100, 46, "LOGO A", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 127, 1042, 100, 46, "LOGO B", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 236, 1042, 100, 46, "LOGO C", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 345, 1042, 100, 46, "LOGO D", { pageIndex: 1 }),
+    imagePlaceholder(frontRightX + 454, 1042, 110, 46, "LOGO E", { pageIndex: 1 }),
 
     // BACK SIDE - Panel 4 (About SRM)
     text("About SRM", backLeftX + 36, 42, TRI_PANEL_W - 72, 36, "#ffffff", 800, "Arial", "center"),

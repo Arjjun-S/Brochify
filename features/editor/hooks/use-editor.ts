@@ -21,6 +21,7 @@ import {
 } from "@/features/editor/types";
 import { useHistory } from "@/features/editor/hooks/use-history";
 import { 
+  applyLogoPlaceholderGroupClipPath,
   createFilter, 
   downloadFile, 
   exportCropRectForFabricObject,
@@ -271,10 +272,29 @@ const buildEditor = ({
         return undefined;
       }
 
-      return canvas
-        .getObjects()
-        .find((object) => object.name === "image-placeholder"
-          && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholderId);
+      const parentLogoGroup = canvas.getObjects().find((object) => {
+        if (object.type !== "group" || object.name !== "image-placeholder") {
+          return false;
+        }
+
+        const grp = object as fabric.Group;
+        return grp.getObjects().some(
+          (child) =>
+            child.name === "placeholder-image"
+            && (child as fabric.Object & { placeholderId?: string }).placeholderId === placeholderId,
+        );
+      });
+
+      if (parentLogoGroup) {
+        return parentLogoGroup;
+      }
+
+      return canvas.getObjects().find(
+        (object) =>
+          object.name === "image-placeholder"
+          && object.type !== "group"
+          && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholderId,
+      );
     }
 
     return undefined;
@@ -799,6 +819,187 @@ const buildEditor = ({
       fabric.Image.fromURL(
         value,
         (image) => {
+          const readTransformForGroup = (source: fabric.Object) => ({
+            left: source.left,
+            top: source.top,
+            scaleX: source.scaleX,
+            scaleY: source.scaleY,
+            angle: source.angle,
+            skewX: source.skewX,
+            skewY: source.skewY,
+            flipX: source.flipX,
+            flipY: source.flipY,
+            originX: source.originX,
+            originY: source.originY,
+          });
+
+          const removeStrayPlaceholderChildren = (
+            placeholderId: string | undefined,
+            exceptTopLevel: fabric.Object,
+          ) => {
+            if (!placeholderId) {
+              return;
+            }
+
+            canvas.getObjects().forEach((object) => {
+              if (object === exceptTopLevel) {
+                return;
+              }
+
+              if (
+                object.name === "placeholder-image"
+                && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholderId
+              ) {
+                canvas.remove(object);
+              }
+
+              if (
+                object.name === "placeholder-label"
+                && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholderId
+              ) {
+                canvas.remove(object);
+              }
+            });
+          };
+
+          type FrameLayout = {
+            innerW: number;
+            innerH: number;
+            transformSource: fabric.Object;
+            rx: number;
+            ry: number;
+            stroke: string | null;
+            strokeWidth: number;
+            strokeDashArray: number[] | undefined;
+            isCircle: boolean;
+            circleRadius: number;
+          };
+
+          const resolvePlaceholderFrameLayout = (
+            placeholder: fabric.Object & {
+              placeholderId?: string;
+              pageIndex?: number;
+              rx?: number;
+              ry?: number;
+            },
+          ): FrameLayout | undefined => {
+            if (placeholder.type === "group") {
+              const grp = placeholder as fabric.Group;
+              const frameChild =
+                grp.getObjects().find((o) => o.name === "image-placeholder-frame")
+                ?? grp.getObjects().find((o) => o.type === "rect" || o.type === "circle");
+
+              if (frameChild) {
+                const innerW = frameChild.getScaledWidth();
+                const innerH = frameChild.getScaledHeight();
+
+                if (frameChild.type === "circle") {
+                  const c = frameChild as fabric.Circle;
+                  return {
+                    innerW,
+                    innerH,
+                    transformSource: grp,
+                    rx: 0,
+                    ry: 0,
+                    stroke: (c.stroke as string) ?? "#38bdf8",
+                    strokeWidth: c.strokeWidth ?? 2,
+                    strokeDashArray: c.strokeDashArray as number[] | undefined,
+                    isCircle: true,
+                    circleRadius: (c.radius || 0) * (c.scaleX || 1),
+                  };
+                }
+
+                const r = frameChild as fabric.Rect;
+                const sx = r.scaleX || 1;
+                const sy = r.scaleY || 1;
+
+                return {
+                  innerW,
+                  innerH,
+                  transformSource: grp,
+                  rx: Math.max(0, (r.rx || 0) * sx),
+                  ry: Math.max(0, (r.ry || 0) * sy),
+                  stroke: (r.stroke as string) ?? "#2563eb",
+                  strokeWidth: r.strokeWidth ?? 2,
+                  strokeDashArray: r.strokeDashArray as number[] | undefined,
+                  isCircle: false,
+                  circleRadius: 0,
+                };
+              }
+
+              const clip = grp.clipPath;
+              if (clip?.type === "circle") {
+                const c = clip as fabric.Circle;
+                return {
+                  innerW: c.getScaledWidth(),
+                  innerH: c.getScaledHeight(),
+                  transformSource: grp,
+                  rx: 0,
+                  ry: 0,
+                  stroke: "#38bdf8",
+                  strokeWidth: 2,
+                  strokeDashArray: [8, 6] as number[],
+                  isCircle: true,
+                  circleRadius: (c.radius || 0) * (c.scaleX || 1),
+                };
+              }
+
+              if (clip?.type === "rect") {
+                const r = clip as fabric.Rect;
+                const sx = r.scaleX || 1;
+                const sy = r.scaleY || 1;
+                return {
+                  innerW: r.getScaledWidth(),
+                  innerH: r.getScaledHeight(),
+                  transformSource: grp,
+                  rx: Math.max(0, (r.rx || 0) * sx),
+                  ry: Math.max(0, (r.ry || 0) * sy),
+                  stroke: "#2563eb",
+                  strokeWidth: 2,
+                  strokeDashArray: [8, 6] as number[],
+                  isCircle: false,
+                  circleRadius: 0,
+                };
+              }
+
+              return undefined;
+            }
+
+            if (placeholder.type === "circle") {
+              const c = placeholder as fabric.Circle;
+              return {
+                innerW: placeholder.getScaledWidth(),
+                innerH: placeholder.getScaledHeight(),
+                transformSource: placeholder,
+                rx: 0,
+                ry: 0,
+                stroke: (c.stroke as string) ?? null,
+                strokeWidth: c.strokeWidth ?? 2,
+                strokeDashArray: c.strokeDashArray as number[] | undefined,
+                isCircle: true,
+                circleRadius: (c.radius || 0) * (c.scaleX || 1),
+              };
+            }
+
+            if (placeholder.type === "rect") {
+              const r = placeholder as fabric.Rect;
+              return {
+                innerW: placeholder.getScaledWidth(),
+                innerH: placeholder.getScaledHeight(),
+                transformSource: placeholder,
+                rx: Math.max(0, (r.rx || 0) * (r.scaleX || 1)),
+                ry: Math.max(0, (r.ry || 0) * (r.scaleY || 1)),
+                stroke: (r.stroke as string) ?? null,
+                strokeWidth: r.strokeWidth ?? 2,
+                strokeDashArray: r.strokeDashArray as number[] | undefined,
+                isCircle: false,
+                circleRadius: 0,
+              };
+            }
+
+            return undefined;
+          };
+
           const selectedPlaceholderFrame = getSelectedPlaceholderFrame();
 
           if (selectedPlaceholderFrame) {
@@ -808,75 +1009,84 @@ const buildEditor = ({
               rx?: number;
               ry?: number;
             };
-            const placeholderWidth = placeholder.getScaledWidth();
-            const placeholderHeight = placeholder.getScaledHeight();
 
-            if (placeholderWidth && placeholderHeight) {
-              const placeholderCenter = placeholder.getCenterPoint();
+            const layout = resolvePlaceholderFrameLayout(placeholder);
+
+            if (layout && layout.innerW && layout.innerH) {
+              const { innerW, innerH, transformSource, rx, ry, stroke, strokeWidth, strokeDashArray, isCircle, circleRadius }
+                = layout;
+
               const imageWidth = image.width || 1;
               const imageHeight = image.height || 1;
-              const coverScale = Math.max(
-                placeholderWidth / imageWidth,
-                placeholderHeight / imageHeight,
-              );
+              const containScale = Math.min(innerW / imageWidth, innerH / imageHeight);
 
               image.set({
                 originX: "center",
                 originY: "center",
-                left: placeholderCenter.x,
-                top: placeholderCenter.y,
-                scaleX: coverScale,
-                scaleY: coverScale,
+                left: innerW / 2,
+                top: innerH / 2,
+                scaleX: containScale,
+                scaleY: containScale,
                 name: "placeholder-image",
               });
 
               (image as unknown as { placeholderId?: string }).placeholderId = placeholder.placeholderId;
               (image as unknown as { pageIndex?: number }).pageIndex = placeholder.pageIndex;
 
-              const clipPath = placeholder.type === "circle"
+              const border = isCircle
                 ? new fabric.Circle({
                   originX: "center",
                   originY: "center",
-                  radius: Math.min(placeholderWidth, placeholderHeight) / 2,
+                  left: innerW / 2,
+                  top: innerH / 2,
+                  radius: circleRadius,
+                  fill: "rgba(255,255,255,0.001)",
+                  stroke: stroke ?? "#38bdf8",
+                  strokeWidth,
+                  strokeDashArray,
+                  selectable: false,
+                  evented: false,
+                  name: "image-placeholder-frame",
                 })
                 : new fabric.Rect({
-                  originX: "center",
-                  originY: "center",
-                  width: placeholderWidth,
-                  height: placeholderHeight,
-                  rx: Math.max(0, (placeholder.rx || 0) * (placeholder.scaleX || 1)),
-                  ry: Math.max(0, (placeholder.ry || 0) * (placeholder.scaleY || 1)),
+                  left: 0,
+                  top: 0,
+                  width: innerW,
+                  height: innerH,
+                  rx,
+                  ry,
+                  fill: "rgba(255,255,255,0.001)",
+                  stroke: stroke ?? "#2563eb",
+                  strokeWidth,
+                  strokeDashArray,
+                  selectable: false,
+                  evented: false,
+                  name: "image-placeholder-frame",
                 });
 
-              image.set({ clipPath });
+              const frameIndex = canvas.getObjects().indexOf(placeholder);
+              removeStrayPlaceholderChildren(placeholder.placeholderId, placeholder);
+              canvas.remove(placeholder);
 
-              const existingPlaceholderImages = canvas
-                .getObjects()
-                .filter((object) => object.name === "placeholder-image"
-                  && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholder.placeholderId);
-
-              existingPlaceholderImages.forEach((object) => {
-                canvas.remove(object);
+              const newGroup = new fabric.Group([image, border], {
+                ...readTransformForGroup(transformSource),
+                name: "image-placeholder",
+                subTargetCheck: false,
               });
 
-              const frameIndex = canvas.getObjects().indexOf(placeholder);
+              (newGroup as unknown as { placeholderId?: string }).placeholderId = placeholder.placeholderId;
+              (newGroup as unknown as { pageIndex?: number }).pageIndex = placeholder.pageIndex;
+
               if (frameIndex >= 0) {
-                canvas.insertAt(image, frameIndex, false);
-              } else {
-                canvas.add(image);
+                canvas.insertAt(newGroup, frameIndex, false);
+              }
+              else {
+                canvas.add(newGroup);
               }
 
-              const labelsToRemove = canvas
-                .getObjects()
-                .filter((object) => object.name === "placeholder-label"
-                  && (object as fabric.Object & { placeholderId?: string }).placeholderId === placeholder.placeholderId);
-              labelsToRemove.forEach((label) => {
-                canvas.remove(label);
-              });
+              applyLogoPlaceholderGroupClipPath(newGroup);
 
-              placeholder.set({ fill: "rgba(255,255,255,0.001)" });
-              canvas.bringToFront(placeholder);
-              canvas.setActiveObject(image);
+              canvas.setActiveObject(newGroup);
               canvas.requestRenderAll();
               return;
             }
