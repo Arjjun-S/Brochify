@@ -1,5 +1,5 @@
 import { fabric } from "fabric";
-import { useCallback, useState, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { 
   Editor, 
@@ -1543,7 +1543,9 @@ export const useEditor = ({
     activePage,
   });
 
-  autoZoomRef.current = autoZoom;
+  useEffect(() => {
+    autoZoomRef.current = autoZoom;
+  }, [autoZoom]);
 
   useCanvasEvents({
     save,

@@ -102,8 +102,36 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
         return;
       }
 
+      // Fabric runs its mousedown handler before this `mouse:down` callback. If a resize/rotate
+      // handle or move has started, `_currentTransform` is set — never steal the gesture for pan.
+      const transformActive = (canvas as unknown as { _currentTransform?: unknown })._currentTransform;
+      if (transformActive) {
+        return;
+      }
+
+      const p = canvas.getPointer(e, true);
+      const pointer = new fabric.Point(p.x, p.y);
       const activeObject = canvas.getActiveObject();
-      const isClickOnObject = activeObject && activeObject.containsPoint(new fabric.Point(e.offsetX, e.offsetY));
+
+      const activeExtras = activeObject as unknown as {
+        containsPoint?: (point: fabric.Point) => boolean;
+        _findTargetCorner?: (point: fabric.Point, forTouch: boolean) => string | false;
+      };
+
+      const util = fabric.util as typeof fabric.util & { isTouchEvent?: (ev: Event) => boolean };
+      const isTouch = typeof util.isTouchEvent === "function" && util.isTouchEvent(e);
+
+      const hitResizeHandle =
+        Boolean(activeObject)
+        && typeof activeExtras._findTargetCorner === "function"
+        && Boolean(activeExtras._findTargetCorner(pointer, isTouch));
+
+      const hitObjectBody =
+        Boolean(activeObject)
+        && typeof activeExtras.containsPoint === "function"
+        && activeExtras.containsPoint(pointer);
+
+      const isClickOnObject = Boolean(hitResizeHandle || hitObjectBody);
 
       // Pan gesture: middle mouse, Alt+left click, Space+left click, or left click on empty canvas (not on an object)
       const panGesture =

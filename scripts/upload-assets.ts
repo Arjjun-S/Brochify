@@ -17,7 +17,7 @@ const ASSET_FOLDERS: Record<string, string> = {
   badges: "public/badges",
 };
 
-const ASSET_TYPES = {
+const ASSET_TYPES: Record<keyof typeof ASSET_FOLDERS, string> = {
   logos: "logo",
   certificate: "certificate_template",
   badges: "badge",
@@ -71,7 +71,7 @@ async function main() {
       }
 
       try {
-        await uploadFile(filePath, key, ASSET_TYPES[key]);
+        await uploadFile(filePath, key, ASSET_TYPES[key as keyof typeof ASSET_TYPES]);
       } catch (error) {
         console.error(`Failed to upload ${file}:`, error instanceof Error ? error.message : error);
       }

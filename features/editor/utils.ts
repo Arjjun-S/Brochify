@@ -533,9 +533,9 @@ export function applyLogoPlaceholderGroupClipPath(grp: fabric.Group) {
       flipY: c.flipY,
     });
     c.set({
-      stroke: null,
+      stroke: undefined,
       strokeWidth: 0,
-      strokeDashArray: null,
+      strokeDashArray: undefined,
       fill: "rgba(255,255,255,0)",
       evented: false,
       selectable: false,
@@ -562,9 +562,9 @@ export function applyLogoPlaceholderGroupClipPath(grp: fabric.Group) {
       ry: r.ry,
     });
     r.set({
-      stroke: null,
+      stroke: undefined,
       strokeWidth: 0,
-      strokeDashArray: null,
+      strokeDashArray: undefined,
       fill: "rgba(255,255,255,0)",
       evented: false,
       selectable: false,

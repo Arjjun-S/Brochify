@@ -1,6 +1,6 @@
 import { fabric } from "fabric";
 import debounce from "lodash.debounce";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect } from "react";
 
 import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
 
@@ -17,25 +17,18 @@ export const useCanvasEvents = ({
   setSelectedObjects,
   clearSelectionCallback,
 }: UseCanvasEventsProps) => {
-  const saveRef = useRef(save);
-  saveRef.current = save;
-
-  const queuePersist = useMemo(
-    () =>
-      debounce(
-        () => {
-          saveRef.current();
-        },
-        240,
-        { maxWait: 900 },
-      ),
-    [],
-  );
-
   useEffect(() => {
     if (!canvas) {
       return;
     }
+
+    const queuePersist = debounce(
+      () => {
+        save();
+      },
+      240,
+      { maxWait: 900 },
+    );
 
     const onSelectionCreated = (e: { selected?: fabric.Object[] }) => {
       setSelectedObjects(e.selected || []);
@@ -82,7 +75,7 @@ export const useCanvasEvents = ({
   },
   [
     canvas,
-    queuePersist,
+    save,
     clearSelectionCallback,
     setSelectedObjects,
   ]);

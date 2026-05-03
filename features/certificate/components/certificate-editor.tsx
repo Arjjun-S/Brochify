@@ -1,9 +1,7 @@
 "use client";
 
 import { fabric } from "fabric";
-import debounce from "lodash.debounce";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader } from "lucide-react";
 
 import {
   ActiveTool,
@@ -52,36 +50,6 @@ interface CertificateEditorProps {
 
 export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
   const [activeTool, setActiveTool] = useState<ActiveTool>("select");
-
-  const [certificateState, setCertificateState] = useState(initialData.content);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const saveCertificate = useCallback(async (content: typeof certificateState) => {
-    try {
-      const response = await fetch(`/api/certificate/${initialData.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to save");
-      }
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save");
-    }
-  }, [initialData.id]);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const debouncedSave = useCallback(
-    debounce((content: typeof certificateState) => {
-      setIsSaving(true);
-      saveCertificate(content).finally(() => setIsSaving(false));
-    }, 500),
-    [saveCertificate]
-  );
 
   const onClearSelection = useCallback(() => {
     if (selectionDependentTools.includes(activeTool)) {
@@ -272,19 +240,6 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
           <Footer editor={editor} />
         </main>
       </div>
-
-      {isSaving && (
-        <div className="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg px-4 py-2 text-sm text-muted-foreground flex items-center gap-2">
-          <Loader className="size-4 animate-spin" />
-          Saving...
-        </div>
-      )}
-
-      {saveError && (
-        <div className="fixed bottom-4 right-4 bg-red-50 text-red-700 rounded-lg shadow-lg px-4 py-2 text-sm">
-          {saveError}
-        </div>
-      )}
     </div>
   );
 };

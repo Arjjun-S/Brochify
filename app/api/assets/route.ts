@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { requireServerSession } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 
 export async function GET(req: Request) {
@@ -15,7 +14,7 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ data: assets });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Failed to fetch assets" },
       { status: 500 }

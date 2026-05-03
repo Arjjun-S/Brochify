@@ -37,6 +37,10 @@ export const RemoveBgSidebar = ({
   };
 
   const onClick = () => {
+    if (!imageSrc) {
+      return;
+    }
+
     mutation.mutate({
       image: imageSrc,
     }, {

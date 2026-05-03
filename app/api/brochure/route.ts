@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSessionFromRequest } from "@/lib/server/auth";
+import { isDatabaseUnavailable } from "@/lib/server/db-unavailable";
 import { createBrochureDraft, listBrochuresForUser } from "@/lib/server/data";
 import type { BrochureStatus, BrochureTemplateId, EditorState } from "@/lib/server/types";
 
@@ -38,6 +39,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ brochures });
   } catch (error: unknown) {
     console.error("Failed to list brochures", error);
+
+    if (isDatabaseUnavailable(error)) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot reach the database. Check DATABASE_URL, network/VPN, and that your DB provider is running.",
+          brochures: [],
+        },
+        { status: 503 },
+      );
+    }
+
     const message = error instanceof Error ? error.message : "Failed to load brochures.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
