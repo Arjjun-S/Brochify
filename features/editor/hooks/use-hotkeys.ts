@@ -14,9 +14,18 @@ export const useHotkeys = ({ canvas, undo, redo, save, copy, paste }: UseHotkeys
   useEvent("keydown", (event) => {
     const isCtrlKey = event.ctrlKey || event.metaKey;
     const isBackspace = event.key === "Backspace";
-    const isInput = ["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName);
+    const target = event.target as HTMLElement;
+    const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 
-    if (isInput) return;
+    if (isInput || target.isContentEditable) {
+      return;
+    }
+
+    const activeObject = canvas?.getActiveObject();
+    const editingFabricText =
+      Boolean(activeObject)
+      && (activeObject!.type === "textbox" || activeObject!.type === "i-text")
+      && Boolean((activeObject as fabric.IText).isEditing);
 
     // delete key
     if (event.keyCode === 46) {
@@ -33,14 +42,28 @@ export const useHotkeys = ({ canvas, undo, redo, save, copy, paste }: UseHotkeys
       save();
     }
 
-    if (isCtrlKey && event.key === "z") {
+    if (isCtrlKey && (event.key === "z" || event.key === "Z")) {
+      if (editingFabricText) {
+        return;
+      }
+
       event.preventDefault();
-      undo();
+      if (event.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+      return;
     }
 
-    if (isCtrlKey && event.key === "y") {
+    if (isCtrlKey && (event.key === "y" || event.key === "Y")) {
+      if (editingFabricText) {
+        return;
+      }
+
       event.preventDefault();
       redo();
+      return;
     }
 
     if (isCtrlKey && event.key === "c") {

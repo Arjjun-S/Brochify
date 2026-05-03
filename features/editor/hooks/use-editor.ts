@@ -19,6 +19,8 @@ import {
   FONT_SIZE,
   JSON_KEYS,
 } from "@/features/editor/types";
+import { patchFabricRotationControl } from "@/features/editor/fabric-rotation-control";
+import { patchFabricSelectionZoomSync } from "@/features/editor/fabric-selection-zoom-sync";
 import { useHistory } from "@/features/editor/hooks/use-history";
 import { 
   applyLogoPlaceholderGroupClipPath,
@@ -1518,6 +1520,11 @@ export const useEditor = ({
   useWindowEvents();
 
   const autoZoomRef = useRef<() => void>(() => {});
+  const persistCancelRef = useRef<() => void>(() => {});
+
+  const onPersistCancelReady = useCallback((cancel: () => void) => {
+    persistCancelRef.current = cancel;
+  }, []);
 
   const {
     save, 
@@ -1532,6 +1539,9 @@ export const useEditor = ({
     saveCallback,
     afterRestore: () => {
       autoZoomRef.current();
+    },
+    cancelDebouncedPersist: () => {
+      persistCancelRef.current();
     },
   });
 
@@ -1552,6 +1562,7 @@ export const useEditor = ({
     canvas,
     setSelectedObjects,
     clearSelectionCallback,
+    onPersistCancelReady,
   });
 
   useViewportInteractions({ canvas });
@@ -1643,6 +1654,8 @@ export const useEditor = ({
       patchFabricTransformGuards();
       patchFabricTextEditingPresentation();
       patchFabricTextEditingCursorMetrics();
+      patchFabricSelectionZoomSync();
+      patchFabricRotationControl();
 
       fabric.Object.prototype.set({
         cornerColor: "#FFF",
@@ -1652,6 +1665,9 @@ export const useEditor = ({
         transparentCorners: false,
         borderOpacityWhenMoving: 1,
         cornerStrokeColor: "#3b82f6",
+        /** Breathing room between content and handles (rotate line sits clearer of text/shapes). */
+        padding: 4,
+        cornerSize: 12,
       });
 
       const initialWorkspace = new fabric.Rect({

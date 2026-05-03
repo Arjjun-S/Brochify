@@ -16,6 +16,47 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return !!el.closest("input, textarea, select, [contenteditable='true']");
 }
 
+/** Convert wheel deltas to pixels for consistent pan/zoom across mice and trackpads. */
+function normalizeWheelDelta(e: WheelEvent): { dx: number; dy: number } {
+  let dx = e.deltaX;
+  let dy = e.deltaY;
+
+  if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    const linePx = 16;
+    dx *= linePx;
+    dy *= linePx;
+  }
+
+  return { dx, dy };
+}
+
+/**
+ * Fabric `zoomToPoint` expects a point in **canvas buffer coordinates** (same as `getPointer(e, true)`:
+ * pointer on the drawable canvas before applying `viewportTransform` inverse). Using `getPointer(e)`
+ * with default `ignoreZoom` gives **scene** coordinates and makes zoom feel wrong / drift.
+ *
+ * Canva-like behavior: zoom mostly tracks the pointer, with a small pull toward the viewport center so
+ * corners do not feel jumpy. Adjust `viewportCenterWeight` between 0 (pure cursor) and ~0.35 (more stable).
+ */
+function zoomFocalPoint(
+  canvas: fabric.Canvas,
+  e: WheelEvent,
+  viewportCenterWeight: number,
+): fabric.Point {
+  const w = canvas.getWidth();
+  const h = canvas.getHeight();
+  const cx = w / 2;
+  const cy = h / 2;
+
+  const pointer = canvas.getPointer(e, true);
+  const wx = viewportCenterWeight;
+
+  return new fabric.Point(
+    pointer.x * (1 - wx) + cx * wx,
+    pointer.y * (1 - wx) + cy * wx,
+  );
+}
+
 export function useViewportInteractions({ canvas }: UseViewportInteractionsProps) {
   useEffect(() => {
     if (!canvas) {
@@ -32,6 +73,7 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
     let lastClientY = 0;
     let spaceHeld = false;
     let suppressedSelection = false;
+    let capturedPointerId: number | null = null;
 
     const restoreInteractionChrome = () => {
       if (suppressedSelection) {
@@ -41,6 +83,18 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
       }
 
       canvas.defaultCursor = "default";
+    };
+
+    const releasePointerCaptureSafe = () => {
+      if (capturedPointerId === null) {
+        return;
+      }
+      try {
+        wrapper.releasePointerCapture(capturedPointerId);
+      } catch {
+        /* pointer may already be released */
+      }
+      capturedPointerId = null;
     };
 
     const beginPan = (clientX: number, clientY: number) => {
@@ -58,6 +112,8 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
     };
 
     const endPan = () => {
+      releasePointerCaptureSafe();
+
       if (!isPanning) {
         return;
       }
@@ -70,6 +126,17 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
       }
     };
 
+    const recoverInteractionIfPointerLost = () => {
+      releasePointerCaptureSafe();
+      spaceHeld = false;
+      const hadLock = isPanning || suppressedSelection;
+      isPanning = false;
+      if (hadLock) {
+        restoreInteractionChrome();
+      }
+      canvas.defaultCursor = "default";
+    };
+
     const onWheel = (e: WheelEvent) => {
       if (!wrapper.contains(e.target as Node)) {
         return;
@@ -78,15 +145,41 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
       e.preventDefault();
       e.stopPropagation();
 
-      let zoom = canvas.getZoom();
-      const pinch = e.ctrlKey || e.metaKey;
-      const sensitivity = pinch ? 0.008 : 0.002;
+      const { dx, dy } = normalizeWheelDelta(e);
 
-      zoom *= Math.exp(-e.deltaY * sensitivity);
+      // Canva-style: two-finger scroll pans; pinch (Ctrl/Cmd+wheel on trackpad) or Ctrl/Cmd+mouse wheel zooms.
+      const zoomGesture = e.ctrlKey || e.metaKey;
+
+      if (!zoomGesture) {
+        const vpt = canvas.viewportTransform;
+        if (!vpt) {
+          return;
+        }
+
+        const next: [number, number, number, number, number, number] = [
+          vpt[0],
+          vpt[1],
+          vpt[2],
+          vpt[3],
+          vpt[4] - dx,
+          vpt[5] - dy,
+        ];
+        canvas.setViewportTransform(next);
+        refreshFabricTextEditingAnchor(canvas);
+        canvas.requestRenderAll();
+        return;
+      }
+
+      // Pinch / Ctrl+wheel: zoom with focal = blend(cursor on canvas, viewport center).
+      let zoom = canvas.getZoom();
+      const sensitivity = 0.0024;
+      zoom *= Math.exp(-dy * sensitivity);
       zoom = Math.min(Math.max(zoom, 0.05), 12);
 
-      const pointer = canvas.getPointer(e);
-      canvas.zoomToPoint(new fabric.Point(pointer.x, pointer.y), zoom);
+      const viewportCenterWeight = 0.2;
+      const focal = zoomFocalPoint(canvas, e, viewportCenterWeight);
+
+      canvas.zoomToPoint(focal, zoom);
       refreshFabricTextEditingAnchor(canvas);
       canvas.requestRenderAll();
     };
@@ -109,29 +202,11 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
         return;
       }
 
-      const p = canvas.getPointer(e, true);
-      const pointer = new fabric.Point(p.x, p.y);
-      const activeObject = canvas.getActiveObject();
-
-      const activeExtras = activeObject as unknown as {
-        containsPoint?: (point: fabric.Point) => boolean;
-        _findTargetCorner?: (point: fabric.Point, forTouch: boolean) => string | false;
-      };
-
-      const util = fabric.util as typeof fabric.util & { isTouchEvent?: (ev: Event) => boolean };
-      const isTouch = typeof util.isTouchEvent === "function" && util.isTouchEvent(e);
-
-      const hitResizeHandle =
-        Boolean(activeObject)
-        && typeof activeExtras._findTargetCorner === "function"
-        && Boolean(activeExtras._findTargetCorner(pointer, isTouch));
-
-      const hitObjectBody =
-        Boolean(activeObject)
-        && typeof activeExtras.containsPoint === "function"
-        && activeExtras.containsPoint(pointer);
-
-      const isClickOnObject = Boolean(hitResizeHandle || hitObjectBody);
+      // Use Fabric's own target resolution (groups, corners, subTargets). Manual containsPoint with
+      // getPointer() drifted from Fabric when zoomed/grouped and wrongly treated object hits as “empty”,
+      // which started pan + skipTargetFind and made the canvas feel stuck until refresh.
+      const targetUnderPointer = canvas.findTarget(e, false);
+      const isClickOnObject = Boolean(targetUnderPointer);
 
       // Pan gesture: middle mouse, Alt+left click, Space+left click, or left click on empty canvas (not on an object)
       const panGesture =
@@ -151,6 +226,17 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
       canvas.discardActiveObject();
       canvas.requestRenderAll();
       beginPan(e.clientX, e.clientY);
+
+      const pe = e as MouseEvent & { pointerId?: number };
+      if (typeof pe.pointerId === "number") {
+        try {
+          wrapper.setPointerCapture(pe.pointerId);
+          capturedPointerId = pe.pointerId;
+        } catch {
+          capturedPointerId = null;
+        }
+      }
+
       e.preventDefault();
     };
 
@@ -174,6 +260,12 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
 
     const onWindowMouseUp = () => {
       endPan();
+    };
+
+    const onWindowBlur = () => {
+      // If mouseup happens outside the window (or OS eats it), pan never ends and skipTargetFind
+      // stays true — clicks no longer hit targets until refresh.
+      recoverInteractionIfPointerLost();
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -217,6 +309,9 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
     canvas.on("mouse:down", onCanvasMouseDown);
     window.addEventListener("mousemove", onWindowMouseMove);
     window.addEventListener("mouseup", onWindowMouseUp);
+    window.addEventListener("pointerup", onWindowMouseUp);
+    window.addEventListener("pointercancel", onWindowMouseUp);
+    window.addEventListener("blur", onWindowBlur);
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("keyup", onKeyUp, true);
 
@@ -225,12 +320,13 @@ export function useViewportInteractions({ canvas }: UseViewportInteractionsProps
       canvas.off("mouse:down", onCanvasMouseDown);
       window.removeEventListener("mousemove", onWindowMouseMove);
       window.removeEventListener("mouseup", onWindowMouseUp);
+      window.removeEventListener("pointerup", onWindowMouseUp);
+      window.removeEventListener("pointercancel", onWindowMouseUp);
+      window.removeEventListener("blur", onWindowBlur);
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
 
-      endPan();
-      spaceHeld = false;
-      canvas.defaultCursor = "default";
+      recoverInteractionIfPointerLost();
     };
   }, [canvas]);
 }

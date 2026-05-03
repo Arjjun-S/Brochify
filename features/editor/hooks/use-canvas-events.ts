@@ -9,13 +9,16 @@ interface UseCanvasEventsProps {
   canvas: fabric.Canvas | null;
   setSelectedObjects: (objects: fabric.Object[]) => void;
   clearSelectionCallback?: () => void;
-};
+  /** Registered with the current debounced persist cancel function (for undo/redo to flush noise). */
+  onPersistCancelReady?: (cancel: () => void) => void;
+}
 
 export const useCanvasEvents = ({
   save,
   canvas,
   setSelectedObjects,
   clearSelectionCallback,
+  onPersistCancelReady,
 }: UseCanvasEventsProps) => {
   useEffect(() => {
     if (!canvas) {
@@ -29,6 +32,10 @@ export const useCanvasEvents = ({
       240,
       { maxWait: 900 },
     );
+
+    onPersistCancelReady?.(() => {
+      queuePersist.cancel();
+    });
 
     const onSelectionCreated = (e: { selected?: fabric.Object[] }) => {
       setSelectedObjects(e.selected || []);
@@ -63,6 +70,7 @@ export const useCanvasEvents = ({
 
     return () => {
       queuePersist.cancel();
+      onPersistCancelReady?.(() => {});
       canvas.off("object:added", queuePersist);
       canvas.off("object:removed", queuePersist);
       canvas.off("object:modified", queuePersist);
@@ -78,5 +86,6 @@ export const useCanvasEvents = ({
     save,
     clearSelectionCallback,
     setSelectedObjects,
+    onPersistCancelReady,
   ]);
 };

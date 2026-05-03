@@ -13,135 +13,190 @@ interface UseHistoryProps {
   }) => void;
   /** Re-apply viewport + page clip/interaction after canvas JSON restore (undo/redo). */
   afterRestore?: () => void;
-};
+  /** Cancel any pending debounced `save()` from canvas events (must run before restore). */
+  cancelDebouncedPersist?: () => void;
+}
 
-export const useHistory = ({ canvas, saveCallback, afterRestore }: UseHistoryProps) => {
+export const useHistory = ({
+  canvas,
+  saveCallback,
+  afterRestore,
+  cancelDebouncedPersist,
+}: UseHistoryProps) => {
   const [historyIndex, setHistoryIndex] = useState(0);
   const canvasHistory = useRef<string[]>([]);
+  const historyIndexRef = useRef(0);
   const skipSave = useRef(false);
+  const isRestoringRef = useRef(false);
   const afterRestoreRef = useRef(afterRestore);
 
   useEffect(() => {
     afterRestoreRef.current = afterRestore;
   }, [afterRestore]);
 
-  const canUndo = useCallback(() => {
-    return historyIndex > 0;
+  useEffect(() => {
+    historyIndexRef.current = historyIndex;
   }, [historyIndex]);
+
+  const canUndo = useCallback(() => {
+    return historyIndexRef.current > 0;
+  }, []);
 
   const canRedo = useCallback(() => {
-    return historyIndex < canvasHistory.current.length - 1;
-  }, [historyIndex]);
+    return historyIndexRef.current < canvasHistory.current.length - 1;
+  }, []);
 
-  const save = useCallback((skip = false) => {
-    if (!canvas) return;
+  const save = useCallback(
+    (skip = false) => {
+      if (!canvas) {
+        return;
+      }
 
-    let json: string;
+      let json: string;
+      try {
+        const currentState = canvas.toJSON(JSON_KEYS);
+        const sanitizedState = sanitizeCanvasState(currentState) || {
+          version: "5.3.0",
+          viewportTransform: [1, 0, 0, 1, 0, 0],
+          objects: [],
+        };
+        json = JSON.stringify(sanitizedState);
+      } catch {
+        return;
+      }
+
+      if (!skip && !skipSave.current) {
+        const idx = historyIndexRef.current;
+        canvasHistory.current = canvasHistory.current.slice(0, idx + 1);
+
+        const last = canvasHistory.current[canvasHistory.current.length - 1];
+        if (last !== json) {
+          canvasHistory.current.push(json);
+          const nextIndex = canvasHistory.current.length - 1;
+          historyIndexRef.current = nextIndex;
+          setHistoryIndex(nextIndex);
+        }
+      }
+
+      const workspace = canvas.getObjects().find((object) => object.name === "clip");
+      const height = workspace?.height || 0;
+      const width = workspace?.width || 0;
+
+      saveCallback?.({ json, height, width });
+    },
+    [canvas, saveCallback],
+  );
+
+  const finishRestore = useCallback(() => {
+    skipSave.current = false;
+    isRestoringRef.current = false;
+  }, []);
+
+  const undo = useCallback(() => {
+    if (!canvas || isRestoringRef.current) {
+      return;
+    }
+
+    const idx = historyIndexRef.current;
+    if (idx <= 0) {
+      return;
+    }
+
+    cancelDebouncedPersist?.();
+
+    const previousIndex = idx - 1;
+    const previousSerializedState = canvasHistory.current[previousIndex];
+    if (!previousSerializedState) {
+      return;
+    }
+
+    let previousState: unknown;
     try {
-      const currentState = canvas.toJSON(JSON_KEYS);
-      const sanitizedState = sanitizeCanvasState(currentState) || {
-        version: "5.3.0",
-        viewportTransform: [1, 0, 0, 1, 0, 0],
-        objects: [],
-      };
-      json = JSON.stringify(sanitizedState);
+      previousState = JSON.parse(previousSerializedState);
     } catch {
       return;
     }
 
-    if (!skip && !skipSave.current) {
-      canvasHistory.current.push(json);
-      setHistoryIndex(canvasHistory.current.length - 1);
+    const sanitizedPreviousState = sanitizeCanvasState(previousState);
+    if (!sanitizedPreviousState) {
+      return;
     }
 
-    const workspace = canvas
-      .getObjects()
-      .find((object) => object.name === "clip");
-    const height = workspace?.height || 0;
-    const width = workspace?.width || 0;
+    isRestoringRef.current = true;
+    skipSave.current = true;
 
-    saveCallback?.({ json, height, width });
-  }, 
-  [
-    canvas,
-    saveCallback,
-  ]);
+    canvas.clear();
+    canvas.renderAll();
 
-  const undo = useCallback(() => {
-    if (canUndo()) {
-      skipSave.current = true;
-      canvas?.clear().renderAll();
-
-      const previousIndex = historyIndex - 1;
-      const previousSerializedState = canvasHistory.current[previousIndex];
-      if (!previousSerializedState) {
-        skipSave.current = false;
-        return;
-      }
-
-      let previousState: unknown;
+    canvas.loadFromJSON(sanitizedPreviousState, () => {
       try {
-        previousState = JSON.parse(previousSerializedState);
-      } catch {
-        skipSave.current = false;
-        return;
-      }
-
-      const sanitizedPreviousState = sanitizeCanvasState(previousState);
-      if (!sanitizedPreviousState) {
-        skipSave.current = false;
-        return;
-      }
-
-      canvas?.loadFromJSON(sanitizedPreviousState, () => {
         canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
         finalizeFabricTextObjectsAfterLoad(canvas);
         afterRestoreRef.current?.();
+        canvas.discardActiveObject();
         canvas.renderAll();
+        historyIndexRef.current = previousIndex;
         setHistoryIndex(previousIndex);
-        skipSave.current = false;
-      });
-    }
-  }, [canUndo, canvas, historyIndex]);
+        save(true);
+      } finally {
+        finishRestore();
+      }
+    });
+  }, [canvas, cancelDebouncedPersist, finishRestore, save]);
 
   const redo = useCallback(() => {
-    if (canRedo()) {
-      skipSave.current = true;
-      canvas?.clear().renderAll();
+    if (!canvas || isRestoringRef.current) {
+      return;
+    }
 
-      const nextIndex = historyIndex + 1;
-      const nextSerializedState = canvasHistory.current[nextIndex];
-      if (!nextSerializedState) {
-        skipSave.current = false;
-        return;
-      }
+    const idx = historyIndexRef.current;
+    if (idx >= canvasHistory.current.length - 1) {
+      return;
+    }
 
-      let nextState: unknown;
+    cancelDebouncedPersist?.();
+
+    const nextIndex = idx + 1;
+    const nextSerializedState = canvasHistory.current[nextIndex];
+    if (!nextSerializedState) {
+      return;
+    }
+
+    let nextState: unknown;
+    try {
+      nextState = JSON.parse(nextSerializedState);
+    } catch {
+      return;
+    }
+
+    const sanitizedNextState = sanitizeCanvasState(nextState);
+    if (!sanitizedNextState) {
+      return;
+    }
+
+    isRestoringRef.current = true;
+    skipSave.current = true;
+
+    canvas.clear();
+    canvas.renderAll();
+
+    canvas.loadFromJSON(sanitizedNextState, () => {
       try {
-        nextState = JSON.parse(nextSerializedState);
-      } catch {
-        skipSave.current = false;
-        return;
-      }
-
-      const sanitizedNextState = sanitizeCanvasState(nextState);
-      if (!sanitizedNextState) {
-        skipSave.current = false;
-        return;
-      }
-
-      canvas?.loadFromJSON(sanitizedNextState, () => {
         canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
         finalizeFabricTextObjectsAfterLoad(canvas);
         afterRestoreRef.current?.();
+        canvas.discardActiveObject();
         canvas.renderAll();
+        historyIndexRef.current = nextIndex;
         setHistoryIndex(nextIndex);
-        skipSave.current = false;
-      });
-    }
-  }, [canvas, historyIndex, canRedo]);
+        save(true);
+      } finally {
+        finishRestore();
+      }
+    });
+  }, [canvas, cancelDebouncedPersist, finishRestore, save]);
 
-  return { 
+  return {
     save,
     canUndo,
     canRedo,
