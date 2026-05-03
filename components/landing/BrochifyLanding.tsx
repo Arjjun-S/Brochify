@@ -1,450 +1,468 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { Logo } from "@/components/ui/Logo";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
-  Award,
-  CheckCircle2,
+  BadgeCheck,
+  Download,
+  Eye,
   FileDown,
-  LayoutTemplate,
-  Send,
-  ShieldCheck,
-  PenLine,
+  FileText,
+  Layers3,
+  MousePointer2,
+  PenTool,
+  Play,
+  WandSparkles,
 } from "lucide-react";
-import {
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
-import LandingTileCanvas from "./LandingTileCanvas";
+import { useSyncExternalStore, type ReactNode } from "react";
 
-const fadeUp = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } };
-const softReveal = {
-  hidden: { opacity: 0, y: 16, scale: 0.98 },
-  show: { opacity: 1, y: 0, scale: 1 },
+const fadeUp = {
+  hidden: { opacity: 0, y: 22 },
+  show: { opacity: 1, y: 0 },
+};
+
+const stagger = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.08,
+    },
+  },
 };
 
 const emptySubscribe = () => () => {};
+
 function useHydrated() {
   return useSyncExternalStore(emptySubscribe, () => true, () => false);
 }
-
-type ClickBurst = { id: number; x: number; y: number };
 
 function loginNext(path: string) {
   return `/login?next=${encodeURIComponent(path)}`;
 }
 
-const workspaces: { title: string; meta: string; href: string; icon: ReactNode }[] = [
-  {
-    title: "Studio",
-    meta: "Brochures",
-    href: loginNext("/faculty/brochures/create"),
-    icon: <PenLine className="h-4 w-4" aria-hidden />,
-  },
-  {
-    title: "Certificates",
-    meta: "Issue",
-    href: loginNext("/faculty/certificates"),
-    icon: <Award className="h-4 w-4" aria-hidden />,
-  },
-  {
-    title: "Review",
-    meta: "Approve",
-    href: loginNext("/admin/dashboard"),
-    icon: <ShieldCheck className="h-4 w-4" aria-hidden />,
-  },
-  {
-    title: "Templates",
-    meta: "Brand",
-    href: loginNext("/studio"),
-    icon: <LayoutTemplate className="h-4 w-4" aria-hidden />,
-  },
-];
-
-const workflowSteps: { title: string; meta: string; icon: ReactNode }[] = [
-  {
-    title: "Brief",
-    meta: "Details in",
-    icon: <PenLine className="h-4 w-4" aria-hidden />,
-  },
-  {
-    title: "Design",
-    meta: "Layout set",
-    icon: <LayoutTemplate className="h-4 w-4" aria-hidden />,
-  },
-  {
-    title: "Review",
-    meta: "Admin pass",
-    icon: <CheckCircle2 className="h-4 w-4" aria-hidden />,
-  },
-  {
-    title: "Export",
-    meta: "PDF ready",
-    icon: <FileDown className="h-4 w-4" aria-hidden />,
-  },
-];
-
-const shouldUseLiteMode = () => {
-  if (typeof window === "undefined") return false;
-  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const saveData =
-    (window.navigator as Navigator & { connection?: { saveData?: boolean } }).connection
-      ?.saveData ?? false;
-  return prefersReducedMotion || saveData;
+type IconItem = {
+  title: string;
+  description?: string;
+  icon: ReactNode;
 };
+
+const trustedLogos = [
+  "SRM",
+  "IEEE Madras Section",
+  "School of Computing",
+  "IEEE TEMS",
+  "Institution's Innovation Council",
+];
+
+const highlights: IconItem[] = [
+  { title: "Easy to Use", icon: <MousePointer2 className="h-4 w-4" aria-hidden /> },
+  { title: "AI Powered", icon: <WandSparkles className="h-4 w-4" aria-hidden /> },
+  { title: "Bulk Generation", icon: <Layers3 className="h-4 w-4" aria-hidden /> },
+  { title: "Export as PDF", icon: <FileDown className="h-4 w-4" aria-hidden /> },
+];
+
+const features: IconItem[] = [
+  {
+    title: "Drag & Drop Editor",
+    description: "Canva-like editor with text, images, shapes, logos and custom layouts.",
+    icon: <MousePointer2 className="h-6 w-6" aria-hidden />,
+  },
+  {
+    title: "Smart Templates",
+    description: "Ready-made professional brochure and certificate templates.",
+    icon: <PenTool className="h-6 w-6" aria-hidden />,
+  },
+  {
+    title: "Bulk Certificate Generator",
+    description: "Upload data and generate hundreds of certificates instantly.",
+    icon: <Layers3 className="h-6 w-6" aria-hidden />,
+  },
+  {
+    title: "Approval Workflow",
+    description: "Admin approval system for authenticity, quality and control.",
+    icon: <BadgeCheck className="h-6 w-6" aria-hidden />,
+  },
+];
+
+const steps: IconItem[] = [
+  {
+    title: "Fill Details",
+    description: "Add basic information and content.",
+    icon: <FileText className="h-5 w-5" aria-hidden />,
+  },
+  {
+    title: "Customize",
+    description: "Edit the layout, colors and brand assets.",
+    icon: <PenTool className="h-5 w-5" aria-hidden />,
+  },
+  {
+    title: "Preview",
+    description: "Review your final design before export.",
+    icon: <Eye className="h-5 w-5" aria-hidden />,
+  },
+  {
+    title: "Download",
+    description: "Export as PDF or generate in bulk.",
+    icon: <Download className="h-5 w-5" aria-hidden />,
+  },
+];
 
 export default function BrochifyLanding() {
   const hydrated = useHydrated();
-  const [clickBursts, setClickBursts] = useState<ClickBurst[]>([]);
-  const ringRef = useRef<HTMLDivElement | null>(null);
-  const dotRef = useRef<HTMLDivElement | null>(null);
-
-  const liteMode = useSyncExternalStore(
-    (onStoreChange) => {
-      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-      const fn = () => onStoreChange();
-      mq.addEventListener("change", fn);
-      return () => mq.removeEventListener("change", fn);
-    },
-    () => shouldUseLiteMode(),
-    () => false,
-  );
-
-  const showMouseFx = useSyncExternalStore(
-    (onStoreChange) => {
-      const mq = window.matchMedia("(pointer: coarse)");
-      const fn = () => onStoreChange();
-      mq.addEventListener("change", fn);
-      return () => mq.removeEventListener("change", fn);
-    },
-    () => !liteMode && !window.matchMedia("(pointer: coarse)").matches,
-    () => false,
-  );
-
-  useEffect(() => {
-    if (!showMouseFx) return;
-
-    const applyPointerPosition = (x: number, y: number) => {
-      const ring = ringRef.current;
-      const dot = dotRef.current;
-      if (ring) {
-        ring.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) rotate(45deg)`;
-      }
-      if (dot) {
-        dot.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
-      }
-    };
-
-    const updatePointer = (event: PointerEvent) => {
-      applyPointerPosition(event.clientX, event.clientY);
-    };
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (liteMode) return;
-      const burstId = event.timeStamp + Math.random();
-      setClickBursts((prev) => [...prev.slice(-4), { id: burstId, x: event.clientX, y: event.clientY }]);
-      window.setTimeout(() => {
-        setClickBursts((prev) => prev.filter((b) => b.id !== burstId));
-      }, 420);
-    };
-
-    const hidePointer = () => {
-      applyPointerPosition(-120, -120);
-    };
-
-    window.addEventListener("pointermove", updatePointer, { passive: true });
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("pointerleave", hidePointer);
-
-    return () => {
-      window.removeEventListener("pointermove", updatePointer);
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("pointerleave", hidePointer);
-    };
-  }, [liteMode, showMouseFx]);
+  const studioHref = hydrated ? loginNext("/studio") : "/login";
+  const certificateHref = hydrated ? loginNext("/faculty/certificates") : "/login";
 
   return (
     <div
-      className="relative min-h-[100svh] w-full overflow-x-hidden bg-[#05040A] text-slate-200 selection:bg-violet-500/30"
+      className="min-h-screen bg-[#f7f9ff] text-[#0b163f] selection:bg-[#462E93]/20"
       style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
     >
-      {!liteMode && <LandingTileCanvas />}
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#031756]/65 px-4 py-3 backdrop-blur-xl sm:px-6">
+        <nav className="mx-auto flex h-14 max-w-[1180px] items-center justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <Image src="/icon-logo.png" alt="Brochify" width={42} height={42} className="h-10 w-10" priority />
+            <span className="leading-none">
+              <span
+                className="block text-lg font-extrabold tracking-tight text-white"
+                style={{ fontFamily: "var(--font-poppins), var(--font-inter), sans-serif" }}
+              >
+                BROCHIFY
+              </span>
+            </span>
+          </Link>
 
-      {showMouseFx && (
-        <>
-          <div
-            ref={ringRef}
-            aria-hidden
-            className="pointer-events-none fixed left-0 top-0 z-[29] h-7 w-7 border border-violet-400/30 will-change-transform"
-          />
-          <div
-            ref={dotRef}
-            aria-hidden
-            className="pointer-events-none fixed left-0 top-0 z-[29] h-1.5 w-1.5 rounded-full bg-violet-400/80 will-change-transform"
-          />
-
-          {clickBursts.map((burst) => (
-            <motion.div
-              key={burst.id}
-              aria-hidden
-              className="pointer-events-none fixed z-30 h-3 w-3 border border-violet-500/60"
-              initial={{ x: burst.x, y: burst.y, scale: 0.2, opacity: 0.95, rotate: 20 }}
-              animate={{ x: burst.x, y: burst.y, scale: 5.2, opacity: 0, rotate: 130 }}
-              transition={{ duration: 0.42, ease: [0.18, 0.78, 0.2, 1] }}
-              style={{ translateX: "-50%", translateY: "-50%" }}
-            />
-          ))}
-        </>
-      )}
-
-      <div className="relative z-10">
-        <header className="px-4 pt-4 sm:px-6 md:pt-6">
-          <div className="mx-auto flex h-14 w-full max-w-[1180px] items-center justify-between rounded-full border border-white/5 bg-[#0C0916]/80 px-3.5 shadow-2xl backdrop-blur-2xl sm:px-5">
-            <Link href="/" className="transition-opacity hover:opacity-80">
-              <Logo appearance="dark" iconClassName="h-8 w-8" textClassName="opacity-90 text-xl sm:text-2xl" />
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="rounded-full px-3 py-2 text-xs font-semibold text-white/85 transition hover:text-white"
+            >
+              Login
             </Link>
+            <Link
+              href={studioHref}
+              className="rounded-full bg-white px-4 py-2.5 text-xs font-bold text-[#462E93] shadow-[0_10px_24px_-10px_rgba(255,255,255,0.8)] transition hover:-translate-y-0.5 hover:bg-[#eef4ff]"
+            >
+              Get Started
+            </Link>
+          </div>
+        </nav>
+      </header>
 
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <Link
-                href="/login"
-                className="rounded-full px-3 py-2 text-[13px] font-semibold text-slate-400 transition hover:text-white sm:px-4"
+      <main>
+        <section className="relative overflow-hidden bg-[linear-gradient(125deg,#001846_0%,#002A82_45%,#462E93_100%)] pt-28 text-white sm:pt-32">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_83%_26%,rgba(255,255,255,0.15),transparent_28%),radial-gradient(circle_at_15%_10%,rgba(58,172,255,0.24),transparent_26%)]" />
+          <div className="absolute right-8 top-28 hidden h-56 w-56 bg-[radial-gradient(circle,rgba(255,255,255,0.18)_1.5px,transparent_1.5px)] [background-size:18px_18px] opacity-50 lg:block" />
+
+          <div className="relative mx-auto grid min-h-[610px] max-w-[1180px] gap-10 px-5 pb-24 sm:px-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+            <motion.div variants={stagger} initial="hidden" animate="show" className="max-w-2xl">
+              <motion.h1
+                variants={fadeUp}
+                className="max-w-[700px] text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-[4.55rem]"
+                style={{ fontFamily: "var(--font-poppins), var(--font-inter), sans-serif" }}
               >
-                Sign in
-              </Link>
-              <Link
-                href={hydrated ? loginNext("/studio") : "/login"}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black shadow-lg transition hover:bg-slate-200"
+                Create Stunning{" "}
+                <span className="text-[#37b7ff]">Brochures</span> &{" "}
+                <span className="text-[#b998ff]">Certificates</span> in Minutes
+              </motion.h1>
+              <motion.p variants={fadeUp} className="mt-5 max-w-[590px] text-base leading-8 text-white/78 sm:text-lg">
+                Design professional brochures and certificates with easy customization, bulk generation, and cloud
+                export. All in one powerful platform.
+              </motion.p>
+              <motion.div variants={fadeUp} className="mt-8 flex flex-wrap items-center gap-4">
+                <Link
+                  href={studioHref}
+                  className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#39b8ff,#9c4dff)] px-6 py-3.5 text-sm font-bold text-white shadow-[0_18px_34px_-18px_rgba(84,178,255,0.95)] transition hover:-translate-y-1"
+                >
+                  Start Creating For Free <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
+                <Link
+                  href="#templates"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/45 bg-white/7 px-6 py-3.5 text-sm font-bold text-white backdrop-blur-md transition hover:-translate-y-1 hover:bg-white/12"
+                >
+                  <Play className="h-4 w-4" aria-hidden /> View Demo
+                </Link>
+              </motion.div>
+              <motion.div variants={fadeUp} className="mt-10 flex flex-wrap gap-x-7 gap-y-4">
+                {highlights.map((item) => (
+                  <span key={item.title} className="inline-flex items-center gap-2 text-xs font-semibold text-white/88">
+                    {item.icon}
+                    {item.title}
+                  </span>
+                ))}
+              </motion.div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 28, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.75, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+              className="relative min-h-[420px] lg:min-h-[520px]"
+            >
+              <motion.div
+                animate={{ y: [0, -12, 0] }}
+                transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute left-0 top-8 w-[58%] min-w-[280px] max-w-[430px] origin-bottom rotate-[-8deg] drop-shadow-[0_28px_40px_rgba(0,0,0,0.35)]"
               >
-                Open <ArrowRight className="h-3.5 w-3.5 opacity-80" aria-hidden />
+                <Image
+                  src="/brochure.png"
+                  alt="Blue folded brochure preview"
+                  width={1270}
+                  height={1239}
+                  className="h-auto w-full"
+                  priority
+                />
+              </motion.div>
+              <motion.div
+                animate={{ y: [0, 14, 0] }}
+                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute bottom-4 right-0 w-[64%] min-w-[300px] max-w-[500px] rotate-[4deg] drop-shadow-[0_30px_46px_rgba(0,0,0,0.38)]"
+              >
+                <Image
+                  src="/certificate.png"
+                  alt="Purple certificate preview"
+                  width={1334}
+                  height={1179}
+                  className="h-auto w-full"
+                  priority
+                />
+              </motion.div>
+            </motion.div>
+          </div>
+          <div className="absolute -bottom-px left-0 h-14 w-full rounded-t-[50%] bg-[#f7f9ff]" />
+        </section>
+
+        <section className="mx-auto max-w-[1180px] px-5 py-12 sm:px-6">
+          <p className="text-center text-[11px] font-extrabold uppercase tracking-[0.28em] text-[#7969b2]">
+            Import logos easily
+          </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {trustedLogos.map((logo) => (
+              <motion.div
+                key={logo}
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="flex min-h-20 items-center justify-center rounded-2xl border border-[#e8edff] bg-white px-5 text-center text-sm font-extrabold text-[#1c3679] shadow-[0_16px_40px_-28px_rgba(42,58,117,0.65)]"
+              >
+                {logo}
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        <section id="features" className="mx-auto max-w-[1180px] px-5 py-10 sm:px-6">
+          <div className="text-center">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-[#7d62db]">Powerful Features</p>
+            <h2
+              className="mt-2 text-3xl font-extrabold tracking-tight text-[#111b45] sm:text-4xl"
+              style={{ fontFamily: "var(--font-poppins), var(--font-inter), sans-serif" }}
+            >
+              Everything You Need to Create Professionally
+            </h2>
+          </div>
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {features.map((feature, index) => (
+              <motion.div
+                key={feature.title}
+                initial={{ opacity: 0, y: 18 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.05 }}
+                className="group rounded-2xl border border-[#edf1ff] bg-white p-7 text-center shadow-[0_20px_50px_-32px_rgba(42,58,117,0.85)] transition duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-[0_28px_70px_-32px_rgba(70,46,147,0.8)]"
+              >
+                <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#2fb9ff,#8d4dff)] text-white shadow-[0_14px_24px_-14px_rgba(70,46,147,0.9)]">
+                  {feature.icon}
+                </span>
+                <h3 className="mt-6 text-base font-extrabold text-[#172052]">{feature.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-[#657092]">{feature.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        <section id="how-it-works" className="mx-auto max-w-[1180px] px-5 py-12 sm:px-6">
+          <div className="text-center">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-[#7d62db]">How It Works</p>
+            <h2
+              className="mt-2 text-3xl font-extrabold tracking-tight text-[#111b45] sm:text-4xl"
+              style={{ fontFamily: "var(--font-poppins), var(--font-inter), sans-serif" }}
+            >
+              Simple Steps, Amazing Results
+            </h2>
+          </div>
+          <div className="relative mt-12 grid gap-7 md:grid-cols-4">
+            <div className="absolute left-[12%] right-[12%] top-8 hidden border-t border-dashed border-[#b8c4ff] md:block" />
+            {steps.map((step, index) => (
+              <motion.div
+                key={step.title}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.05 }}
+                className="relative text-center"
+              >
+                <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[#edf1ff] bg-white text-[#7c51ff] shadow-[0_16px_40px_-28px_rgba(42,58,117,0.7)]">
+                  {step.icon}
+                </span>
+                <h3 className="mt-5 text-sm font-extrabold text-[#111b45]">
+                  {index + 1}. {step.title}
+                </h3>
+                <p className="mx-auto mt-2 max-w-[170px] text-xs leading-5 text-[#707a9b]">{step.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        <section id="templates" className="mx-auto max-w-[1180px] px-5 py-10 sm:px-6">
+          <div className="rounded-3xl border border-[#e5ebff] bg-[linear-gradient(135deg,#eef5ff,#f4eefe)] p-6 shadow-[0_24px_70px_-45px_rgba(42,58,117,0.9)] sm:p-8">
+            <div className="text-center">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-[#7d62db]">
+                Beautiful Templates
+              </p>
+              <h2
+                className="mt-2 text-3xl font-extrabold tracking-tight text-[#111b45] sm:text-4xl"
+                style={{ fontFamily: "var(--font-poppins), var(--font-inter), sans-serif" }}
+              >
+                Professionally Designed for Every Need
+              </h2>
+            </div>
+            <div className="mt-8 grid gap-8 lg:grid-cols-2">
+              <div className="grid gap-5 sm:grid-cols-[0.9fr_1.1fr] sm:items-center">
+                <div>
+                  <h3 className="text-xl font-extrabold text-[#172052]">Brochure Templates</h3>
+                  <p className="mt-3 text-sm leading-6 text-[#657092]">
+                    Business, events, academic and institutional layouts ready for customization.
+                  </p>
+                  <Link
+                    href={studioHref}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#7b55e7] bg-white/55 px-5 py-3 text-sm font-bold text-[#462E93] transition hover:-translate-y-1 hover:bg-white"
+                  >
+                    Explore Brochures <ArrowRight className="h-4 w-4" aria-hidden />
+                  </Link>
+                </div>
+                <Image
+                  src="/brochure.png"
+                  alt="Brochure templates"
+                  width={1270}
+                  height={1239}
+                  className="mx-auto w-full max-w-[320px] drop-shadow-[0_20px_26px_rgba(0,42,130,0.16)]"
+                />
+              </div>
+              <div className="grid gap-5 sm:grid-cols-[0.9fr_1.1fr] sm:items-center">
+                <div>
+                  <h3 className="text-xl font-extrabold text-[#172052]">Certificate Templates</h3>
+                  <p className="mt-3 text-sm leading-6 text-[#657092]">
+                    Elegant certificates for participation, achievement, awards and events.
+                  </p>
+                  <Link
+                    href={certificateHref}
+                    className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#7b55e7] bg-white/55 px-5 py-3 text-sm font-bold text-[#462E93] transition hover:-translate-y-1 hover:bg-white"
+                  >
+                    Explore Certificates <ArrowRight className="h-4 w-4" aria-hidden />
+                  </Link>
+                </div>
+                <Image
+                  src="/certificate.png"
+                  alt="Certificate templates"
+                  width={1334}
+                  height={1179}
+                  className="mx-auto w-full max-w-[330px] drop-shadow-[0_20px_26px_rgba(70,46,147,0.18)]"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="mx-auto max-w-[1180px] px-5 py-12 sm:px-6">
+          <div className="overflow-hidden rounded-3xl bg-[linear-gradient(110deg,#002A82,#462E93,#a83cf0)] p-8 text-white shadow-[0_24px_70px_-38px_rgba(70,46,147,0.95)] sm:p-10">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2
+                  className="text-2xl font-extrabold tracking-tight sm:text-3xl"
+                  style={{ fontFamily: "var(--font-poppins), var(--font-inter), sans-serif" }}
+                >
+                  Ready to Create Something Amazing?
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-white/78">
+                  Join thousands of users who trust Brochify for their professional designs.
+                </p>
+              </div>
+              <Link
+                href={studioHref}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-extrabold text-[#462E93] shadow-[0_16px_30px_-18px_rgba(255,255,255,0.85)] transition hover:-translate-y-1"
+              >
+                Get Started For Free <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
             </div>
           </div>
-        </header>
+        </section>
+      </main>
 
-        <main className="relative">
-          <section className="mx-auto w-full max-w-[1180px] px-5 pb-8 pt-8 sm:px-6 md:pb-12 md:pt-10">
-            <motion.div
-              variants={softReveal}
-              initial="hidden"
-              animate="show"
-              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-              className="relative overflow-hidden rounded-[2.6rem] border border-white/5 bg-[#0C0916]/90 p-5 shadow-[0_20px_80px_-20px_rgba(0,0,0,0.8)] backdrop-blur-2xl sm:p-7 lg:p-10"
-            >
-              <div className="pointer-events-none absolute -right-10 -top-20 h-64 w-64 rounded-full bg-violet-600/10 blur-[80px]" />
-              <div className="pointer-events-none absolute -bottom-20 left-1/4 h-56 w-56 rounded-full bg-fuchsia-600/5 blur-[80px]" />
-
-              <div className="relative grid gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
-                <div className="max-w-xl">
-                  <motion.div
-                    variants={fadeUp}
-                    initial="hidden"
-                    animate="show"
-                    transition={{ duration: 0.5, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/10 px-3.5 py-1.5 backdrop-blur-md">
-                      <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
-                      <span className="text-xs font-semibold tracking-wide text-violet-300">
-                        Campus Collateral
-                      </span>
-                    </div>
-                    <h1 className="mt-6 max-w-[12ch] text-[3.5rem] font-bold leading-[1.05] tracking-tight text-white sm:text-[4.5rem] lg:text-[5.2rem]">
-                      Draft to <br className="hidden sm:block" />
-                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-300 via-fuchsia-300 to-violet-300">
-                        approved PDF.
-                      </span>
-                    </h1>
-                    <p className="mt-6 max-w-md text-base leading-relaxed text-slate-400 sm:text-lg">
-                      Empower faculty teams to effortlessly design, review, and export beautifully branded brochures and certificates.
-                    </p>
-                    <div className="mt-7 flex flex-wrap items-center gap-3">
-                      <Link
-                        href={hydrated ? loginNext("/studio") : "/login"}
-                        className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-black shadow-lg transition hover:-translate-y-0.5 hover:bg-slate-200"
-                      >
-                        Open studio <ArrowRight className="h-4 w-4 opacity-90" aria-hidden />
-                      </Link>
-                    </div>
-                  </motion.div>
-                </div>
-
-                <motion.div
-                  variants={softReveal}
-                  initial="hidden"
-                  animate="show"
-                  transition={{ duration: 0.55, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-                  className="relative min-h-[390px] lg:min-h-[455px]"
-                >
-                  <div className="absolute left-2 top-8 hidden h-40 w-40 rounded-[2rem] border border-white/5 bg-[#120F1C] shadow-[0_20px_60px_-10px_rgba(0,0,0,0.5)] sm:block" />
-
-                  <div className="absolute left-0 top-3 w-[68%] min-w-[290px] max-w-[430px] rotate-[-3deg] rounded-[2rem] border border-white/5 bg-[#120F1C] p-3 shadow-2xl">
-                    <div className="flex items-center justify-between px-2 pb-3 pt-1">
-                      <div className="flex gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F56] border border-[#E0443E]" />
-                        <span className="h-2.5 w-2.5 rounded-full bg-[#FFBD2E] border border-[#DEA123]" />
-                        <span className="h-2.5 w-2.5 rounded-full bg-[#27C93F] border border-[#1AAB29]" />
-                      </div>
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                        Studio
-                      </span>
-                    </div>
-
-                    <div className="rounded-[1.45rem] bg-[#0A0810] p-4 border border-white/5">
-                      <div className="rounded-[1.1rem] bg-[linear-gradient(135deg,#7c3aed_0%,#a855f7_100%)] p-5 text-white shadow-inner relative overflow-hidden">
-                        <div className="absolute inset-0 bg-black/10 mix-blend-overlay" />
-                        <div className="h-2 w-16 rounded-full bg-white/40" />
-                        <div className="mt-14 space-y-2 relative">
-                          <div className="h-4 w-40 rounded-full bg-white/90" />
-                          <div className="h-2.5 w-52 rounded-full bg-white/60" />
-                          <div className="h-2.5 w-32 rounded-full bg-white/40" />
-                        </div>
-                      </div>
-                      <div className="mt-4 grid grid-cols-3 gap-3">
-                        <div className="h-20 rounded-2xl bg-[#1A1629] border border-white/5" />
-                        <div className="h-20 rounded-2xl bg-[#1A1629] border border-white/5" />
-                        <div className="h-20 rounded-2xl bg-[#1A1629] border border-white/5" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="absolute right-0 top-20 w-[54%] min-w-[245px] rounded-[1.75rem] border border-white/5 bg-[#161324] p-5 shadow-2xl">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Approval</p>
-                      <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400 border border-emerald-500/20">
-                        Live
-                      </span>
-                    </div>
-                    <div className="mt-5 space-y-3">
-                      {["Faculty draft", "Admin review", "PDF export"].map((item, index) => (
-                        <div key={item} className="flex items-center gap-3">
-                          <span
-                            className={[
-                              "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold border",
-                              index === 2 
-                                ? "bg-violet-600 text-white border-violet-500 shadow-md" 
-                                : "bg-[#0A0810] text-slate-400 border-white/5",
-                            ].join(" ")}
-                          >
-                            {index + 1}
-                          </span>
-                          <span className={index === 2 ? "text-sm font-semibold text-white" : "text-sm font-medium text-slate-400"}>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="absolute bottom-7 left-[18%] flex items-center gap-3 rounded-full border border-white/5 bg-[#1C182B] px-4 py-3 shadow-2xl">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white shadow-md">
-                      <Send className="h-4 w-4" aria-hidden />
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-white">Ready to publish</p>
-                      <p className="text-xs font-medium text-slate-400">Signed-off export</p>
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-            </motion.div>
-          </section>
-
-          <section className="mx-auto w-full max-w-[1180px] px-5 pb-10 sm:px-6 md:pb-14">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-              className="relative overflow-hidden rounded-[2.25rem] border border-white/5 bg-[#0C0916]/90 p-5 shadow-[0_20px_80px_-20px_rgba(0,0,0,0.8)] backdrop-blur-2xl sm:p-6 md:p-8"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-violet-400">
-                    Workflow
-                  </p>
-                  <h2 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                    Approval lane
-                  </h2>
-                </div>
-                <p className="max-w-xs text-sm leading-6 text-slate-400">
-                  Every handoff stays visible.
-                </p>
-              </div>
-
-              <div className="relative mt-8 rounded-[1.7rem] border border-white/5 bg-[#120F1C] p-4 sm:p-5">
-                <div className="absolute left-10 right-10 top-1/2 hidden h-[1px] -translate-y-1/2 bg-white/5 sm:block" />
-                <div className="grid gap-3 sm:grid-cols-4">
-                  {workflowSteps.map((step, index) => (
-                    <motion.div
-                      key={step.title}
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.28, delay: index * 0.05 }}
-                      className={[
-                        "group relative rounded-[1.35rem] border border-white/5 bg-[#161324] p-5 shadow-xl hover:bg-[#1C182B] hover:border-white/10 transition-all",
-                        index % 2 === 0 ? "sm:-translate-y-3" : "sm:translate-y-3",
-                      ].join(" ")}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#201C33] border border-white/5 text-violet-400 group-hover:bg-violet-600 group-hover:text-white transition-colors">
-                          {step.icon}
-                        </span>
-                        <span className="text-xs font-bold text-slate-500">0{index + 1}</span>
-                      </div>
-                      <p className="mt-6 text-base font-semibold text-slate-100">{step.title}</p>
-                      <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                        {step.meta}
-                      </p>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          </section>
-
-          <section className="mx-auto w-full max-w-[1180px] px-5 pb-16 sm:px-6 md:pb-24">
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-            >
-              {workspaces.map((tool) => (
-                <Link
-                  key={tool.title}
-                  href={tool.href}
-                  className="group flex items-center justify-between gap-4 rounded-[1.35rem] border border-white/5 bg-[#0C0916]/90 p-5 shadow-xl backdrop-blur-xl transition-all hover:-translate-y-1 hover:bg-[#120F1C] hover:border-white/10"
-                >
-                  <span className="flex items-center gap-4">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1A1629] border border-white/5 text-slate-300 transition-colors group-hover:bg-violet-600/20 group-hover:text-violet-300 group-hover:border-violet-500/30">
-                      {tool.icon}
-                    </span>
-                    <span>
-                      <span className="block text-[15px] font-semibold text-slate-100">{tool.title}</span>
-                      <span className="text-xs font-medium text-slate-500 mt-0.5 block">{tool.meta}</span>
-                    </span>
-                  </span>
-                  <ArrowRight
-                    className="h-4 w-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-violet-400"
-                    aria-hidden
-                  />
-                </Link>
-              ))}
-            </motion.div>
-          </section>
-        </main>
-
-        <footer className="relative px-5 pb-8 sm:px-6">
-          <div className="mx-auto flex w-full max-w-[1180px] flex-col items-center justify-between gap-2 border-t border-white/5 pt-6 sm:flex-row">
-            <span className="text-[11px] font-medium text-slate-500">© {new Date().getFullYear()} Brochify</span>
-            <span className="text-[11px] text-slate-500">Built for campus teams.</span>
+      <footer id="footer" className="bg-[#03122f] px-5 py-10 text-white sm:px-6">
+        <div className="mx-auto grid max-w-[1180px] gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div>
+            <div className="flex items-center gap-3">
+              <Image src="/icon-logo.png" alt="Brochify" width={42} height={42} className="h-10 w-10" />
+              <span
+                className="text-xl font-extrabold tracking-tight"
+                style={{ fontFamily: "var(--font-poppins), var(--font-inter), sans-serif" }}
+              >
+                BROCHIFY
+              </span>
+            </div>
+            <p className="mt-4 max-w-xs text-sm leading-7 text-white/62">
+              The all-in-one platform to create professional brochures and certificates in minutes.
+            </p>
           </div>
-        </footer>
-      </div>
+          <div>
+            <h3 className="text-sm font-extrabold">Product</h3>
+            <div className="mt-4 space-y-3 text-sm text-white/62">
+              <a href="#features" className="block transition hover:text-white">
+                Features
+              </a>
+              <a href="#templates" className="block transition hover:text-white">
+                Templates
+              </a>
+              <Link href={studioHref} className="block transition hover:text-white">
+                Get Started
+              </Link>
+            </div>
+          </div>
+          <div>
+            <h3 className="text-sm font-extrabold">Resources</h3>
+            <div className="mt-4 space-y-3 text-sm text-white/62">
+              <Link href="/help" className="block transition hover:text-white">
+                Help
+              </Link>
+              <Link href="/tutorials" className="block transition hover:text-white">
+                Tutorials
+              </Link>
+            </div>
+          </div>
+          <div>
+            <h3 className="text-sm font-extrabold">Company</h3>
+            <div className="mt-4 space-y-3 text-sm text-white/62">
+              <Link href="/about" className="block transition hover:text-white">
+                About
+              </Link>
+              <Link href="/contact" className="block transition hover:text-white">
+                Contact
+              </Link>
+              <Link href="/privacy-policy" className="block transition hover:text-white">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" className="block transition hover:text-white">
+                Terms
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="mx-auto mt-10 max-w-[1180px] border-t border-white/10 pt-5 text-center text-xs text-white/52">
+          © 2026 Brochify. All rights reserved.
+        </div>
+      </footer>
     </div>
   );
 }
