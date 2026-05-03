@@ -19,31 +19,31 @@ const mentors = [
 const developers = [
   {
     name: "Dhanush S",
-    image: "/student1.png",
+    image: "/dhanush.jpeg",
     github: "https://github.com/Cosmos-0118",
     linkedin: "https://www.linkedin.com/in/dhanushs-dev/",
   },
   {
     name: "Bala Tharun R",
-    image: "/student2.png",
+    image: "/bala tharun.jpeg",
     github: "https://github.com/balatharunr",
     linkedin: "https://www.linkedin.com/in/balatharunr/",
   },
   {
     name: "Arjjun S",
-    image: "/student3.png",
+    image: "/arjjun.jpeg",
     github: "https://github.com/Arjjun-S",
     linkedin: "https://www.linkedin.com/in/arjjuns/",
   },
   {
     name: "Priyan",
-    image: "/student4.png",
+    image: "/priyan.jpeg",
     github: "https://github.com/Skygazer1111",
     linkedin: "https://www.linkedin.com/in/priyan-rajarajan-b8128b2a2/",
   },
   {
     name: "Hariharan D",
-    image: "/student5.png",
+    image: "/hariharan.jpeg",
     github: "https://github.com/HARIHARAN-38",
     linkedin: "https://www.linkedin.com/in/hariharan38/",
   },
