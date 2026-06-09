@@ -20,35 +20,35 @@ enum ReviewStatus {
 }
 
 model User {
-  id                   Int           @id @default(autoincrement())
-  username             String        @unique @db.VarChar(64)
-  password             String?       @db.VarChar(255)
-  passwordHash         String?       @map("password_hash") @db.VarChar(255)
+  id                   Int            @id @default(autoincrement())
+  username             String         @unique @db.VarChar(64)
+  password             String?        @db.VarChar(255)
+  passwordHash         String?        @map("password_hash") @db.VarChar(255)
   role                 UserRole
-  createdAt            DateTime      @default(now()) @map("created_at")
-  createdBrochures     Brochure[]    @relation("BrochureCreator")
-  assignedBrochures    Brochure[]    @relation("BrochureAssignee")
-  createdCertificates  Certificate[] @relation("CertificateCreator")
-  assignedCertificates Certificate[] @relation("CertificateAssignee")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  createdBrochures     Brochure[]     @relation("BrochureCreator")
+  assignedBrochures    Brochure[]     @relation("BrochureAssignee")
+  createdCertificates  Certificate[]  @relation("CertificateCreator")
+  assignedCertificates Certificate[]  @relation("CertificateAssignee")
   designProjects       DesignProject[] @relation("DesignProjectCreator")
 
   @@map("users")
 }
 
 model Brochure {
-  id                Int          @id @default(autoincrement())
-  title             String       @db.VarChar(255)
-  description       String       @db.Text
+  id                Int            @id @default(autoincrement())
+  title             String         @db.VarChar(255)
+  description       String         @db.Text
   content           Json
-  createdBy         Int          @map("created_by")
-  assignedAdminId   Int          @map("assigned_admin")
-  status            ReviewStatus @default(draft)
-  rejectionReason   String?      @map("rejection_reason") @db.Text
-  createdAt         DateTime     @default(now()) @map("created_at")
-  updatedAt         DateTime     @updatedAt @map("updated_at")
-  designProject     DesignProject?
-  creator           User         @relation("BrochureCreator", fields: [createdBy], references: [id], onDelete: Cascade)
-  assignedAdminUser User         @relation("BrochureAssignee", fields: [assignedAdminId], references: [id], onDelete: Cascade)
+  createdBy         Int            @map("created_by")
+  assignedAdminId   Int            @map("assigned_admin")
+  status            ReviewStatus   @default(draft)
+  rejectionReason   String?        @map("rejection_reason") @db.Text
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  designProject      DesignProject? @relation("BrochureDesignProject")
+  creator           User           @relation("BrochureCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  assignedAdminUser User           @relation("BrochureAssignee", fields: [assignedAdminId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([createdBy])
@@ -77,32 +77,32 @@ model Certificate {
 }
 
 model Asset {
-  id           Int      @id @default(autoincrement())
-  name         String   @db.VarChar(255)
-  type         String   @db.VarChar(50)
-  cloudinaryUrl String  @map("cloudinary_url") @db.VarChar(512)
-  cloudinaryPublicId String @map("cloudinary_public_id") @db.VarChar(255)
-  createdAt    DateTime @default(now()) @map("created_at")
+  id                 Int      @id @default(autoincrement())
+  name               String   @db.VarChar(255)
+  type               String   @db.VarChar(50)
+  cloudinaryUrl      String   @map("cloudinary_url") @db.VarChar(512)
+  cloudinaryPublicId String   @map("cloudinary_public_id") @db.VarChar(255)
+  createdAt          DateTime @default(now()) @map("created_at")
 
   @@index([type])
   @@map("assets")
 }
 
 model DesignProject {
-  id            Int      @id @default(autoincrement())
-  name          String   @db.VarChar(255)
-  json          String   @db.LongText
-  width         Int      @default(900)
-  height        Int      @default(1200)
-  thumbnailUrl  String?  @map("thumbnail_url") @db.VarChar(512)
-  isTemplate    Boolean  @default(false) @map("is_template")
-  isPro         Boolean  @default(false) @map("is_pro")
-  brochureId    Int?     @unique @map("brochure_id")
-  createdBy     Int      @map("created_by")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  brochure      Brochure? @relation(fields: [brochureId], references: [id], onDelete: SetNull)
-  creator       User     @relation("DesignProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  id           Int          @id @default(autoincrement())
+  name         String       @db.VarChar(255)
+  json         String       @db.LongText
+  width        Int          @default(900)
+  height       Int          @default(1200)
+  thumbnailUrl String?      @map("thumbnail_url") @db.VarChar(512)
+  isTemplate   Boolean      @default(false) @map("is_template")
+  isPro        Boolean      @default(false) @map("is_pro")
+  brochureId   Int?         @unique @map("brochure_id")
+  createdBy    Int          @map("created_by")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  brochure     Brochure?    @relation("BrochureDesignProject", fields: [brochureId], references: [id], onDelete: SetNull)
+  creator      User         @relation("DesignProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
 
   @@index([createdBy])
   @@index([isTemplate])
