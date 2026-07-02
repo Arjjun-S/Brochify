@@ -2,8 +2,8 @@ import { fabric } from "fabric";
 import { useEffect, useRef } from "react";
 
 import { JSON_KEYS } from "@/features/editor/types";
-import { finalizeFabricTextObjectsAfterLoad, sanitizeCanvasState, generateWatermarkedDataUrl, rebuildInteractiveElements } from "@/features/editor/utils";
-import { applyCertificatePlaceholders } from "@/lib/domains/certificate";
+import { finalizeFabricTextObjectsAfterLoad, sanitizeCanvasState, generateWatermarkedDataUrl, rebuildInteractiveElements, sanitizeFabricObjectsBeforeLoad } from "@/features/editor/utils";
+import { applyCertificatePlaceholders, CERTIFICATE_PAGE_WIDTH, CERTIFICATE_PAGE_HEIGHT } from "@/lib/domains/certificate";
 
 interface UseLoadStateProps {
   autoZoom: () => void;
@@ -12,6 +12,7 @@ interface UseLoadStateProps {
   canvasHistory: React.MutableRefObject<string[]>;
   setHistoryIndex: React.Dispatch<React.SetStateAction<number>>;
   isApproved?: boolean;
+  isCertificate?: boolean;
 };
 
 export const useLoadState = ({
@@ -21,6 +22,7 @@ export const useLoadState = ({
   canvasHistory,
   setHistoryIndex,
   isApproved = false,
+  isCertificate = false,
 }: UseLoadStateProps) => {
   const initialized = useRef(false);
 
@@ -50,6 +52,15 @@ export const useLoadState = ({
         return;
       }
 
+      if (parsedState.objects) {
+        parsedState.objects = sanitizeFabricObjectsBeforeLoad(parsedState.objects);
+      }
+
+      if (parsedState.backgroundImage && typeof parsedState.backgroundImage.src === "string") {
+        parsedState.backgroundImage.src = parsedState.backgroundImage.src.split("?")[0] + "?c_cache=1";
+        parsedState.backgroundImage.crossOrigin = "anonymous";
+      }
+
       // Asynchronously preprocess signatures and brochitextboxes
       const preprocess = async () => {
         const parsed = parsedState as Record<string, unknown>;
@@ -77,64 +88,71 @@ export const useLoadState = ({
       };
 
       preprocess().then(() => {
-        canvas.loadFromJSON(parsedState as Record<string, unknown>, () => {
-          canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-          finalizeFabricTextObjectsAfterLoad(canvas);
-
-          // Recreate workspace clip if missing (loadFromJSON overwrites canvas objects)
-          let workspace = canvas.getObjects().find((object) => object.name === "clip");
-          if (!workspace) {
-            workspace = new fabric.Rect({
-              width: 983,
-              height: 680,
-              name: "clip",
-              fill: "white",
-              stroke: "#e2e8f0",
-              strokeWidth: 1,
-              selectable: false,
-              hasControls: false,
-              shadow: new fabric.Shadow({
-                color: "rgba(0,0,0,0.15)",
-                blur: 8,
-                offsetX: 0,
-                offsetY: 2,
-              }),
-            });
-            canvas.add(workspace);
-            canvas.centerObject(workspace);
-            canvas.sendToBack(workspace);
-          }
-
-          // Fit background image to workspace
-          const bg = canvas.backgroundImage;
-          if (bg) {
-            const workspaceWidth = workspace.width ?? 983;
-            const workspaceHeight = workspace.height ?? 680;
-            bg.set({
-              originX: "left",
-              originY: "top",
-              left: workspace.left ?? 0,
-              top: workspace.top ?? 0,
-              scaleX: workspaceWidth / (bg.width || 1),
-              scaleY: workspaceHeight / (bg.height || 1),
-            });
-          }
-
-          rebuildInteractiveElements(canvas);
-
-          let currentState: string;
+        if (!canvas) return;
+        requestAnimationFrame(() => {
           try {
-            currentState = JSON.stringify(
-              canvas.toJSON(JSON_KEYS),
-            );
-          } catch {
-            autoZoom();
-            return;
-          }
+            canvas.loadFromJSON(parsedState as Record<string, unknown>, () => {
+              canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+              finalizeFabricTextObjectsAfterLoad(canvas);
 
-          canvasHistory.current = [currentState];
-          setHistoryIndex(0);
-          autoZoom();
+              // Recreate workspace clip if missing (loadFromJSON overwrites canvas objects)
+              let workspace = canvas.getObjects().find((object) => object.name === "clip");
+              if (!workspace) {
+                workspace = new fabric.Rect({
+                  width: isCertificate ? CERTIFICATE_PAGE_WIDTH : 983,
+                  height: isCertificate ? CERTIFICATE_PAGE_HEIGHT : 680,
+                  name: "clip",
+                  fill: isCertificate ? "transparent" : "white",
+                  stroke: "#e2e8f0",
+                  strokeWidth: 1,
+                  selectable: false,
+                  hasControls: false,
+                  shadow: new fabric.Shadow({
+                    color: "rgba(0,0,0,0.15)",
+                    blur: 8,
+                    offsetX: 0,
+                    offsetY: 2,
+                  }),
+                });
+                canvas.add(workspace);
+                canvas.centerObject(workspace);
+                canvas.sendToBack(workspace);
+              }
+
+              // Fit background image to workspace
+              const bg = canvas.backgroundImage;
+              if (bg) {
+                const workspaceWidth = workspace.width ?? (isCertificate ? CERTIFICATE_PAGE_WIDTH : 983);
+                const workspaceHeight = workspace.height ?? (isCertificate ? CERTIFICATE_PAGE_HEIGHT : 680);
+                bg.set({
+                  originX: "left",
+                  originY: "top",
+                  left: workspace.left ?? 0,
+                  top: workspace.top ?? 0,
+                  scaleX: workspaceWidth / (bg.width || 1),
+                  scaleY: workspaceHeight / (bg.height || 1),
+                });
+              }
+
+              rebuildInteractiveElements(canvas);
+
+              let currentState: string;
+              try {
+                currentState = JSON.stringify(
+                  canvas.toJSON(JSON_KEYS),
+                );
+              } catch {
+                autoZoom();
+                return;
+              }
+
+              canvasHistory.current = [currentState];
+              setHistoryIndex(0);
+              autoZoom();
+            });
+          } catch (e) {
+            console.error("loadFromJSON error:", e);
+          }
         });
       });
       initialized.current = true;

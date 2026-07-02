@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,19 +7,47 @@ import Papa from "papaparse";
 import readXlsxFile from "read-excel-file/browser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Editor } from "@/features/editor/types";
 
 interface BulkExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   certificateId: string;
+  editor: Editor | undefined;
 }
 
-export const BulkExportModal = ({ isOpen, onClose, certificateId }: BulkExportModalProps) => {
+export const BulkExportModal = ({ isOpen, onClose, certificateId, editor }: BulkExportModalProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [format, setFormat] = useState<"pdf" | "png" | "jpg">("pdf");
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+
+  const getPlaceholdersInUse = () => {
+    const brochiObj = editor?.canvas?.getObjects().find(o => o.name === "brochitextbox") as any;
+    if (brochiObj) {
+      const text = brochiObj.originalText || brochiObj.text || "";
+      const matches = text.match(/\{[a-zA-Z0-9_]+\}/g) || [];
+      const extracted = Array.from(new Set(matches.map((m: string) => m.slice(1, -1))));
+      if (extracted.length > 0) return extracted;
+    }
+    return ["salutation", "name", "year", "prize", "event", "date", "organization"];
+  };
+
+  const placeholders = getPlaceholdersInUse();
+  const fileColumns = parsedRows.length > 0 ? Object.keys(parsedRows[0]) : [];
+
+  const initializeMapping = (rows: any[]) => {
+    if (rows.length === 0) return;
+    const cols = Object.keys(rows[0]);
+    const initialMap: Record<string, string> = {};
+    placeholders.forEach(pl => {
+      const match = cols.find(c => c.toLowerCase() === pl.toLowerCase()) || "";
+      initialMap[pl] = match;
+    });
+    setColumnMapping(initialMap);
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -30,6 +56,7 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId }: BulkExportMo
     setFile(selectedFile);
     setParsing(true);
     setParsedRows([]);
+    setColumnMapping({});
 
     try {
       const extension = selectedFile.name.split(".").pop()?.toLowerCase();
@@ -47,6 +74,7 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId }: BulkExportMo
               return normalizedRow;
             });
             setParsedRows(data);
+            initializeMapping(data);
             setParsing(false);
             toast.success(`Successfully parsed ${data.length} student rows!`);
           },
@@ -71,6 +99,7 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId }: BulkExportMo
               return normalizedRow;
             });
             setParsedRows(data);
+            initializeMapping(data);
             toast.success(`Successfully parsed ${data.length} student rows!`);
           } catch (err: any) {
             toast.error(`JSON parsing error: ${err.message}`);
@@ -95,6 +124,7 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId }: BulkExportMo
           return obj;
         });
         setParsedRows(data);
+        initializeMapping(data);
         setParsing(false);
         toast.success(`Successfully parsed ${data.length} student rows!`);
       } else {
@@ -118,6 +148,16 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId }: BulkExportMo
     setLoading(true);
 
     try {
+      const mappedRows = parsedRows.map((row) => {
+        const mapped: Record<string, string> = { ...row };
+        Object.entries(columnMapping).forEach(([placeholder, fileHeader]) => {
+          if (fileHeader) {
+            mapped[placeholder] = row[fileHeader] || "";
+          }
+        });
+        return mapped;
+      });
+
       const response = await fetch(`/api/certificate/${certificateId}/bulk-generate`, {
         method: "POST",
         headers: {
@@ -125,7 +165,7 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId }: BulkExportMo
         },
         body: JSON.stringify({
           format,
-          rows: parsedRows,
+          rows: mappedRows,
         }),
       });
 
@@ -200,6 +240,31 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId }: BulkExportMo
               </div>
             </div>
           </div>
+
+          {parsedRows.length > 0 && (
+            <div className="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+              <Label className="text-xs font-semibold text-slate-300">Map placeholders to file columns:</Label>
+              <div className="space-y-2">
+                {placeholders.map((pl) => (
+                  <div key={pl} className="flex items-center justify-between gap-x-4">
+                    <span className="text-xs font-mono text-indigo-400 font-semibold">{`{${pl}}`}</span>
+                    <select
+                      value={columnMapping[pl] || ""}
+                      onChange={(e) => setColumnMapping({ ...columnMapping, [pl]: e.target.value })}
+                      className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white max-w-[200px] outline-none focus:border-indigo-500"
+                    >
+                      <option value="">-- Ignore / Empty --</option>
+                      {fileColumns.map((col) => (
+                        <option key={col} value={col}>
+                          {col}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-2 p-3.5 bg-indigo-950/30 border border-indigo-900/40 rounded-lg text-[11px] leading-relaxed text-indigo-300">
             <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-indigo-400" />

@@ -1,8 +1,8 @@
 import type { OverlayItem, OverlayTextAlign } from "@/lib/domains/brochure";
 import { normalizeFontFamilyValue } from "@/lib/domains/brochure";
 
-export const CERTIFICATE_PAGE_WIDTH = 983;
-export const CERTIFICATE_PAGE_HEIGHT = 680;
+export const CERTIFICATE_PAGE_WIDTH = 1400;
+export const CERTIFICATE_PAGE_HEIGHT = 990;
 
 export const CERTIFICATE_PLACEHOLDERS = [
   "{{salutation}}",
@@ -322,11 +322,11 @@ export function createCertificateOverlayLayout(
   overlays.push(
     createTextOverlay({
       text: "SRM Institute of Science and Technology",
-      x: 90,
-      y: 80,
-      width: 803,
+      x: 200,
+      y: 120,
+      width: 1000,
       height: 40,
-      fontSize: 26,
+      fontSize: 28,
       fontWeight: 700,
       align: "center",
       color: "#0f172a",
@@ -338,11 +338,11 @@ export function createCertificateOverlayLayout(
   overlays.push(
     createTextOverlay({
       text: "CERTIFICATE OF PARTICIPATION",
-      x: 90,
-      y: 150,
-      width: 803,
+      x: 200,
+      y: 220,
+      width: 1000,
       height: 50,
-      fontSize: 36,
+      fontSize: 38,
       fontWeight: 700,
       align: "center",
       color: "#1e3a8a",
@@ -355,11 +355,11 @@ export function createCertificateOverlayLayout(
   const mockPreview = "This is to certify that Mr Student of 2026 has secured First Place in Web Dev Hackathon held on 29 June 2026.";
   const mainBodyOverlay = createTextOverlay({
     text: mockPreview,
-    x: 90,
-    y: 260,
-    width: 803,
+    x: 200,
+    y: 380,
+    width: 1000,
     height: 160,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 500,
     align: "center",
     color: "#334155",
@@ -374,10 +374,10 @@ export function createCertificateOverlayLayout(
     id: createId("qr-placeholder"),
     type: "shape",
     page: 1,
-    x: 810,
-    y: 500,
-    width: 110,
-    height: 110,
+    x: 1100,
+    y: 700,
+    width: 150,
+    height: 150,
     rotation: 0,
     shape: "rectangle",
     fill: "rgba(148, 163, 184, 0.05)",
@@ -392,7 +392,7 @@ export function createCertificateOverlayLayout(
 
 export function createEmptyCertificateEditorState(): CertificateEditorState {
   const templateInput = createDefaultCertificateTemplateInput();
-  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743770/brochify/certificate/template1.png";
+  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743759/brochify/certificate/template1.png";
   return {
     templateInput,
     overlayItems: createCertificateOverlayLayout(templateInput, "srm"),
@@ -447,16 +447,16 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
     }
   }
 
-  if (item.type === "text") {
+  if (item.type === "text" || item.type === "textbox") {
     return {
       id: typeof item.id === "string" ? item.id : createId("certificate-text"),
       type: "text",
       page: 1,
-      x: typeof item.x === "number" ? item.x : 0,
-      y: typeof item.y === "number" ? item.y : 0,
-      width: typeof item.width === "number" ? item.width : 200,
-      height: typeof item.height === "number" ? item.height : 40,
-      rotation: typeof item.rotation === "number" ? item.rotation : 0,
+      x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
+      y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
+      width: typeof item.width === "number" ? item.width * (typeof item.scaleX === "number" ? item.scaleX : 1) : 200,
+      height: typeof item.height === "number" ? item.height * (typeof item.scaleY === "number" ? item.scaleY : 1) : 40,
+      rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
       text: typeof item.text === "string" ? item.text : "",
       fontFamily: normalizeFontFamilyValue(typeof item.fontFamily === "string" ? item.fontFamily : undefined),
       fontSize: typeof item.fontSize === "number" ? item.fontSize : 18,
@@ -479,11 +479,11 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
       id: typeof item.id === "string" ? item.id : createId("certificate-image"),
       type: "image",
       page: 1,
-      x: typeof item.x === "number" ? item.x : 0,
-      y: typeof item.y === "number" ? item.y : 0,
-      width: typeof item.width === "number" ? item.width : 120,
-      height: typeof item.height === "number" ? item.height : 80,
-      rotation: typeof item.rotation === "number" ? item.rotation : 0,
+      x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
+      y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
+      width: typeof item.width === "number" ? item.width * (typeof item.scaleX === "number" ? item.scaleX : 1) : 120,
+      height: typeof item.height === "number" ? item.height * (typeof item.scaleY === "number" ? item.scaleY : 1) : 80,
+      rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
       src: typeof item.src === "string" ? item.src : "",
       name: typeof item.name === "string" ? item.name : "asset",
       borderRadius: typeof item.borderRadius === "number" ? item.borderRadius : 0,
@@ -491,17 +491,17 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
     };
   }
 
-  if (item.type === "shape") {
+  if (item.type === "shape" || item.type === "rect" || item.type === "circle" || item.type === "triangle" || item.type === "line") {
     return {
       id: typeof item.id === "string" ? item.id : createId("certificate-shape"),
       type: "shape",
       page: 1,
-      x: typeof item.x === "number" ? item.x : 0,
-      y: typeof item.y === "number" ? item.y : 0,
-      width: typeof item.width === "number" ? item.width : 120,
-      height: typeof item.height === "number" ? item.height : 80,
-      rotation: typeof item.rotation === "number" ? item.rotation : 0,
-      shape: item.shape === "circle" ? "circle" : "rectangle",
+      x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
+      y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
+      width: typeof item.width === "number" ? item.width * (typeof item.scaleX === "number" ? item.scaleX : 1) : 120,
+      height: typeof item.height === "number" ? item.height * (typeof item.scaleY === "number" ? item.scaleY : 1) : 80,
+      rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
+      shape: item.shape === "circle" || item.type === "circle" ? "circle" : "rectangle",
       fill: typeof item.fill === "string" ? item.fill : "rgba(14,165,233,0.14)",
       stroke: typeof item.stroke === "string" ? item.stroke : "#0369a1",
       strokeWidth: typeof item.strokeWidth === "number" ? item.strokeWidth : 2,
@@ -515,7 +515,7 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
 
 export function normalizeCertificateEditorState(input: unknown): CertificateEditorState {
   const fallback = createEmptyCertificateEditorState();
-  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743770/brochify/certificate/template1.png";
+  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743759/brochify/certificate/template1.png";
 
   if (!isRecord(input)) {
     return fallback;
@@ -723,11 +723,21 @@ function getTextAlignmentCss(align: OverlayTextAlign): string {
   return "center";
 }
 
+function getItemLayerOrder(item: any): number {
+  if (item.name === "qr-placeholder" || item.name === "qr-box") return 5;
+  if (item.name === "signature") return 4;
+  if (item.name === "image-box") return 1;
+  if (item.type === "image") return 2;
+  if (item.type === "text") return 3;
+  return 0;
+}
+
 export function renderCertificateHtmlForStudent(
   state: CertificateEditorState,
   student: CertificateStudentRow,
 ): string {
-  const overlayHtml = state.overlayItems
+  const overlayHtml = [...state.overlayItems]
+    .sort((a, b) => getItemLayerOrder(a) - getItemLayerOrder(b))
     .map((item) => {
       const baseStyle = [
         `position:absolute`,
@@ -778,7 +788,7 @@ export function renderCertificateHtmlForStudent(
     .join("");
 
   return `
-    <div class="certificate-page" style="position:relative;width:${CERTIFICATE_PAGE_WIDTH}px;height:${CERTIFICATE_PAGE_HEIGHT}px;background-image:${state.background.backgroundImage};background-position:center;background-size:cover;background-color:#ffffff;border:6px solid ${state.background.borderColor};box-sizing:border-box;overflow:hidden;">
+    <div class="certificate-page" style="position:relative;width:${CERTIFICATE_PAGE_WIDTH}px;height:${CERTIFICATE_PAGE_HEIGHT}px;background-image:url('${state.background.backgroundImage}');background-position:center;background-size:cover;background-color:#ffffff;border:none;box-sizing:border-box;overflow:hidden;">
       ${overlayHtml}
     </div>
   `;

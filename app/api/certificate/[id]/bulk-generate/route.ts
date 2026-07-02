@@ -43,7 +43,7 @@ function buildStudentDocument(pageHtml: string, watermarkText: string | null): s
       <head>
         <style>
           @page {
-            size: 260mm 180mm;
+            size: 1400px 990px;
             margin: 0;
           }
 
@@ -56,8 +56,8 @@ function buildStudentDocument(pageHtml: string, watermarkText: string | null): s
           html, body {
             margin: 0;
             padding: 0;
-            width: 983px;
-            height: 680px;
+            width: 1400px;
+            height: 990px;
             overflow: hidden;
             background: #ffffff;
             font-family: "Times New Roman", Times, serif;
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     try {
       const page = await browser.newPage();
-      await page.setViewport({ width: 983, height: 680 });
+      await page.setViewport({ width: 1400, height: 990 });
 
       const batchSize = 20;
       for (let startIndex = 0; startIndex < students.length; startIndex += batchSize) {
@@ -249,8 +249,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
           if (format === "pdf") {
             const pdfBytes = await page.pdf({
-              width: "260mm",
-              height: "180mm",
+              width: "1400px",
+              height: "990px",
               printBackground: true,
               preferCSSPageSize: true,
             });

@@ -63,7 +63,7 @@ export const CertificateTemplateSidebar = ({ editor, activeTool, onChangeActiveT
           <div className="grid grid-cols-2 gap-4">
             {data?.data &&
               data.data.map((asset) => {
-                const isSelected = currentBgUrl === asset.cloudinaryUrl;
+                const isSelected = currentBgUrl.split("?")[0] === asset.cloudinaryUrl.split("?")[0];
                 return (
                   <button
                     onClick={() => onSelectTemplate(asset.cloudinaryUrl)}

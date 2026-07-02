@@ -827,14 +827,15 @@ export function rebuildInteractiveElements(canvas: fabric.Canvas) {
       });
 
       fabric.Image.fromURL("/icon-logo.png", (img) => {
+        const logoScale = 70 / (img.width || 1);
         img.set({
           originX: "center",
           originY: "center",
           left: 0,
           top: -15,
-          opacity: 0.25,
-          scaleX: 0.8,
-          scaleY: 0.8
+          opacity: 0.18,
+          scaleX: logoScale,
+          scaleY: logoScale
         });
 
         const label = new fabric.Text("QR Verification", {
@@ -846,6 +847,14 @@ export function rebuildInteractiveElements(canvas: fabric.Canvas) {
           originY: "center",
           left: 0,
           top: 40
+        });
+
+        const clipRect = new fabric.Rect({
+          width: obj.width || 150,
+          height: obj.height || 150,
+          originX: "center",
+          originY: "center",
+          absolutePositioned: false
         });
 
         const group = new fabric.Group([rect, img, label], {
@@ -860,7 +869,8 @@ export function rebuildInteractiveElements(canvas: fabric.Canvas) {
           originX: "center",
           originY: "center",
           selectable: true,
-          hasControls: true
+          hasControls: true,
+          clipPath: clipRect
         });
 
         (group as any).extensionType = "qr-box";
@@ -979,4 +989,65 @@ export function rebuildInteractiveElements(canvas: fabric.Canvas) {
       }
     }
   });
+}
+
+export function sanitizeFabricObjectsBeforeLoad(objects: any[]): any[] {
+  if (!Array.isArray(objects)) return [];
+  
+  const SUPPORTED_FABRIC_TYPES = [
+    "rect",
+    "circle",
+    "triangle",
+    "line",
+    "image",
+    "textbox",
+    "text",
+    "group",
+    "path",
+    "polygon",
+    "polyline",
+  ];
+
+  return objects
+    .map((obj) => {
+      if (!obj || typeof obj !== "object") return null;
+
+      // Deep copy to prevent mutating the original state
+      const clone = { ...obj };
+
+      // Handle custom or legacy types
+      if (clone.type === "shape") {
+        clone.type = clone.shape === "circle" ? "circle" : "rect";
+      } else if (clone.type === "rect" || clone.type === "circle" || clone.type === "triangle" || clone.type === "line") {
+        // Keep standard shapes
+      } else if (clone.name === "brochitextbox" || clone.type === "brochi-text") {
+        clone.type = "textbox";
+      } else if (clone.name === "signature" || clone.type === "signature" || clone.type === "signature-frame") {
+        clone.type = "image";
+      } else if (clone.name === "qr-box" || clone.type === "qr-placeholder" || clone.type === "qr-box") {
+        clone.type = "rect";
+        clone.name = "qr-box";
+      } else if (clone.name === "image-box" || clone.type === "image-frame" || clone.type === "logo-frame") {
+        // If it has a source, it's an image; otherwise it's a placeholder rect
+        clone.type = (clone.assignedLogo || clone.src) ? "image" : "rect";
+        clone.name = "image-box";
+      }
+
+      // Check if the type is supported by Fabric
+      if (!SUPPORTED_FABRIC_TYPES.includes(clone.type)) {
+        console.warn(`Filtering unsupported Fabric object type: ${clone.type}`);
+        return null;
+      }
+
+      // Safeguard left and top coordinates
+      if (typeof clone.left !== "number" && typeof clone.x === "number") {
+        clone.left = clone.x;
+      }
+      if (typeof clone.top !== "number" && typeof clone.y === "number") {
+        clone.top = clone.y;
+      }
+
+      return clone;
+    })
+    .filter(Boolean);
 }

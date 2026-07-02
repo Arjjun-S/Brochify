@@ -325,6 +325,7 @@ export const Navbar = ({
       await editor.savePdf({
         watermarkText,
         template: workflow?.template || "",
+        isCertificate: editorType === "certificate",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to export PDF.";
@@ -592,6 +593,7 @@ export const Navbar = ({
         isOpen={bulkModalOpen}
         onClose={() => setBulkModalOpen(false)}
         certificateId={id}
+        editor={editor}
       />
     </nav>
   );

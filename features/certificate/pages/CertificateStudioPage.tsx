@@ -1509,7 +1509,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 id="certificate-preview"
                 className="relative h-full w-full overflow-hidden rounded-xl bg-white shadow-[0_35px_80px_-38px_rgba(15,23,42,0.7)]"
                 style={{
-                  border: `6px solid ${background.borderColor}`,
+                  border: "none",
                   backgroundImage: background.backgroundImage,
                   backgroundPosition: "center",
                   backgroundSize: "cover",

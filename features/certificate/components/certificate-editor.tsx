@@ -103,15 +103,16 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
     [mutate, initialData.content]
   );
 
-  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743770/brochify/certificate/template1.png";
+  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743759/brochify/certificate/template1.png";
   const bgImage = initialData.content.background?.backgroundImage || defaultBg;
+  const bgImageWithCache = bgImage.split("?")[0] + "?c_cache=1";
 
   const defaultJson = JSON.stringify({
     version: "5.3.0",
     objects: initialData.content.overlayItems || [],
     backgroundImage: {
       type: "image",
-      src: bgImage,
+      src: bgImageWithCache,
       originX: "left",
       originY: "top",
       crossOrigin: "anonymous",

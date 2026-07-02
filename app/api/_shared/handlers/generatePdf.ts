@@ -27,9 +27,15 @@ export async function handleGeneratePdf(req: NextRequest) {
         ? Math.min(24, Math.floor(spreadPagesRaw))
         : 1;
 
+    const isCertificate = body?.isCertificate === true;
     const isPoster = template === "posterFlyer";
-    const pageWidth = isPoster ? "210mm" : "260mm";
-    const pageHeight = isPoster ? "297mm" : "180mm";
+    let pageWidth = isPoster ? "210mm" : "260mm";
+    let pageHeight = isPoster ? "297mm" : "180mm";
+
+    if (isCertificate) {
+      pageWidth = "1400px";
+      pageHeight = "990px";
+    }
 
     if (!html.trim()) {
       return NextResponse.json({ error: "html is required." }, { status: 400 });
@@ -111,7 +117,8 @@ export async function handleGeneratePdf(req: NextRequest) {
                     body {
                         margin: 0;
                         padding: 0;
-                      position: relative;
+                        position: relative;
+                        ${isCertificate ? `width: ${pageWidth}; height: ${pageHeight}; overflow: hidden;` : ""}
                     }
                     * {
                         -webkit-print-color-adjust: exact !important;
@@ -158,7 +165,7 @@ export async function handleGeneratePdf(req: NextRequest) {
     });
 
     console.log("Generating PDF...");
-    await page.setViewport({ width: 1200, height: 800 });
+    await page.setViewport({ width: isCertificate ? 1400 : 1200, height: isCertificate ? 990 : 800 });
 
     const singleSizedPdf = isPoster || spreadPages <= 1;
 
