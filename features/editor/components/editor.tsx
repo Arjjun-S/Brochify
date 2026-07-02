@@ -31,6 +31,7 @@ import { TemplateSidebar } from "@/features/editor/components/template-sidebar";
 import { LogoSidebar } from "@/features/editor/components/logo-sidebar";
 import { RemoveBgSidebar } from "@/features/editor/components/remove-bg-sidebar";
 import { SettingsSidebar } from "@/features/editor/components/settings-sidebar";
+import { QRSidebar } from "@/features/editor/components/qr-sidebar";
 import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
 
 interface EditorProps {
@@ -216,6 +217,11 @@ export const Editor = ({ initialData, brochureId, brochureType }: EditorProps) =
           onChangeActiveTool={onChangeActiveTool}
         />
         <DrawSidebar
+          editor={editor}
+          activeTool={activeTool}
+          onChangeActiveTool={onChangeActiveTool}
+        />
+        <QRSidebar
           editor={editor}
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}

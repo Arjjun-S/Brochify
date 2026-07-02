@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { AlertTriangle, Loader } from "lucide-react";
+import { AlertTriangle, Loader, Check } from "lucide-react";
 
 import { ActiveTool, Editor } from "@/features/editor/types";
 import { ToolSidebarClose } from "@/features/editor/components/tool-sidebar-close";
@@ -20,23 +20,21 @@ interface CertificateTemplateSidebarProps {
 }
 
 export const CertificateTemplateSidebar = ({ editor, activeTool, onChangeActiveTool }: CertificateTemplateSidebarProps) => {
-  const [ConfirmDialog, confirm] = useConfirm(
-    "Are you sure?",
-    "You are about to replace the current project with this template."
-  );
-
   const { data, isLoading, isError } = useGetAssets("certificate_template");
 
   const onClose = () => {
     onChangeActiveTool("select");
   };
 
-  const onSelectTemplate = async (url: string) => {
-    const ok = await confirm();
-    if (ok) {
-      editor?.addBackgroundImage(url);
-    }
+  const onSelectTemplate = (url: string) => {
+    editor?.addBackgroundImage(url);
   };
+
+  // Extract currently active background image URL from editor canvas
+  const bgImage = editor?.canvas?.backgroundImage as any;
+  const currentBgUrl = bgImage
+    ? (typeof bgImage.getSrc === "function" ? bgImage.getSrc() : bgImage.src || bgImage._element?.src || "")
+    : "";
 
   return (
     <aside
@@ -45,7 +43,6 @@ export const CertificateTemplateSidebar = ({ editor, activeTool, onChangeActiveT
         activeTool === "certificate-templates" ? "visible" : "hidden"
       )}
     >
-      <ConfirmDialog />
       <ToolSidebarHeader
         title="Certificate Templates"
         description="Add certificate template backgrounds"
@@ -65,25 +62,38 @@ export const CertificateTemplateSidebar = ({ editor, activeTool, onChangeActiveT
         <div className="p-4">
           <div className="grid grid-cols-2 gap-4">
             {data?.data &&
-              data.data.map((asset) => (
-                <button
-                  onClick={() => onSelectTemplate(asset.cloudinaryUrl)}
-                  key={asset.id}
-                  className="relative w-full h-[100px] group hover:opacity-75 transition bg-muted rounded-sm overflow-hidden border"
-                >
-                  <Image
-                    src={asset.cloudinaryUrl}
-                    alt={asset.name}
-                    fill
-                    sizes="(max-width: 768px) 50vw, 180px"
-                    className="object-cover"
-                    loading="lazy"
-                  />
-                  <div className="opacity-0 group-hover:opacity-100 absolute left-0 bottom-0 w-full text-[10px] truncate text-white p-1 bg-black/50 text-left">
-                    {asset.name}
-                  </div>
-                </button>
-              ))}
+              data.data.map((asset) => {
+                const isSelected = currentBgUrl === asset.cloudinaryUrl;
+                return (
+                  <button
+                    onClick={() => onSelectTemplate(asset.cloudinaryUrl)}
+                    key={asset.id}
+                    className={cn(
+                      "relative w-full h-[100px] group transition rounded-sm overflow-hidden border bg-muted",
+                      isSelected 
+                        ? "border-indigo-600 ring-2 ring-indigo-600/50 shadow-[0_0_12px_rgba(79,70,229,0.4)]" 
+                        : "hover:opacity-75"
+                    )}
+                  >
+                    {isSelected && (
+                      <div className="absolute top-1.5 right-1.5 bg-indigo-600 text-white rounded-full p-0.5 z-[10]">
+                        <Check className="size-3" />
+                      </div>
+                    )}
+                    <Image
+                      src={asset.cloudinaryUrl}
+                      alt={asset.name}
+                      fill
+                      sizes="(max-width: 768px) 50vw, 180px"
+                      className="object-cover"
+                      loading="lazy"
+                    />
+                    <div className="opacity-0 group-hover:opacity-100 absolute left-0 bottom-0 w-full text-[10px] truncate text-white p-1 bg-black/50 text-left">
+                      {asset.name}
+                    </div>
+                  </button>
+                );
+              })}
           </div>
         </div>
       </ScrollArea>

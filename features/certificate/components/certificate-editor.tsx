@@ -2,6 +2,8 @@
 
 import { fabric } from "fabric";
 import { useCallback, useEffect, useRef, useState } from "react";
+import debounce from "lodash.debounce";
+import { useUpdateCertificate } from "@/features/certificate/api/use-update-certificate";
 
 import {
   ActiveTool,
@@ -23,14 +25,16 @@ import { ImageSidebar } from "@/features/editor/components/image-sidebar";
 import { FilterSidebar } from "@/features/editor/components/filter-sidebar";
 import { DrawSidebar } from "@/features/editor/components/draw-sidebar";
 import { AiSidebar } from "@/features/editor/components/ai-sidebar";
-import { TemplateSidebar } from "@/features/editor/components/template-sidebar";
+import { CertificateTemplateSidebar } from "@/features/editor/components/certificate-template-sidebar";
 import { ElementsSidebar } from "@/features/editor/components/elements-sidebar";
 import { LogoSidebar } from "@/features/editor/components/logo-sidebar";
-import { CertificateTemplateSidebar } from "@/features/editor/components/certificate-template-sidebar";
+import { SignatureSidebar } from "@/features/editor/components/signature-sidebar";
 import { RemoveBgSidebar } from "@/features/editor/components/remove-bg-sidebar";
 import { SettingsSidebar } from "@/features/editor/components/settings-sidebar";
 import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
-import { CERTIFICATE_PAGE_HEIGHT, CERTIFICATE_PAGE_WIDTH } from "@/lib/domains/certificate";
+import { JSON_KEYS } from "@/features/editor/types";
+import { CERTIFICATE_PAGE_HEIGHT, CERTIFICATE_PAGE_WIDTH, applyCertificatePlaceholders } from "@/lib/domains/certificate";
+import { BrochiTextboxModal } from "@/features/editor/components/brochi-textbox-modal";
 
 interface CertificateEditorProps {
   initialData: {
@@ -43,6 +47,7 @@ interface CertificateEditorProps {
         borderColor: string;
         backgroundImage: string;
       };
+      customSignatures?: Array<{ name: string; designation: string; src: string }>;
     };
     status: string;
   };
@@ -50,6 +55,13 @@ interface CertificateEditorProps {
 
 export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
   const [activeTool, setActiveTool] = useState<ActiveTool>("select");
+  const [customSignatures, setCustomSignatures] = useState<Array<{ name: string; designation: string; src: string }>>(
+    initialData.content.customSignatures || []
+  );
+  const customSignaturesRef = useRef(customSignatures);
+  customSignaturesRef.current = customSignatures;
+
+  const [editingBrochiObject, setEditingBrochiObject] = useState<fabric.Textbox | null>(null);
 
   const onClearSelection = useCallback(() => {
     if (selectionDependentTools.includes(activeTool)) {
@@ -57,17 +69,64 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
     }
   }, [activeTool]);
 
+  const { mutate } = useUpdateCertificate(initialData.id);
+
+  const debouncedSave = useCallback(
+    debounce(
+      (values: {
+        json: string;
+        height: number;
+        width: number;
+      }) => {
+        // We need to merge the new fabric JSON with the existing CertificateEditorState structure
+        const parsed = JSON.parse(values.json);
+        const backgroundImage = parsed.backgroundImage?.src || "";
+        
+        const templateMatch = backgroundImage.match(/template\d+/);
+        const template = templateMatch ? templateMatch[0] : (initialData.content.template || "template1");
+        
+        mutate({
+          content: {
+            ...initialData.content,
+            overlayItems: parsed.objects || [],
+            background: {
+              ...initialData.content.background,
+              backgroundImage,
+            },
+            template,
+            customSignatures: customSignaturesRef.current,
+          },
+        });
+      },
+      500
+    ),
+    [mutate, initialData.content]
+  );
+
+  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743770/brochify/certificate/template1.png";
+  const bgImage = initialData.content.background?.backgroundImage || defaultBg;
+
   const defaultJson = JSON.stringify({
     version: "5.3.0",
     objects: initialData.content.overlayItems || [],
+    backgroundImage: {
+      type: "image",
+      src: bgImage,
+      originX: "left",
+      originY: "top",
+      crossOrigin: "anonymous",
+    },
   });
+
+  const isApproved = initialData.status === "approved";
 
   const { init, editor } = useEditor({
     defaultState: defaultJson,
     defaultWidth: CERTIFICATE_PAGE_WIDTH,
     defaultHeight: CERTIFICATE_PAGE_HEIGHT,
     clearSelectionCallback: onClearSelection,
-    saveCallback: () => {},
+    saveCallback: debouncedSave,
+    isApproved,
   });
 
   const onChangeActiveTool = useCallback((tool: ActiveTool) => {
@@ -126,6 +185,25 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
     };
   }, [editor]);
 
+  useEffect(() => {
+    const canvas = editor?.canvas;
+    if (!canvas) return;
+
+    const handleDblClick = (e: fabric.IEvent) => {
+      const target = e.target;
+      if (target && target.name === "brochitextbox" && target.type === "textbox") {
+        (target as fabric.Textbox).exitEditing();
+        setEditingBrochiObject(target as fabric.Textbox);
+      }
+    };
+
+    canvas.on("mouse:dblclick", handleDblClick);
+
+    return () => {
+      canvas.off("mouse:dblclick", handleDblClick);
+    };
+  }, [editor?.canvas]);
+
   return (
     <div className="h-full flex flex-col">
       <Navbar
@@ -133,6 +211,8 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
         editor={editor}
         activeTool={activeTool}
         onChangeActiveTool={onChangeActiveTool}
+        editorType="certificate"
+        certificateContent={initialData.content}
       />
       <div className="absolute h-[calc(100%-68px)] w-full top-[68px] flex">
         <Sidebar
@@ -180,7 +260,7 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
         />
-        <TemplateSidebar
+         <CertificateTemplateSidebar
           editor={editor}
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
@@ -195,10 +275,47 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
         />
-        <CertificateTemplateSidebar
+        <SignatureSidebar
           editor={editor}
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
+          customSignatures={customSignatures}
+          onAddCustomSignature={(sig) => {
+            const nextSigs = [...customSignatures, sig];
+            setCustomSignatures(nextSigs);
+            if (editor) {
+              mutate({
+                content: {
+                  ...initialData.content,
+                  overlayItems: editor.canvas.getObjects().map(o => o.toJSON(JSON_KEYS)),
+                  background: {
+                    ...initialData.content.background,
+                    backgroundImage: editor.canvas.backgroundImage ? (editor.canvas.backgroundImage as any).src : "",
+                  },
+                  template: initialData.content.template || "template1",
+                  customSignatures: nextSigs,
+                }
+              });
+            }
+          }}
+          onDeleteCustomSignature={(index) => {
+            const nextSigs = customSignatures.filter((_, i) => i !== index);
+            setCustomSignatures(nextSigs);
+            if (editor) {
+              mutate({
+                content: {
+                  ...initialData.content,
+                  overlayItems: editor.canvas.getObjects().map(o => o.toJSON(JSON_KEYS)),
+                  background: {
+                    ...initialData.content.background,
+                    backgroundImage: editor.canvas.backgroundImage ? (editor.canvas.backgroundImage as any).src : "",
+                  },
+                  template: initialData.content.template || "template1",
+                  customSignatures: nextSigs,
+                }
+              });
+            }
+          }}
         />
         <ElementsSidebar
           editor={editor}
@@ -240,6 +357,35 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
           <Footer editor={editor} />
         </main>
       </div>
+      <BrochiTextboxModal
+        isOpen={!!editingBrochiObject}
+        onClose={() => setEditingBrochiObject(null)}
+        initialText={editingBrochiObject?.originalText || ""}
+        onApply={(text) => {
+          if (editingBrochiObject && editor) {
+            const mockStudent = {
+              serialNo: "001",
+              salutation: "Mr",
+              name: "Student",
+              year: "2026",
+              gender: "Mr" as const,
+              prize: "First Place",
+              event: "Web Dev Hackathon",
+              date: "29 June 2026",
+              organization: "SRM Institute of Science and Technology",
+            };
+            const previewText = applyCertificatePlaceholders(text, mockStudent);
+
+            editingBrochiObject.set({
+              originalText: text,
+              text: previewText
+            });
+            editor.canvas.renderAll();
+            (editor as any).save();
+          }
+          setEditingBrochiObject(null);
+        }}
+      />
     </div>
   );
 };

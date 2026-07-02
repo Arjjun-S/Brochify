@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  QrCode,
   LayoutTemplate,
   ImageIcon,
   Pencil,
@@ -11,6 +12,7 @@ import {
   BadgeIcon,
   FileText,
   Vote,
+  PenTool,
 } from "lucide-react";
 
 import { ActiveTool } from "@/features/editor/types";
@@ -32,18 +34,28 @@ export const Sidebar = ({
   return (
     <aside className="bg-white flex flex-col w-[100px] h-full border-r overflow-y-auto">
       <ul className="flex flex-col">
-        <SidebarItem
-          icon={LayoutTemplate}
-          label="Design"
-          isActive={activeTool === "templates"}
-          onClick={() => onChangeActiveTool("templates")}
-        />
+        {editorType !== "certificate" && (
+          <SidebarItem
+            icon={LayoutTemplate}
+            label="Design"
+            isActive={activeTool === "templates"}
+            onClick={() => onChangeActiveTool("templates")}
+          />
+        )}
         {editorType === "certificate" && (
           <SidebarItem
             icon={FileText}
             label="Templates"
             isActive={activeTool === "certificate-templates"}
             onClick={() => onChangeActiveTool("certificate-templates")}
+          />
+        )}
+        {editorType === "certificate" && (
+          <SidebarItem
+            icon={PenTool}
+            label="Signature"
+            isActive={activeTool === "signatures"}
+            onClick={() => onChangeActiveTool("signatures")}
           />
         )}
         <SidebarItem
@@ -72,18 +84,29 @@ export const Sidebar = ({
           isActive={activeTool === "text"}
           onClick={() => onChangeActiveTool("text")}
         />
-        <SidebarItem
-          icon={Shapes}
-          label="Shapes"
-          isActive={activeTool === "shapes"}
-          onClick={() => onChangeActiveTool("shapes")}
-        />
+        {editorType !== "certificate" && (
+          <SidebarItem
+            icon={Shapes}
+            label="Shapes"
+            isActive={activeTool === "shapes"}
+            onClick={() => onChangeActiveTool("shapes")}
+          />
+        )}
         <SidebarItem
           icon={Pencil}
           label="Draw"
           isActive={activeTool === "draw"}
           onClick={() => onChangeActiveTool("draw")}
         />
+        
+        {editorType !== "certificate" && (
+          <SidebarItem
+            icon={QrCode}
+            label="QR Code"
+            isActive={activeTool === "qr"}
+            onClick={() => onChangeActiveTool("qr")}
+          />
+        )}
         <SidebarItem
           icon={Sparkles}
           label="AI"

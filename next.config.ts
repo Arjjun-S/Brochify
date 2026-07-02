@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "utfs.io" },
       { protocol: "https", hostname: "replicate.delivery" },
       { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "api.qrserver.com" },
     ],
   },
   serverExternalPackages: ["jsdom"],

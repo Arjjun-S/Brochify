@@ -1,0 +1,209 @@
+Project Overview
+
+- Purpose: Brochify is a web app for creating, editing, and generating brochures and certificates. It provides a canvas-based editor, template and asset management (Cloudinary-backed), certificate generation (including bulk CSV-driven workflows), PDF and ZIP export, and admin/faculty review workflows.
+- Architecture: Next.js (app router) frontend with server-side API routes. Prisma + MySQL for persistence. Server-side PDF generation using Puppeteer. Cloudinary for asset/template storage. Fabric-like canvas editing on the client (Fabric.js is included as a dependency).
+- Tech stack: Next.js (React), TypeScript, Prisma (MySQL), Cloudinary, Puppeteer, Fabric.js, Node.js, Tailwind CSS.
+
+Folder Structure (important folders)
+
+- `app/` — Next.js app routes, pages, and API routes. Contains `app/api/*` endpoints (brochure, certificate, design-projects, assets, logos, generate-pdf, etc.), and client/server pages for dashboard, studio/editor, faculty/admin views.
+- `components/` — Shared UI and editor components used across the app (editor panels, canvas components, dashboards, UI primitives).
+- `features/` — Feature-scoped components (editor toolbars, certificate features, templates, hooks local to editor features).
+- `lib/` — Utilities and server helpers: `server/prisma.ts`, puppeteer helpers, designProject JSON helpers, image/AI integration helpers, logging, stubs.
+- `core/` — Core types and services used by the application domain (user services, notification services, capacity/security helpers).
+- `prisma/` — Prisma schema and migrations.
+- `public/` — Static assets and images.
+- `scripts/` — Helper scripts (e.g., `upload-assets.ts` uses Cloudinary to upload templates/assets).
+- `features/editor/hooks` and `features/editor/components` — Client-side editor logic, canvas interactions and sidebars.
+
+Database Structure (MySQL via Prisma)
+
+Source of truth: `prisma/schema.prisma` (Prisma 6.x compatible). Key tables below (mapped table names are preserved using `@@map`).
+
+1) `users`
+- id: INT primary key auto-increment
+- username: VARCHAR(64) UNIQUE
+- password: VARCHAR(255) NULL (legacy/stored plaintext? — nullable)
+- password_hash: VARCHAR(255) NULL (preferred hashed password column)
+- role: ENUM('admin','faculty')
+- created_at: DATETIME default now()
+
+Indexes/constraints:
+- Unique index on `username`.
+
+Relations:
+- One-to-many: `createdBrochures` (`Brochure.created_by`)
+- One-to-many: `assignedBrochures` (`Brochure.assigned_admin`)
+- One-to-many: `createdCertificates` (`Certificate.created_by`)
+- One-to-many: `assignedCertificates` (`Certificate.assigned_admin`)
+- One-to-many: `designProjects` (`DesignProject.created_by`)
+
+2) `brochures`
+- id: INT PK AI
+- title: VARCHAR(255)
+- description: TEXT
+- content: JSON (design content saved/serialized)
+- created_by: INT (FK -> users.id)
+- assigned_admin: INT (FK -> users.id)
+- status: ENUM('draft','pending','approved','rejected') DEFAULT 'draft'
+- rejection_reason: TEXT NULL
+- created_at: DATETIME default now()
+- updated_at: DATETIME @updatedAt
+
+Indexes:
+- status
+- created_by
+- assigned_admin
+
+Relations:
+- creator -> `users(id)` (ON DELETE CASCADE)
+- assignedAdminUser -> `users(id)` (ON DELETE CASCADE)
+- one-to-one optional with `design_projects` via `design_projects.brochure_id` (unique, nullable)
+
+3) `certificates`
+- same structure as `brochures` (title, description, content JSON, created_by, assigned_admin, status, rejection_reason, created_at, updated_at)
+
+Indexes:
+- status
+- created_by
+- assigned_admin
+
+Relations:
+- creator -> `users(id)` (ON DELETE CASCADE)
+- assignedAdminUser -> `users(id)` (ON DELETE CASCADE)
+
+4) `assets`
+- id: INT PK AI
+- name: VARCHAR(255)
+- type: VARCHAR(50)
+- cloudinary_url: VARCHAR(512)
+- cloudinary_public_id: VARCHAR(255)
+- created_at: DATETIME default now()
+
+Indexes:
+- type
+
+Notes:
+- Assets are Cloudinary-backed. `cloudinary_url` is used directly by the UI to render images.
+
+5) `design_projects`
+- id: INT PK AI
+- name: VARCHAR(255)
+- json: LONGTEXT (serialized canvas/design as JSON)
+- width: INT DEFAULT 900
+- height: INT DEFAULT 1200
+- thumbnail_url: VARCHAR(512) NULL
+- is_template: BOOLEAN DEFAULT false
+- is_pro: BOOLEAN DEFAULT false
+- brochure_id: INT NULL UNIQUE (links to `brochures.id`) — one-to-one
+- created_by: INT FK -> users.id
+- created_at: DATETIME default now()
+- updated_at: DATETIME @updatedAt
+
+Indexes:
+- brochure_id UNIQUE
+- created_by
+- is_template
+
+Relations:
+- brochure -> `brochures(id)` ON DELETE SET NULL
+- creator -> `users(id)` ON DELETE CASCADE
+
+6) `certificate_verifications`
+- id: INT PK AI
+- certificate_id: INT (FK -> certificates.id)
+- recipient_name: VARCHAR(255)
+- verification_token: VARCHAR(64) UNIQUE
+- generated_at: DATETIME default now()
+- organization: VARCHAR(255) NULL
+
+Indexes:
+- certificate_id
+- verification_token UNIQUE
+
+Relations:
+- certificate -> `certificates(id)` ON DELETE CASCADE
+
+
+Canvas System
+
+- Rendering: The project uses a client-side canvas-based editor composed of components under `components/Editor` and `features/editor`. The presence of `fabric` dependency and `components/studio/canvas/*` components indicates a Fabric.js (or Fabric-like) rendering approach. Canvas objects are represented in the design JSON stored in `design_projects.json` / `design_projects.json` (Prisma `json`/`longtext` field).
+- Canvas storage: Per-project design JSON is persisted in `design_projects.json` (`DesignProject.json` field). Brochure content is also stored as JSON in `brochures.content` for brochure documents. The server has helper logic in `lib/server/designProjectJson.ts` to sanitize or normalize stored JSON.
+- Object storage: Visual assets (images, logos, templates) are stored in Cloudinary; `assets` table stores Cloudinary URLs and public IDs.
+- Template loading: API route `app/api/design-projects/templates/route.ts` and `app/api/logos/route.ts` fetch templates/logos (from DB and/or Cloudinary). Client-side `template-sidebar.tsx` and `certificate-template-sidebar.tsx` load templates for preview and insertion.
+- Export logic: Server side PDF generation endpoints under `app/api/generate-pdf/route.ts` and helpers in `lib/server/puppeteer.ts` create printable PDFs (Puppeteer snapshots of canvas/html). There are dedicated brochure and v1 endpoints for generating PDFs.
+
+Certificate System
+
+- Generation flow: Certificates are created via the UI (faculty/admin) and persisted in `certificates.content` (JSON). There are API routes under `app/api/certificate/*` to create, submit, approve, reject, and bulk-generate certificates (`/bulk-generate`). Bulk generation accepts CSV input at an API route.
+- Template flow: Certificate templates are stored as design projects (templates) or as assets with `is_template` flags. `certificate-template-sidebar.tsx` displays template thumbnails using `asset.cloudinaryUrl` and allows loading into canvas.
+- Download flow: PDF generation endpoints (same Puppeteer-based flows) produce downloadable PDFs for single and bulk certificates. Server-side routes support generating single certificate PDF and bulk endpoints.
+
+Cloudinary Flow
+
+- Upload flow: Scripts like `scripts/upload-assets.ts` and server endpoints use the Cloudinary SDK (`cloudinary` v2) to upload assets. Environment variables in `.env` provide `CLOUDINARY_API`, `CLOUDINARY_URL`, `CLOUDINARY_NAME`, `CLOUDINARY_SECRET`, and prefixes.
+- Retrieval flow: API endpoints (`app/api/logos/route.ts`) use Cloudinary API (with credentials from env) to list resources by prefix and return them as JSON to clients. Client-side code references `asset.cloudinaryUrl` for previewing images.
+- Storage flow: After uploading to Cloudinary, the script persists `cloudinaryUrl` and `cloudinaryPublicId` in the `assets` table. UI components render images directly from the secure Cloudinary URL.
+
+API Endpoints (high level list)
+
+- `app/api/assets/route.ts` — list assets from DB
+- `app/api/logos/route.ts` — fetch Cloudinary logos/resources
+- `app/api/design-projects/route.ts` — list/create design projects
+- `app/api/design-projects/[id]/route.ts` — get/update/delete design project
+- `app/api/design-projects/templates/route.ts` — list templates
+- `app/api/brochure/route.ts` — create/list brochures
+- `app/api/brochure/[id]/route.ts` — CRU/D for brochure (approve/reject/submit subroutes)
+- `app/api/certificate/route.ts` — list/create certificates
+- `app/api/certificate/[id]/route.ts` — CRU/D for certificate (approve/reject/submit/bulk-generate)
+- `app/api/generate-pdf/route.ts` and `app/api/generate-brochure/route.ts` — server-side PDF generation for brochures/certificates
+- `app/api/auth/*` — login/session/logout
+- `app/api/v1/*` — versioned endpoints for programmatic brochure/pdf generation
+- `app/api/design-ai/*` — AI image generation and remove background routes
+
+Known Bugs & Observations (discovered during read)
+
+- Migration ordering issue: There was a split migration where `20260502115000_link_design_project_brochure` attempted to ALTER `design_projects` before the table existed in the history. This created a migration ordering problem. The workspace now has a single ordered init migration, but the existing local `brochify` database has drift from prior schema pushes and needs a reset or manual reconciliation before `prisma migrate dev` can apply it.
+- Redundant password fields: `users` contains both `password` and `password_hash`. The presence of a nullable `password` column raises security questions — likely a legacy field. Consider migrating to only `password_hash` (bcrypt) and dropping plaintext `password`.
+- `updated_at` column in raw SQL migrations is created without a default; Prisma's `@updatedAt` expects the ORM to set it. Confirm inserts from non-Prisma paths set `updated_at` or allow NULL with DB defaults to avoid insert errors.
+- Cloudinary credentials are present in `.env` (sensitive). Ensure `.env` is not checked into public repos.
+- Some API routes expect Cloudinary env vars under multiple names (`CLOUDINARY_API` vs `CLOUDINARY_API_KEY`, `CLOUDINARY_NAME` vs `CLOUDINARY_CLOUD_NAME`) — normalize env var usage.
+- Canvas JSON compatibility: The editor reads/writes design JSON widely; ensure schema compatibility when changing object representations (migrations may be needed for existing projects).
+
+Proposed Fixes and Next Steps (plan — will be executed in the ordered phases):
+
+Phase 1 (complete) — Project understanding (this document). No code changes beyond documentation.
+
+Phase 2 — Prisma migrations
+- Audit and consolidate migrations into one clean initial migration that creates `design_projects` before any ALTERs. Verify `npx prisma validate`, `npx prisma generate`, `npx prisma migrate dev` succeed against a fresh DB.
+- Confirm foreign keys and indexes exist for `users`, `brochures`, `certificates`, `assets`, `design_projects`.
+
+Phase 3 — Cloudinary templates
+- Use `app/api/logos/route.ts` as canonical Cloudinary listing route. Ensure UI (`template-sidebar`, `certificate-template-sidebar`, `elements-sidebar`) uses `asset.cloudinaryUrl` with proper caching/fallback states.
+- Add client-side graceful failure handling and loading states.
+
+Phase 4 — QR Code in brochure editor
+- Implement a QR tool in the editor toolbar and side panel that can generate QR images (server-side or client-side), preview, and add a move/resize/rotate/duplicate/delete-capable canvas object to the design JSON.
+
+Phase 5 & 6 — Certificate template & dynamic variables
+- Make certificate templates Cloudinary-backed; load templates as locked background images; keep text objects editable and support variable substitution for `{{name}}`, `{{year}}`, etc.
+
+Phase 7 — Bulk generation
+- CSV upload UI, mapping, preview, and server-side rendering loop that generates PDFs per row and stores/returns them as ZIP.
+
+Phase 8 & 9 — Verification
+- Add `certificate_verifications` table, generate verification tokens and a `/verify/[token]` route that resolves token -> certificate metadata.
+- Auto-embed verification QR into generated certificate (linking to verification page).
+
+Phase 10 & 11 — PDF and ZIP export
+- Ensure Puppeteer exports preserve fonts/images/layout and generate high-quality PDFs. Implement streaming ZIP creation to be memory-safe for large batches (e.g., node streams + archiver or piping to S3/Cloud storage if needed).
+
+Phase 12 — Testing and reports
+- Run full CI/local tests: Prisma validations, migration tests (fresh DB), Cloudinary API integration (mocked), canvas load/save cycles, QR generation, certificate generation, CSV import, and bulk export. Generate `implementation_report.txt` summarizing changes and remaining issues.
+
+Notes & Assumptions
+
+- This document is derived from the repository files under `app/`, `components/`, `features/`, `lib/`, and `prisma/`. I validated `prisma/schema.prisma` and ensured the schema is Prisma 6.x compatible.
+- Sensitive values (Cloudinary keys) are present in `.env` and must be managed securely.
+
+-- End of understanding.txt

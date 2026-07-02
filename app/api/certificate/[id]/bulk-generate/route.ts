@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
+import crypto from "crypto";
 import { launchPuppeteer } from "@/lib/server/puppeteer";
 import {
   getCertificateDownloadFileName,
@@ -8,6 +9,7 @@ import {
 } from "@/lib/domains/certificate";
 import { readSessionFromRequest } from "@/lib/server/auth";
 import { getCertificateByIdForUser } from "@/lib/server/data";
+import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
 
@@ -156,7 +158,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const students = normalizeCertificateStudentRows(rows, {
       eventName: certificate.content.templateInput.eventName,
       issueDate: certificate.content.templateInput.issueDate,
-    });
+    }).map((student) => ({
+      ...student,
+      organization: student.organization || certificate.content.templateInput.organizationName,
+    }));
 
     if (students.length === 0) {
       return NextResponse.json({ error: "Uploaded file has no valid student rows." }, { status: 400 });
@@ -168,6 +173,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         : "Brochify generated     NOT Approved";
 
     const zip = new JSZip();
+    const verificationBaseUrl = (process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin).replace(/\/$/, "");
 
     const browser = await launchPuppeteer({
       headless: true,
@@ -191,8 +197,31 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         for (let localIndex = 0; localIndex < batch.length; localIndex += 1) {
           const globalIndex = startIndex + localIndex;
           const student = batch[localIndex];
+          const tempToken = crypto.randomBytes(20).toString("hex");
+          let verification = await prisma.certificateVerification.create({
+            data: {
+              certificateId: certificate.id,
+              recipientName: student.name,
+              verificationToken: tempToken,
+              organization: student.organization || certificate.content.templateInput.organizationName,
+            },
+          });
+
+          const year = new Date().getFullYear();
+          const verificationId = `CERT-${year}-${String(verification.id).padStart(4, "0")}`;
+
+          verification = await prisma.certificateVerification.update({
+            where: { id: verification.id },
+            data: { verificationToken: verificationId },
+          });
+
+          const studentWithVerification = {
+            ...student,
+            certificateId: verificationId,
+            verificationUrl: `${verificationBaseUrl}/verify/${verificationId}`,
+          };
           const contentWithAbsoluteUrls = withAbsoluteImageUrls(certificate.content, request.nextUrl.origin);
-          const pageHtml = renderCertificateHtmlForStudent(contentWithAbsoluteUrls, student);
+          const pageHtml = renderCertificateHtmlForStudent(contentWithAbsoluteUrls, studentWithVerification);
           const documentHtml = buildStudentDocument(pageHtml, watermarkText);
 
           await page.setContent(documentHtml, {
@@ -216,7 +245,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             await Promise.all(pending);
           });
 
-          const fileName = getCertificateDownloadFileName(student.serialNo, globalIndex, format);
+          const fileName = getCertificateDownloadFileName(student.serialNo, student.name, globalIndex, format);
 
           if (format === "pdf") {
             const pdfBytes = await page.pdf({

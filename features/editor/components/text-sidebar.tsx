@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { 
   ActiveTool, 
   Editor, 
@@ -8,18 +9,41 @@ import { ToolSidebarHeader } from "@/features/editor/components/tool-sidebar-hea
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { BrochiTextboxModal } from "@/features/editor/components/brochi-textbox-modal";
 
 interface TextSidebarProps {
   editor: Editor | undefined;
   activeTool: ActiveTool;
   onChangeActiveTool: (tool: ActiveTool) => void;
-};
+}
 
 export const TextSidebar = ({
   editor,
   activeTool,
   onChangeActiveTool,
 }: TextSidebarProps) => {
+  const [isBrochiModalOpen, setIsBrochiModalOpen] = useState(false);
+  const [hasBrochi, setHasBrochi] = useState(false);
+
+  useEffect(() => {
+    if (!editor?.canvas) return;
+
+    const checkBrochi = () => {
+      const exists = editor.canvas.getObjects().some((obj) => obj.name === "brochitextbox");
+      setHasBrochi(exists);
+    };
+
+    checkBrochi();
+
+    editor.canvas.on("object:added", checkBrochi);
+    editor.canvas.on("object:removed", checkBrochi);
+
+    return () => {
+      editor.canvas?.off("object:added", checkBrochi);
+      editor.canvas?.off("object:removed", checkBrochi);
+    };
+  }, [editor, editor?.canvas]);
+
   const onClose = () => {
     onChangeActiveTool("select");
   };
@@ -31,6 +55,11 @@ export const TextSidebar = ({
         activeTool === "text" ? "visible" : "hidden",
       )}
     >
+      <BrochiTextboxModal
+        isOpen={isBrochiModalOpen}
+        onClose={() => setIsBrochiModalOpen(false)}
+        onApply={(text) => editor?.addBrochiTextBox(text)}
+      />
       <ToolSidebarHeader
         title="Text"
         description="Add text to your canvas"
@@ -38,11 +67,23 @@ export const TextSidebar = ({
       <ScrollArea>
         <div className="p-4 space-y-4 border-b">
           <Button
-            className="w-full"
+            className="w-full font-semibold"
             onClick={() => editor?.addText("Textbox")}
           >
             Add a textbox
           </Button>
+          <Button
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed"
+            onClick={() => setIsBrochiModalOpen(true)}
+            disabled={hasBrochi}
+          >
+            Add a Placeholder Textbox (Brochi)
+          </Button>
+          {hasBrochi && (
+            <p className="text-xs text-rose-500 font-semibold text-center mt-1">
+              Only one Brochi TextBox is allowed per certificate.
+            </p>
+          )}
           <Button
             className="w-full h-16"
             variant="secondary"

@@ -137,6 +137,7 @@ export type ImageOverlayItem = OverlayBase & {
   src: string;
   name: string;
   borderRadius: number;
+  originalSrc?: string;
 };
 
 export type OverlayItem = TextOverlayItem | ShapeOverlayItem | ImageOverlayItem;

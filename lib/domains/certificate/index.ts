@@ -4,7 +4,18 @@ import { normalizeFontFamilyValue } from "@/lib/domains/brochure";
 export const CERTIFICATE_PAGE_WIDTH = 983;
 export const CERTIFICATE_PAGE_HEIGHT = 680;
 
-export const CERTIFICATE_PLACEHOLDERS = ["{{name}}", "{{gender}}", "{{prize}}", "{{event}}", "{{date}}"] as const;
+export const CERTIFICATE_PLACEHOLDERS = [
+  "{{salutation}}",
+  "{{name}}",
+  "{{year}}",
+  "{{date}}",
+  "{{organization}}",
+  "{{certificate_id}}",
+  "{{verification_url}}",
+  "{{gender}}",
+  "{{prize}}",
+  "{{event}}",
+] as const;
 
 export type CertificateTemplateName = "srm" | "beige" | "tan";
 export type CertificateType = "workshop" | "hackathon" | "symposium" | "custom";
@@ -32,21 +43,30 @@ export type CertificateTemplateInput = {
 export type CertificateEditorState = {
   templateInput: CertificateTemplateInput;
   overlayItems: OverlayItem[];
-  template: CertificateTemplateName;
+  template: string;
   background: {
     borderColor: string;
     backgroundImage: string;
   };
+  customSignatures?: Array<{
+    name: string;
+    designation: string;
+    src: string;
+  }>;
 };
 
 export type CertificateStudentRow = {
   serialNo: string;
+  salutation: string;
   name: string;
   year: string;
   gender: "Mr" | "Ms";
   prize: string;
   event: string;
   date: string;
+  organization: string;
+  certificateId?: string;
+  verificationUrl?: string;
 };
 
 const DEFAULT_SIGNATURES: CertificateSignature[] = [
@@ -56,7 +76,7 @@ const DEFAULT_SIGNATURES: CertificateSignature[] = [
 ];
 
 const DEFAULT_BODY_TEXT =
-  "{{gender}} {{name}} from {{year}} has secured {{prize}} in {{event}} held on {{date}} organized by the Department of Computing Technologies, School of Computing, S.R.M. Institute of Science and Technology, Kattankulathur, Chennai, Tamil Nadu.";
+  "{{salutation}} {{name}} from {{year}} has secured {{prize}} in {{event}} held on {{date}} organized by {{organization}}.";
 
 const INTERNAL_ORGANIZATION_NAME = "SRM Institute of Science and Technology";
 const INTERNAL_SCHOOL_NAME = "School of Computing";
@@ -64,15 +84,15 @@ const INTERNAL_DEPARTMENT_NAME = "Department of Computing Technologies";
 
 export function getCertificateBodyTextForType(type: CertificateType): string {
   if (type === "workshop") {
-    return "{{gender}} {{name}} has successfully participated in {{event}} held on {{date}}.";
+    return "{{salutation}} {{name}} has successfully participated in {{event}} held on {{date}}.";
   }
 
   if (type === "hackathon") {
-    return "{{gender}} {{name}} has secured {{prize}} in {{event}} conducted on {{date}}.";
+    return "{{salutation}} {{name}} has secured {{prize}} in {{event}} conducted on {{date}}.";
   }
 
   if (type === "symposium") {
-    return "{{gender}} {{name}} has presented at {{event}} on {{date}}.";
+    return "{{salutation}} {{name}} has presented at {{event}} on {{date}}.";
   }
 
   return DEFAULT_BODY_TEXT;
@@ -294,202 +314,137 @@ export function normalizeCertificateTemplateInput(input: unknown): CertificateTe
 
 export function createCertificateOverlayLayout(
   templateInput: CertificateTemplateInput,
-  template: CertificateTemplateName = "srm",
+  template: string = "template1",
 ): OverlayItem[] {
   const overlays: OverlayItem[] = [];
 
-  const palette =
-    template === "beige"
-      ? {
-          title: "#8a5a1f",
-          accent: "#4a3423",
-          body: "#3d2a1c",
-          border: "#9a6b3a",
-          surface: "#fff7eb",
-          background: "linear-gradient(145deg, rgba(255,247,235,1) 0%, rgba(239,222,197,1) 100%)",
-        }
-      : template === "tan"
-        ? {
-            title: "#6b4e24",
-            accent: "#35261b",
-            body: "#2f241a",
-            border: "#8a6638",
-            surface: "#fff8ef",
-            background: "linear-gradient(145deg, rgba(255,248,239,1) 0%, rgba(245,220,188,1) 100%)",
-          }
-        : {
-            title: "#7f1d1d",
-            accent: "#0f172a",
-            body: "#111827",
-            border: "#1e3a8a",
-            surface: "#ffffff",
-            background: "linear-gradient(145deg, rgba(255,255,255,1) 0%, rgba(241,245,249,1) 100%)",
-          };
-
-  const topLogos = templateInput.logos.slice(0, 6);
-  const logoWidth = 98;
-  const logoHeight = 68;
-  const logoGap = 14;
-  const topRowWidth = topLogos.length * logoWidth + Math.max(0, topLogos.length - 1) * logoGap;
-  const topRowStartX = Math.max(20, (CERTIFICATE_PAGE_WIDTH - topRowWidth) / 2);
-
-  topLogos.forEach((logo, index) => {
-    overlays.push(
-      createImageOverlay({
-        src: logo,
-        name: `logo-${index + 1}`,
-        x: topRowStartX + index * (logoWidth + logoGap),
-        y: 28,
-        width: logoWidth,
-        height: logoHeight,
-        borderRadius: 2,
-      }),
-    );
-  });
-
+  // 1. Institution Name (Static TextBox)
   overlays.push(
     createTextOverlay({
-      text: templateInput.organizationName.toUpperCase(),
+      text: "SRM Institute of Science and Technology",
       x: 90,
-      y: 118,
+      y: 80,
       width: 803,
-      height: 42,
+      height: 40,
+      fontSize: 26,
+      fontWeight: 700,
+      align: "center",
+      color: "#0f172a",
+      fontFamily: '"Times New Roman", Times, serif',
+    })
+  );
+
+  // 2. Title (Static TextBox)
+  overlays.push(
+    createTextOverlay({
+      text: "CERTIFICATE OF PARTICIPATION",
+      x: 90,
+      y: 150,
+      width: 803,
+      height: 50,
       fontSize: 36,
-      fontWeight: 600,
-      align: "center",
-      color: palette.accent,
-      fontFamily: '"Times New Roman", Times, serif',
-    }),
-  );
-
-  overlays.push(
-    createTextOverlay({
-      text: templateInput.collegeName,
-      x: 130,
-      y: 165,
-      width: 723,
-      height: 28,
-      fontSize: 22,
       fontWeight: 700,
       align: "center",
-      color: palette.accent,
+      color: "#1e3a8a",
       fontFamily: '"Times New Roman", Times, serif',
-    }),
+    })
   );
 
-  overlays.push(
-    createTextOverlay({
-      text: templateInput.departmentName,
-      x: 130,
-      y: 195,
-      width: 723,
-      height: 28,
-      fontSize: 22,
-      fontWeight: 700,
-      align: "center",
-      color: palette.accent,
-      fontFamily: '"Times New Roman", Times, serif',
-    }),
-  );
-
-  overlays.push(
-    createTextOverlay({
-      text: templateInput.certificateTitle.toUpperCase(),
-      x: 120,
-      y: 242,
-      width: 743,
-      height: 56,
-      fontSize: 44,
-      fontWeight: 700,
-      align: "center",
-      color: "#6b4f2a",
-      fontFamily: '"Times New Roman", Times, serif',
-    }),
-  );
-
-  overlays.push(
-    createTextOverlay({
-      text: "{{name}}",
-      x: 150,
-      y: 320,
-      width: 683,
-      height: 54,
-      fontSize: 40,
-      fontWeight: 600,
-      align: "center",
-      color: palette.title,
-      fontFamily: '"Lobster", cursive',
-    }),
-  );
-
-  overlays.push(
-    createTextOverlay({
-      text: templateInput.bodyText,
-      x: 110,
-      y: 398,
-      width: 763,
-      height: 118,
-      fontSize: 22,
-      fontWeight: 500,
-      align: "center",
-      color: palette.body,
-      fontFamily: '"Times New Roman", Times, serif',
-    }),
-  );
-
-  const signatures = templateInput.signatures.slice(0, 3);
-  signatures.forEach((signature, index) => {
-    overlays.push(...createSignatureBlock(signature, index));
+  // 3. Main Body TextBox (BrochiTextBox)
+  const defaultBody = "This is to certify that {salutation} {name} of {year} has secured {prize} in {event} held on {date}.";
+  const mockPreview = "This is to certify that Mr Student of 2026 has secured First Place in Web Dev Hackathon held on 29 June 2026.";
+  const mainBodyOverlay = createTextOverlay({
+    text: mockPreview,
+    x: 90,
+    y: 260,
+    width: 803,
+    height: 160,
+    fontSize: 20,
+    fontWeight: 500,
+    align: "center",
+    color: "#334155",
+    fontFamily: '"Times New Roman", Times, serif',
   });
+  (mainBodyOverlay as any).name = "brochitextbox";
+  (mainBodyOverlay as any).originalText = defaultBody;
+  overlays.push(mainBodyOverlay);
 
-  if (templateInput.signatureImage) {
-    overlays.push(
-      createImageOverlay({
-        src: templateInput.signatureImage,
-        name: "signature-image",
-        x: CERTIFICATE_PAGE_WIDTH / 2 - 82,
-        y: 508,
-        width: 164,
-        height: 48,
-        borderRadius: 0,
-      }),
-    );
-  }
-
-  const footerLogos = templateInput.footerLogos.slice(0, 6);
-  footerLogos.forEach((logo, index) => {
-    overlays.push(
-      createImageOverlay({
-        src: logo,
-        name: `footer-logo-${index + 1}`,
-        x: 38 + index * 80,
-        y: 642,
-        width: 66,
-        height: 30,
-        borderRadius: 0,
-      }),
-    );
-  });
+  // 4. QR Placeholder Entity
+  overlays.push({
+    id: createId("qr-placeholder"),
+    type: "shape",
+    page: 1,
+    x: 810,
+    y: 500,
+    width: 110,
+    height: 110,
+    rotation: 0,
+    shape: "rectangle",
+    fill: "rgba(148, 163, 184, 0.05)",
+    stroke: "#94a3b8",
+    strokeWidth: 2,
+    opacity: 1,
+    name: "qr-placeholder",
+  } as any);
 
   return overlays;
 }
 
 export function createEmptyCertificateEditorState(): CertificateEditorState {
   const templateInput = createDefaultCertificateTemplateInput();
+  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743770/brochify/certificate/template1.png";
   return {
     templateInput,
     overlayItems: createCertificateOverlayLayout(templateInput, "srm"),
-    template: "srm",
+    template: "template1",
     background: {
       borderColor: "#1e3a8a",
-      backgroundImage: "linear-gradient(145deg, rgba(255,255,255,1) 0%, rgba(241,245,249,1) 100%)",
+      backgroundImage: defaultBg,
     },
+    customSignatures: [],
   };
 }
 
 function normalizeOverlayItem(item: unknown): OverlayItem | null {
   if (!isRecord(item)) {
     return null;
+  }
+
+  if (item.type === "group" || item.name === "qr-box" || item.name === "image-box") {
+    if (item.name === "qr-box") {
+      return {
+        id: typeof item.id === "string" ? item.id : createId("certificate-qr-box"),
+        type: "shape",
+        page: 1,
+        x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
+        y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
+        width: typeof item.width === "number" ? item.width : 150,
+        height: typeof item.height === "number" ? item.height : 150,
+        rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
+        shape: "rectangle",
+        fill: "rgba(241, 245, 249, 0.3)",
+        stroke: "#cbd5e1",
+        strokeWidth: 2,
+        opacity: 1,
+        name: "qr-box"
+      } as any;
+    }
+    if (item.name === "image-box") {
+      return {
+        id: typeof item.id === "string" ? item.id : createId("certificate-image-box"),
+        type: "image",
+        page: 1,
+        x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
+        y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
+        width: typeof item.width === "number" ? item.width : 150,
+        height: typeof item.height === "number" ? item.height : 150,
+        rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
+        src: typeof item.assignedLogo === "string" ? item.assignedLogo : (typeof item.src === "string" ? item.src : ""),
+        name: "image-box",
+        borderRadius: 8,
+        assignedLogo: typeof item.assignedLogo === "string" ? item.assignedLogo : undefined
+      } as any;
+    }
   }
 
   if (item.type === "text") {
@@ -514,7 +469,9 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
           ? item.align
           : "center",
       backgroundColor: typeof item.backgroundColor === "string" ? item.backgroundColor : "transparent",
-    };
+      name: typeof (item as any).name === "string" ? (item as any).name : undefined,
+      originalText: typeof (item as any).originalText === "string" ? (item as any).originalText : undefined,
+    } as any;
   }
 
   if (item.type === "image") {
@@ -530,6 +487,7 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
       src: typeof item.src === "string" ? item.src : "",
       name: typeof item.name === "string" ? item.name : "asset",
       borderRadius: typeof item.borderRadius === "number" ? item.borderRadius : 0,
+      originalSrc: typeof (item as any).originalSrc === "string" ? (item as any).originalSrc : undefined,
     };
   }
 
@@ -548,7 +506,8 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
       stroke: typeof item.stroke === "string" ? item.stroke : "#0369a1",
       strokeWidth: typeof item.strokeWidth === "number" ? item.strokeWidth : 2,
       opacity: typeof item.opacity === "number" ? item.opacity : 1,
-    };
+      name: typeof (item as any).name === "string" ? (item as any).name : undefined,
+    } as any;
   }
 
   return null;
@@ -556,18 +515,19 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
 
 export function normalizeCertificateEditorState(input: unknown): CertificateEditorState {
   const fallback = createEmptyCertificateEditorState();
+  const defaultBg = "https://res.cloudinary.com/duftjklnm/image/upload/v1777743770/brochify/certificate/template1.png";
 
   if (!isRecord(input)) {
     return fallback;
   }
 
   const templateInput = normalizeCertificateTemplateInput(input.templateInput);
-  const template: CertificateTemplateName = input.template === "beige" || input.template === "tan" ? input.template : "srm";
+  const template = typeof input.template === "string" ? input.template : "template1";
   const overlayItems = Array.isArray(input.overlayItems)
     ? input.overlayItems
         .map((item) => normalizeOverlayItem(item))
         .filter((item): item is OverlayItem => Boolean(item))
-    : createCertificateOverlayLayout(templateInput, template);
+    : createCertificateOverlayLayout(templateInput, "srm");
 
   const background = isRecord(input.background)
     ? {
@@ -578,15 +538,32 @@ export function normalizeCertificateEditorState(input: unknown): CertificateEdit
         backgroundImage:
           typeof input.background.backgroundImage === "string" && input.background.backgroundImage.trim().length > 0
             ? input.background.backgroundImage
-            : fallback.background.backgroundImage,
+            : defaultBg,
       }
-    : fallback.background;
+    : {
+        borderColor: fallback.background.borderColor,
+        backgroundImage: defaultBg,
+      };
+
+  const customSignatures = Array.isArray(input.customSignatures)
+    ? input.customSignatures
+        .map((sig) => {
+          if (!isRecord(sig)) return null;
+          return {
+            name: typeof sig.name === "string" ? sig.name : "",
+            designation: typeof sig.designation === "string" ? sig.designation : "",
+            src: typeof sig.src === "string" ? sig.src : "",
+          };
+        })
+        .filter((s): s is { name: string; designation: string; src: string; } => Boolean(s))
+    : [];
 
   return {
     templateInput,
-    overlayItems: overlayItems.length > 0 ? overlayItems : createCertificateOverlayLayout(templateInput, template),
+    overlayItems: overlayItems.length > 0 ? overlayItems : createCertificateOverlayLayout(templateInput, "srm"),
     template,
     background,
+    customSignatures,
   };
 }
 
@@ -601,6 +578,15 @@ export function mapGenderToHonorific(value: unknown): "Mr" | "Ms" {
   }
 
   return "Mr";
+}
+
+export function normalizeSalutation(value: unknown, fallback: "Mr" | "Ms" = "Mr"): string {
+  const normalized = `${value ?? ""}`.trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized;
 }
 
 export function mapPrizeLabel(value: unknown): string {
@@ -660,12 +646,18 @@ export function normalizeCertificateStudentRows(
       if (!name) {
         return null;
       }
+      const gender = mapGenderToHonorific(readByAliases(row, ["gender", "sex"]));
+      const salutation = normalizeSalutation(
+        readByAliases(row, ["salutation", "title", "honorific"]),
+        gender,
+      );
 
       return {
         serialNo: serialCandidate || String(index + 1),
+        salutation,
         name,
         year: `${readByAliases(row, ["year", "class", "semester", "batch"]) ?? ""}`.trim(),
-        gender: mapGenderToHonorific(readByAliases(row, ["gender", "sex"])),
+        gender,
         prize: mapPrizeLabel(readByAliases(row, ["prize", "position", "rank"])),
         event:
           `${readByAliases(row, ["event", "eventName", "competition"]) ?? defaults.eventName}`.trim() ||
@@ -673,6 +665,8 @@ export function normalizeCertificateStudentRows(
         date:
           `${readByAliases(row, ["date", "issueDate", "awardedOn"]) ?? defaults.issueDate}`.trim() ||
           defaults.issueDate,
+        organization:
+          `${readByAliases(row, ["organization", "organisation", "college", "institution"]) ?? ""}`.trim(),
       };
     })
     .filter((item): item is CertificateStudentRow => Boolean(item));
@@ -680,14 +674,37 @@ export function normalizeCertificateStudentRows(
 
 export function applyCertificatePlaceholders(
   text: string,
-  student: Pick<CertificateStudentRow, "name" | "gender" | "prize" | "event" | "date">,
+  student: Pick<
+    CertificateStudentRow,
+    "salutation" | "name" | "year" | "gender" | "prize" | "event" | "date" | "organization"
+  > & {
+    certificateId?: string;
+    verificationUrl?: string;
+  },
 ): string {
   return text
+    // Single braces
+    .replace(/\{\s*salutation\s*\}/gi, student.salutation)
+    .replace(/\{\s*name\s*\}/gi, student.name)
+    .replace(/\{\s*year\s*\}/gi, student.year)
+    .replace(/\{\s*gender\s*\}/gi, student.gender)
+    .replace(/\{\s*prize\s*\}/gi, student.prize)
+    .replace(/\{\s*event\s*\}/gi, student.event)
+    .replace(/\{\s*date\s*\}/gi, student.date)
+    .replace(/\{\s*organization\s*\}/gi, student.organization)
+    .replace(/\{\s*certificate_id\s*\}/gi, student.certificateId ?? "")
+    .replace(/\{\s*verification_url\s*\}/gi, student.verificationUrl ?? "")
+    // Double braces
+    .replace(/\{\{\s*salutation\s*\}\}/gi, student.salutation)
     .replace(/\{\{\s*name\s*\}\}/gi, student.name)
+    .replace(/\{\{\s*year\s*\}\}/gi, student.year)
     .replace(/\{\{\s*gender\s*\}\}/gi, student.gender)
     .replace(/\{\{\s*prize\s*\}\}/gi, student.prize)
     .replace(/\{\{\s*event\s*\}\}/gi, student.event)
-    .replace(/\{\{\s*date\s*\}\}/gi, student.date);
+    .replace(/\{\{\s*date\s*\}\}/gi, student.date)
+    .replace(/\{\{\s*organization\s*\}\}/gi, student.organization)
+    .replace(/\{\{\s*certificate_id\s*\}\}/gi, student.certificateId ?? "")
+    .replace(/\{\{\s*verification_url\s*\}\}/gi, student.verificationUrl ?? "");
 }
 
 function escapeHtml(value: string): string {
@@ -722,12 +739,33 @@ export function renderCertificateHtmlForStudent(
         `transform-origin:top left`,
       ].join(";");
 
+      if (item.name === "qr-placeholder" || item.name === "qr-box") {
+        if (student.verificationUrl) {
+          return `<div style="${baseStyle};text-align:center;font-family:Arial,sans-serif;color:#334155;overflow:hidden;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=4&data=${encodeURIComponent(student.verificationUrl)}" alt="Verification QR code" style="width:100%;height:calc(100% - 14px);object-fit:contain;display:block;margin:0 auto;" />
+            <div style="font-size:8px;line-height:1.2;word-break:break-all;">${escapeHtml(student.certificateId ?? "Verify")}</div>
+          </div>`;
+        } else {
+          return `<div style="${baseStyle};border:2px dashed #94a3b8;background:rgba(148,163,184,0.05);display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:14px;color:#64748b;font-weight:bold;">QR</div>`;
+        }
+      }
+
       if (item.type === "text") {
-        const text = applyCertificatePlaceholders(item.text, student);
+        const pattern = (item as any).originalText || item.text;
+        const text = applyCertificatePlaceholders(pattern, student);
         return `<div style="${baseStyle};font-family:${escapeHtml(item.fontFamily)};font-size:${item.fontSize}px;font-weight:${item.fontWeight};font-style:${escapeHtml(item.fontStyle || "normal")};text-decoration:${escapeHtml(item.textDecoration || "none")};color:${escapeHtml(item.color)};text-align:${getTextAlignmentCss(item.align)};white-space:pre-wrap;line-height:1.6;overflow:hidden;">${escapeHtml(text)}</div>`;
       }
 
       if (item.type === "image") {
+        if (item.name === "image-box") {
+          if (item.src) {
+            return `<div style="${baseStyle};overflow:hidden;border-radius:${item.borderRadius}px;border:2px dashed #cbd5e1;background:rgba(241,245,249,0.3);"><img src="${escapeHtml(
+              item.src,
+            )}" alt="Inserted Logo" style="width:100%;height:100%;object-fit:cover;" /></div>`;
+          } else {
+            return `<div style="${baseStyle};border:2px dashed #cbd5e1;background:rgba(241,245,249,0.3);border-radius:${item.borderRadius}px;display:flex;align-items:center;justify-content:center;color:#cbd5e1;"><svg style="width:48px;height:48px;fill:#cbd5e1" viewBox="0 0 24 24"><path d="M2 19h20V5H2v14zm2-12h16v10H4V7zm4 8l3-4 2 3 3-5 4 6H8z"/></svg></div>`;
+          }
+        }
         return `<div style="${baseStyle};overflow:hidden;border-radius:${item.borderRadius}px;"><img src="${escapeHtml(
           item.src,
         )}" alt="${escapeHtml(item.name)}" style="width:100%;height:100%;object-fit:contain;" /></div>`;
@@ -740,7 +778,7 @@ export function renderCertificateHtmlForStudent(
     .join("");
 
   return `
-    <div class="certificate-page" style="position:relative;width:${CERTIFICATE_PAGE_WIDTH}px;height:${CERTIFICATE_PAGE_HEIGHT}px;background-image:${state.background.backgroundImage};background-color:#ffffff;border:6px solid ${state.background.borderColor};box-sizing:border-box;overflow:hidden;">
+    <div class="certificate-page" style="position:relative;width:${CERTIFICATE_PAGE_WIDTH}px;height:${CERTIFICATE_PAGE_HEIGHT}px;background-image:${state.background.backgroundImage};background-position:center;background-size:cover;background-color:#ffffff;border:6px solid ${state.background.borderColor};box-sizing:border-box;overflow:hidden;">
       ${overlayHtml}
     </div>
   `;
@@ -748,25 +786,24 @@ export function renderCertificateHtmlForStudent(
 
 export function getCertificateDownloadFileName(
   serialNo: string | null | undefined,
+  studentName: string,
   index: number,
   extension: "pdf" | "png" | "jpg",
 ): string {
   const serialText = `${serialNo ?? ""}`.trim();
+  const cleanName = studentName
+    .trim()
+    .replace(/[^a-zA-Z0-9\s_]+/g, "")
+    .replace(/\s+/g, "_")
+    .slice(0, 30);
 
-  let suffix = "";
-  if (/^\d+$/.test(serialText)) {
-    suffix = String(Number(serialText)).padStart(2, "0");
-  } else if (serialText) {
-    suffix = serialText
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 24);
+  if (serialText) {
+    const paddedSerial = /^\d+$/.test(serialText)
+      ? String(Number(serialText)).padStart(3, "0")
+      : serialText.slice(0, 10);
+    return `${paddedSerial}_${cleanName}.${extension}`;
   }
 
-  if (!suffix) {
-    suffix = String(index + 1).padStart(2, "0");
-  }
-
-  return `serialNo_${suffix}.${extension}`;
+  const paddedIndex = String(index + 1).padStart(3, "0");
+  return `serialNo_${paddedIndex}.${extension}`;
 }

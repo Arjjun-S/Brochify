@@ -735,3 +735,248 @@ export function syncCanvasClipToActivePage(canvas: fabric.Canvas, activePage: nu
 
   syncCanvasPageInteractionToActivePage(canvas, activePage, pageFrames);
 }
+
+export async function generateWatermarkedDataUrl(src: string, isApproved: boolean): Promise<string> {
+  if (isApproved) {
+    if (src === "sign") {
+      return new Promise((resolve) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 150;
+        canvas.height = 50;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.font = "italic 24px cursive";
+          ctx.fillStyle = "#0f172a";
+          ctx.fillText("sign", 20, 35);
+        }
+        resolve(canvas.toDataURL());
+      });
+    }
+    return src;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width || 300;
+      canvas.height = img.height || 100;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(src);
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(-Math.PI / 12);
+      ctx.font = `bold ${Math.max(12, Math.floor(canvas.height / 4))}px sans-serif`;
+      ctx.fillStyle = "rgba(220, 38, 38, 0.4)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("PROVISIONAL", 0, 0);
+      ctx.restore();
+
+      resolve(canvas.toDataURL());
+    };
+    img.onerror = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 150;
+      canvas.height = 50;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(src);
+        return;
+      }
+      ctx.font = "italic 24px cursive";
+      ctx.fillStyle = "#0f172a";
+      ctx.fillText("sign", 20, 35);
+
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillStyle = "rgba(220, 38, 38, 0.4)";
+      ctx.fillText("PROVISIONAL", 15, 20);
+
+      resolve(canvas.toDataURL());
+    };
+    img.src = src === "sign" ? "" : src;
+  });
+}
+
+export function rebuildInteractiveElements(canvas: fabric.Canvas) {
+  const objects = [...canvas.getObjects()];
+  
+  objects.forEach((obj) => {
+    if (obj.name === "qr-box") {
+      if ((obj as fabric.Group).getObjects && (obj as fabric.Group).getObjects().length >= 3) {
+        return;
+      }
+      
+      const rect = new fabric.Rect({
+        width: obj.width || 150,
+        height: obj.height || 150,
+        fill: "rgba(241, 245, 249, 0.3)",
+        stroke: "#cbd5e1",
+        strokeWidth: 2,
+        strokeDashArray: [4, 4],
+        rx: 8,
+        ry: 8,
+        originX: "center",
+        originY: "center"
+      });
+
+      fabric.Image.fromURL("/icon-logo.png", (img) => {
+        img.set({
+          originX: "center",
+          originY: "center",
+          left: 0,
+          top: -15,
+          opacity: 0.25,
+          scaleX: 0.8,
+          scaleY: 0.8
+        });
+
+        const label = new fabric.Text("QR Verification", {
+          fontSize: 11,
+          fontFamily: "Arial",
+          fontWeight: "bold",
+          fill: "#94a3b8",
+          originX: "center",
+          originY: "center",
+          left: 0,
+          top: 40
+        });
+
+        const group = new fabric.Group([rect, img, label], {
+          name: "qr-box",
+          left: obj.left,
+          top: obj.top,
+          width: obj.width || 150,
+          height: obj.height || 150,
+          scaleX: obj.scaleX,
+          scaleY: obj.scaleY,
+          angle: obj.angle,
+          originX: "center",
+          originY: "center",
+          selectable: true,
+          hasControls: true
+        });
+
+        (group as any).extensionType = "qr-box";
+
+        canvas.remove(obj);
+        canvas.add(group);
+        canvas.renderAll();
+      }, { crossOrigin: "anonymous" });
+    }
+    
+    if (obj.name === "image-box") {
+      if ((obj as fabric.Group).getObjects && (obj as fabric.Group).getObjects().length >= 2 && !(obj as any)._element) {
+        return;
+      }
+
+      const rect = new fabric.Rect({
+        width: obj.width || 150,
+        height: obj.height || 150,
+        fill: "rgba(241, 245, 249, 0.3)",
+        stroke: "#cbd5e1",
+        strokeWidth: 2,
+        strokeDashArray: [4, 4],
+        rx: 8,
+        ry: 8,
+        originX: "center",
+        originY: "center"
+      });
+
+      const logoUrl = (obj as any).assignedLogo || (obj.type === "image" ? (obj as fabric.Image).getSrc() || (obj as any).src : null);
+
+      if (logoUrl) {
+        fabric.Image.fromURL(logoUrl, (img) => {
+          const imgWidth = img.width || 1;
+          const imgHeight = img.height || 1;
+          const rectWidth = obj.width || 150;
+          const rectHeight = obj.height || 150;
+          const scale = Math.max(rectWidth / imgWidth, rectHeight / imgHeight);
+          
+          img.set({
+            originX: "center",
+            originY: "center",
+            left: 0,
+            top: 0,
+            scaleX: scale,
+            scaleY: scale,
+            name: "inserted-logo"
+          });
+
+          const clipRect = new fabric.Rect({
+            width: rectWidth,
+            height: rectHeight,
+            originX: "center",
+            originY: "center",
+            absolutePositioned: false
+          });
+
+          const group = new fabric.Group([rect, img], {
+            name: "image-box",
+            left: obj.left,
+            top: obj.top,
+            width: rectWidth,
+            height: rectHeight,
+            scaleX: obj.scaleX,
+            scaleY: obj.scaleY,
+            angle: obj.angle,
+            originX: "center",
+            originY: "center",
+            selectable: true,
+            hasControls: true,
+            clipPath: clipRect
+          });
+
+          (group as any).extensionType = "image-box";
+          (group as any).assignedLogo = logoUrl;
+
+          canvas.remove(obj);
+          canvas.add(group);
+          canvas.renderAll();
+        }, { crossOrigin: "anonymous" });
+      } else {
+        const imagePath = new fabric.Path("M2 19h20V5H2v14zm2-12h16v10H4V7zm4 8l3-4 2 3 3-5 4 6H8z", {
+          fill: "#cbd5e1",
+          originX: "center",
+          originY: "center",
+          left: 0,
+          top: 0
+        });
+        const pathBounds = imagePath.getBoundingRect();
+        const pathScale = Math.min(48 / (pathBounds.width || 1), 48 / (pathBounds.height || 1));
+        imagePath.set({
+          scaleX: pathScale,
+          scaleY: pathScale
+        });
+
+        const group = new fabric.Group([rect, imagePath], {
+          name: "image-box",
+          left: obj.left,
+          top: obj.top,
+          width: obj.width || 150,
+          height: obj.height || 150,
+          scaleX: obj.scaleX,
+          scaleY: obj.scaleY,
+          angle: obj.angle,
+          originX: "center",
+          originY: "center",
+          selectable: true,
+          hasControls: true
+        });
+
+        (group as any).extensionType = "image-box";
+        (group as any).assignedLogo = null;
+
+        canvas.remove(obj);
+        canvas.add(group);
+        canvas.renderAll();
+      }
+    }
+  });
+}

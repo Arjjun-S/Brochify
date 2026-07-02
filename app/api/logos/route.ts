@@ -29,6 +29,18 @@ const toDisplayName = (value: string) => {
 const normalizePrefix = (prefix: string) => (prefix.endsWith("/") ? prefix : `${prefix}/`);
 
 const getCloudinaryCredentials = () => {
+  if (process.env.CLOUDINARY_URL) {
+    const match = process.env.CLOUDINARY_URL.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
+    if (match) {
+      return {
+        api_key: match[1],
+        api_secret: match[2],
+        cloud_name: match[3],
+        secure: true,
+      };
+    }
+  }
+
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API;
   const apiSecret = process.env.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_SECRET;

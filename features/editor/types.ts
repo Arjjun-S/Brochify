@@ -13,7 +13,10 @@ export const JSON_KEYS = [
   "linkData",
   "editable",
   "extensionType",
-  "extension"
+  "extension",
+  "originalSrc",
+  "originalText",
+  "assignedLogo"
 ];
 
 export const filters = [
@@ -109,11 +112,13 @@ export type ActiveTool =
   | "filter"
   | "settings"
   | "ai"
+  | "qr"
   | "remove-bg"
   | "templates"
   | "elements"
   | "logos"
-  | "certificate-templates";
+  | "certificate-templates"
+  | "signatures";
 
 export type BrochureType = "trifold" | "poster";
 
@@ -191,6 +196,7 @@ export interface EditorHookProps {
     height: number;
     width: number;
   }) => void;
+  isApproved?: boolean;
 };
 
 export type BuildEditorProps = {
@@ -216,6 +222,7 @@ export type BuildEditorProps = {
   setStrokeColor: (value: string) => void;
   setStrokeWidth: (value: number) => void;
   setFontFamily: (value: string) => void;
+  isApproved?: boolean;
 };
 
 export interface Editor {
@@ -258,6 +265,7 @@ export interface Editor {
   getActiveFontFamily: () => string;
   changeFontFamily: (value: string) => void;
   addText: (value: string, options?: ITextboxOptions) => void;
+  addBrochiTextBox: (value?: string, options?: ITextboxOptions) => void;
   getActiveOpacity: () => number;
   changeOpacity: (value: number) => void;
   bringForward: () => void;
@@ -282,4 +290,9 @@ export interface Editor {
   goToPage: (page: number) => void;
   addPage: () => void;
   selectedObjects: fabric.Object[];
+  addSignature: (name: string, src: string) => void;
+  addLine: () => void;
+  addQrBox: () => void;
+  addImageBox: () => void;
+  assignLogoToImageBox: (logoUrl: string) => void;
 };

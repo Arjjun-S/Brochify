@@ -32,7 +32,9 @@ import {
   finalizeFabricTextObjectsAfterLoad,
   refreshFabricTextEditingAnchor,
   syncCanvasClipToActivePage,
-  transformText
+  transformText,
+  generateWatermarkedDataUrl,
+  rebuildInteractiveElements
 } from "@/features/editor/utils";
 import { useHotkeys } from "@/features/editor/hooks/use-hotkeys";
 import { useClipboard } from "@/features/editor/hooks/use-clipboard";
@@ -41,7 +43,7 @@ import { useCanvasEvents } from "@/features/editor/hooks/use-canvas-events";
 import { useViewportInteractions } from "@/features/editor/hooks/use-viewport-interactions";
 import { useWindowEvents } from "@/features/editor/hooks/use-window-events";
 import { useLoadState } from "@/features/editor/hooks/use-load-state";
-import { CERTIFICATE_PAGE_WIDTH, CERTIFICATE_PAGE_HEIGHT } from "@/lib/domains/certificate";
+import { CERTIFICATE_PAGE_WIDTH, CERTIFICATE_PAGE_HEIGHT, applyCertificatePlaceholders } from "@/lib/domains/certificate";
 
 const IDENTITY_MATRIX: [number, number, number, number, number, number] = [1, 0, 0, 1, 0, 0];
 
@@ -233,6 +235,7 @@ const buildEditor = ({
   activePage,
   setActivePage,
   setStrokeDashArray,
+  isApproved = false,
 }: BuildEditorProps): Editor => {
   const getWorkspace = () => {
     return canvas
@@ -326,82 +329,122 @@ const buildEditor = ({
     };
   };
 
+  const withWatermark = (fn: () => void) => {
+    if (isApproved) {
+      fn();
+      return;
+    }
+    
+    // Add client-side watermark text
+    const workspace = getWorkspace();
+    const watermark = new fabric.Text("NOT APPROVED", {
+      fontSize: 60,
+      fontFamily: "Arial",
+      fontWeight: "bold",
+      fill: "rgba(185, 28, 28, 0.15)",
+      angle: -30,
+      originX: "center",
+      originY: "center",
+      left: (workspace?.left ?? 0) + (workspace?.width ?? 900) / 2,
+      top: (workspace?.top ?? 0) + (workspace?.height ?? 600) / 2,
+      selectable: false,
+      evented: false,
+      name: "export-watermark"
+    });
+    
+    canvas.add(watermark);
+    canvas.renderAll();
+    
+    try {
+      fn();
+    } finally {
+      canvas.remove(watermark);
+      canvas.renderAll();
+    }
+  };
+
   const savePng = () => {
-    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    withWatermark(() => {
+      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
-    const frames = getPageFrames();
+      const frames = getPageFrames();
 
-    if (frames.length >= 2) {
-      const urls = frames.map((frame) => {
-        const crop = exportCropRectForFabricObject(frame);
-        return withNoClip(() =>
-          canvas.toDataURL({
-            format: "png",
-            quality: 1,
-            ...crop,
-          }),
-        );
-      });
+      if (frames.length >= 2) {
+        const urls = frames.map((frame) => {
+          const crop = exportCropRectForFabricObject(frame);
+          return withNoClip(() =>
+            canvas.toDataURL({
+              format: "png",
+              quality: 1,
+              ...crop,
+            }),
+          );
+        });
 
-      urls.forEach((dataUrl, index) => {
-        window.setTimeout(() => {
-          downloadFile(dataUrl, "png", `brochure-page-${index + 1}`);
-        }, index * 350);
-      });
-    }
-    else {
-      const options = generateSaveOptions();
-      const dataUrl = withNoClip(() => canvas.toDataURL(options));
-      downloadFile(dataUrl, "png");
-    }
+        urls.forEach((dataUrl, index) => {
+          window.setTimeout(() => {
+            downloadFile(dataUrl, "png", `brochure-page-${index + 1}`);
+          }, index * 350);
+        });
+      }
+      else {
+        const options = generateSaveOptions();
+        const dataUrl = withNoClip(() => canvas.toDataURL(options));
+        downloadFile(dataUrl, "png");
+      }
 
-    autoZoom();
+      autoZoom();
+    });
   };
 
   const saveSvg = () => {
-    const options = generateSaveOptions();
+    withWatermark(() => {
+      const options = generateSaveOptions();
 
-    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    const dataUrl = withNoClip(() => canvas.toDataURL(options));
+      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+      const dataUrl = withNoClip(() => canvas.toDataURL(options));
 
-    downloadFile(dataUrl, "svg");
-    autoZoom();
+      downloadFile(dataUrl, "svg");
+      autoZoom();
+    });
   };
 
   const saveJpg = () => {
-    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    withWatermark(() => {
+      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
-    const frames = getPageFrames();
+      const frames = getPageFrames();
 
-    if (frames.length >= 2) {
-      const urls = frames.map((frame) => {
-        const crop = exportCropRectForFabricObject(frame);
-        return withNoClip(() =>
-          canvas.toDataURL({
-            format: "jpeg",
-            quality: 1,
-            ...crop,
-          }),
-        );
-      });
+      if (frames.length >= 2) {
+        const urls = frames.map((frame) => {
+          const crop = exportCropRectForFabricObject(frame);
+          return withNoClip(() =>
+            canvas.toDataURL({
+              format: "jpeg",
+              quality: 1,
+              ...crop,
+            }),
+          );
+        });
 
-      urls.forEach((dataUrl, index) => {
-        window.setTimeout(() => {
-          downloadFile(dataUrl, "jpg", `brochure-page-${index + 1}`);
-        }, index * 350);
-      });
-    }
-    else {
-      const options = {
-        ...generateSaveOptions(),
-        format: "jpeg" as const,
-        quality: 0.92,
-      };
-      const dataUrl = withNoClip(() => canvas.toDataURL(options));
-      downloadFile(dataUrl, "jpg");
-    }
+        urls.forEach((dataUrl, index) => {
+          window.setTimeout(() => {
+            downloadFile(dataUrl, "jpg", `brochure-page-${index + 1}`);
+          }, index * 350);
+        });
+      }
+      else {
+        const options = {
+          ...generateSaveOptions(),
+          format: "jpeg" as const,
+          quality: 0.92,
+        };
+        const dataUrl = withNoClip(() => canvas.toDataURL(options));
+        downloadFile(dataUrl, "jpg");
+      }
 
-    autoZoom();
+      autoZoom();
+    });
   };
 
   const savePdf = async (options?: { watermarkText?: string | null; template?: string }) => {
@@ -499,10 +542,78 @@ const buildEditor = ({
       return;
     }
 
-    canvas.loadFromJSON(data, () => {
-      ensureCanvasViewportTransform(canvas);
-      finalizeFabricTextObjectsAfterLoad(canvas);
-      autoZoom();
+    const preprocess = async () => {
+      const parsedData = data as Record<string, unknown>;
+      if (Array.isArray(parsedData.objects)) {
+        for (const obj of parsedData.objects) {
+          if (obj.name === "signature" && obj.originalSrc) {
+            obj.src = await generateWatermarkedDataUrl(obj.originalSrc, isApproved);
+          }
+          if (obj.name === "brochitextbox" && typeof obj.originalText === "string") {
+            const mockStudent = {
+              serialNo: "001",
+              salutation: "Mr",
+              name: "Student",
+              year: "2026",
+              gender: "Mr" as const,
+              prize: "First Place",
+              event: "Web Dev Hackathon",
+              date: "29 June 2026",
+              organization: "SRM Institute of Science and Technology",
+            };
+            obj.text = applyCertificatePlaceholders(obj.originalText, mockStudent);
+          }
+        }
+      }
+    };
+
+    preprocess().then(() => {
+      canvas.loadFromJSON(data, () => {
+        ensureCanvasViewportTransform(canvas);
+        finalizeFabricTextObjectsAfterLoad(canvas);
+        
+        // Recreate workspace clip if missing (loadFromJSON overwrites canvas objects)
+        let workspace = canvas.getObjects().find((object) => object.name === "clip");
+        if (!workspace) {
+          workspace = new fabric.Rect({
+            width: workspaceWidth || CERTIFICATE_PAGE_WIDTH,
+            height: workspaceHeight || CERTIFICATE_PAGE_HEIGHT,
+            name: "clip",
+            fill: "white",
+            stroke: "#e2e8f0",
+            strokeWidth: 1,
+            selectable: false,
+            hasControls: false,
+            shadow: new fabric.Shadow({
+              color: "rgba(0,0,0,0.15)",
+              blur: 8,
+              offsetX: 0,
+              offsetY: 2,
+            }),
+          });
+          canvas.add(workspace);
+          canvas.centerObject(workspace);
+          canvas.sendToBack(workspace);
+        }
+
+        // Fit background image to workspace
+        const bg = canvas.backgroundImage;
+        if (bg) {
+          const wWidth = workspace.width ?? CERTIFICATE_PAGE_WIDTH;
+          const wHeight = workspace.height ?? CERTIFICATE_PAGE_HEIGHT;
+          bg.set({
+            originX: "left",
+            originY: "top",
+            left: workspace.left ?? 0,
+            top: workspace.top ?? 0,
+            scaleX: wWidth / (bg.width || 1),
+            scaleY: wHeight / (bg.height || 1),
+          });
+        }
+
+        rebuildInteractiveElements(canvas);
+        autoZoom();
+      });
     });
   };
 
@@ -766,25 +877,18 @@ const buildEditor = ({
           );
 
           image.set({
-            originX: "center",
-            originY: "center",
-            left: (workspace.left ?? 0) + workspaceWidth / 2,
-            top: (workspace.top ?? 0) + workspaceHeight / 2,
-            scaleX: coverScale,
-            scaleY: coverScale,
-            selectable: false,
-            evented: false,
-            hasControls: false,
-            lockMovementX: true,
-            lockMovementY: true,
-            lockRotation: true,
-            lockScalingX: true,
-            lockScalingY: true,
-            lockUniScaling: true,
+            originX: "left",
+            originY: "top",
+            left: workspace.left ?? 0,
+            top: workspace.top ?? 0,
+            scaleX: workspaceWidth / imageWidth,
+            scaleY: workspaceHeight / imageHeight,
           });
 
-          image.sendToBack();
-          canvas.renderAll();
+          canvas.setBackgroundImage(image, () => {
+            canvas.renderAll();
+            save();
+          });
         },
         { crossOrigin: "anonymous" },
       );
@@ -1123,6 +1227,31 @@ const buildEditor = ({
 
       addToCanvas(object);
     },
+    addBrochiTextBox: (value, options) => {
+      const defaultValue = value || "This is to certify that {salutation} {name} has participated in the event.";
+      const mockStudent = {
+        serialNo: "001",
+        salutation: "Mr",
+        name: "Student",
+        year: "2026",
+        gender: "Mr" as const,
+        prize: "First Place",
+        event: "Web Dev Hackathon",
+        date: "29 June 2026",
+        organization: "SRM Institute of Science and Technology",
+      };
+      const previewText = applyCertificatePlaceholders(defaultValue, mockStudent);
+
+      const object = new fabric.Textbox(previewText, {
+        ...TEXT_OPTIONS,
+        fill: fillColor,
+        name: "brochitextbox",
+        ...options,
+      });
+      (object as any).originalText = defaultValue;
+
+      addToCanvas(object);
+    },
     getActiveOpacity: () => {
       const selectedObject = selectedObjects?.[0];
 
@@ -1419,6 +1548,211 @@ const buildEditor = ({
       );
       addToCanvas(object);
     },
+    addLine: () => {
+      const line = new fabric.Line([50, 50, 250, 50], {
+        stroke: strokeColor || "#000000",
+        strokeWidth: strokeWidth || 2,
+        strokeDashArray: strokeDashArray,
+        left: 100,
+        top: 100,
+        selectable: true,
+        hasControls: true
+      });
+      addToCanvas(line);
+    },
+    addQrBox: () => {
+      const rect = new fabric.Rect({
+        width: 150,
+        height: 150,
+        fill: "rgba(241, 245, 249, 0.3)",
+        stroke: "#cbd5e1",
+        strokeWidth: 2,
+        strokeDashArray: [4, 4],
+        rx: 8,
+        ry: 8,
+        originX: "center",
+        originY: "center"
+      });
+
+      fabric.Image.fromURL("/icon-logo.png", (img) => {
+        img.set({
+          originX: "center",
+          originY: "center",
+          left: 0,
+          top: -15,
+          opacity: 0.25,
+          scaleX: 0.8,
+          scaleY: 0.8
+        });
+
+        const label = new fabric.Text("QR Verification", {
+          fontSize: 11,
+          fontFamily: "Arial",
+          fontWeight: "bold",
+          fill: "#94a3b8",
+          originX: "center",
+          originY: "center",
+          left: 0,
+          top: 40
+        });
+
+        const group = new fabric.Group([rect, img, label], {
+          name: "qr-box",
+          left: 150,
+          top: 150,
+          width: 150,
+          height: 150,
+          originX: "center",
+          originY: "center",
+          selectable: true,
+          hasControls: true
+        });
+
+        (group as any).extensionType = "qr-box";
+
+        addToCanvas(group);
+      }, { crossOrigin: "anonymous" });
+    },
+    addImageBox: () => {
+      const rect = new fabric.Rect({
+        width: 150,
+        height: 150,
+        fill: "rgba(241, 245, 249, 0.3)",
+        stroke: "#cbd5e1",
+        strokeWidth: 2,
+        strokeDashArray: [4, 4],
+        rx: 8,
+        ry: 8,
+        originX: "center",
+        originY: "center"
+      });
+
+      const imagePath = new fabric.Path("M2 19h20V5H2v14zm2-12h16v10H4V7zm4 8l3-4 2 3 3-5 4 6H8z", {
+        fill: "#cbd5e1",
+        originX: "center",
+        originY: "center",
+        left: 0,
+        top: 0
+      });
+      const pathBounds = imagePath.getBoundingRect();
+      const pathScale = Math.min(48 / (pathBounds.width || 1), 48 / (pathBounds.height || 1));
+      imagePath.set({
+        scaleX: pathScale,
+        scaleY: pathScale
+      });
+
+      const group = new fabric.Group([rect, imagePath], {
+        name: "image-box",
+        left: 100,
+        top: 100,
+        width: 150,
+        height: 150,
+        originX: "center",
+        originY: "center",
+        selectable: true,
+        hasControls: true
+      });
+      
+      (group as any).extensionType = "image-box";
+      (group as any).assignedLogo = null;
+
+      addToCanvas(group);
+    },
+    assignLogoToImageBox: (logoUrl: string) => {
+      const activeObject = canvas.getActiveObject();
+      if (!activeObject || activeObject.name !== "image-box") {
+        return;
+      }
+
+      const group = activeObject as fabric.Group;
+      const rect = group.item(0) as fabric.Rect;
+      const rectWidth = rect.width || 150;
+      const rectHeight = rect.height || 150;
+
+      const left = group.left;
+      const top = group.top;
+      const scaleX = group.scaleX;
+      const scaleY = group.scaleY;
+      const angle = group.angle;
+
+      fabric.Image.fromURL(logoUrl, (img) => {
+        const objects = group.getObjects();
+        for (let i = objects.length - 1; i > 0; i--) {
+          group.remove(objects[i]);
+        }
+
+        const imgWidth = img.width || 1;
+        const imgHeight = img.height || 1;
+        const scale = Math.max(rectWidth / imgWidth, rectHeight / imgHeight);
+        
+        img.set({
+          originX: "center",
+          originY: "center",
+          left: 0,
+          top: 0,
+          scaleX: scale,
+          scaleY: scale,
+          name: "inserted-logo"
+        });
+
+        const clipRect = new fabric.Rect({
+          width: rectWidth,
+          height: rectHeight,
+          originX: "center",
+          originY: "center",
+          absolutePositioned: false
+        });
+        group.clipPath = clipRect;
+
+        group.addWithUpdate(img);
+        
+        group.set({
+          name: "image-box",
+          left,
+          top,
+          scaleX,
+          scaleY,
+          angle
+        });
+        (group as any).assignedLogo = logoUrl;
+
+        canvas.renderAll();
+        save();
+      }, { crossOrigin: "anonymous" });
+    },
+    addSignature: (name: string, src: string) => {
+      generateWatermarkedDataUrl(src, isApproved).then((finalSrc) => {
+        fabric.Image.fromURL(
+          finalSrc,
+          (image) => {
+            const workspace = getWorkspace();
+            const workspaceWidth = workspace?.width ?? CERTIFICATE_PAGE_WIDTH;
+            const workspaceHeight = workspace?.height ?? CERTIFICATE_PAGE_HEIGHT;
+            const imageWidth = image.width || 150;
+            const imageHeight = image.height || 50;
+
+            const scale = 1.0;
+
+            image.set({
+              left: (workspace?.left ?? 0) + (workspaceWidth - imageWidth * scale) / 2,
+              top: (workspace?.top ?? 0) + workspaceHeight - imageHeight * scale - 120,
+              scaleX: scale,
+              scaleY: scale,
+              lockUniScaling: true,
+            });
+
+            (image as any).originalSrc = src;
+            (image as any).name = "signature";
+
+            canvas.add(image);
+            canvas.setActiveObject(image);
+            canvas.renderAll();
+            save();
+          },
+          { crossOrigin: "anonymous" }
+        );
+      });
+    },
     canvas,
     getActiveFontWeight: () => {
       const selectedObject = selectedObjects?.[0];
@@ -1501,6 +1835,7 @@ export const useEditor = ({
   defaultWidth,
   clearSelectionCallback,
   saveCallback,
+  isApproved = false,
 }: EditorHookProps) => {
   const initialState = useRef(defaultState);
   const initialWidth = useRef(defaultWidth);
@@ -1582,6 +1917,7 @@ export const useEditor = ({
     initialState,
     canvasHistory: canvasHistoryRef,
     setHistoryIndex,
+    isApproved,
   });
 
   const editor = useMemo(() => {
@@ -1609,6 +1945,7 @@ export const useEditor = ({
         setStrokeDashArray,
         fontFamily,
         setFontFamily,
+        isApproved,
       });
     }
 

@@ -37,6 +37,7 @@ import {
 import {
   CERTIFICATE_PAGE_HEIGHT,
   CERTIFICATE_PAGE_WIDTH,
+  applyCertificatePlaceholders,
   createCertificateOverlayLayout,
   getCertificateBodyTextForType,
   normalizeCertificateStudentRows,
@@ -69,6 +70,20 @@ type BulkValidationIssue = {
   row: number;
   field: string;
   message: string;
+};
+
+type BulkColumnMapping = {
+  name: string;
+  salutation: string;
+  year: string;
+  date: string;
+  organization: string;
+};
+
+type CertificateTemplateAsset = {
+  id: number;
+  name: string;
+  cloudinaryUrl: string;
 };
 
 type Snapshot = {
@@ -110,6 +125,39 @@ function getTemplateBackground(template: CertificateTemplateName): CertificateEd
   };
 }
 
+function normalizeColumnName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function inferColumn(headers: string[], aliases: string[]): string {
+  const normalizedAliases = aliases.map(normalizeColumnName);
+  return headers.find((header) => normalizedAliases.includes(normalizeColumnName(header))) || "";
+}
+
+function inferBulkColumnMapping(rows: BulkRowRecord[]): BulkColumnMapping {
+  const headers = Object.keys(rows[0] || {});
+  return {
+    name: inferColumn(headers, ["name", "studentName", "participantName"]),
+    salutation: inferColumn(headers, ["salutation", "title", "honorific", "gender", "sex"]),
+    year: inferColumn(headers, ["year", "class", "semester", "batch"]),
+    date: inferColumn(headers, ["date", "issueDate", "awardedOn"]),
+    organization: inferColumn(headers, ["organization", "organisation", "college", "institution"]),
+  };
+}
+
+function mapBulkRows(rows: BulkRowRecord[], mapping: BulkColumnMapping, fallbackOrganization: string): BulkRowRecord[] {
+  return rows.map((row) => ({
+    ...row,
+    name: mapping.name ? row[mapping.name] : row.name,
+    salutation: mapping.salutation ? row[mapping.salutation] : row.salutation,
+    year: mapping.year ? row[mapping.year] : row.year,
+    date: mapping.date ? row[mapping.date] : row.date,
+    organization: mapping.organization
+      ? row[mapping.organization]
+      : row.organization || fallbackOrganization,
+  }));
+}
+
 export default function CertificateStudioPage({ session, certificate }: CertificateStudioPageProps) {
   const pathname = usePathname();
   const [overlayItems, setOverlayItems] = useState<OverlayItem[]>(certificate.content.overlayItems);
@@ -125,6 +173,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
   const [workflowError, setWorkflowError] = useState<string | null>(null);
 
   const [logoAssets, setLogoAssets] = useState<LogoAsset[]>([]);
+  const [templateAssets, setTemplateAssets] = useState<CertificateTemplateAsset[]>([]);
 
   const [canvasScale, setCanvasScale] = useState(0.9);
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
@@ -143,6 +192,13 @@ export default function CertificateStudioPage({ session, certificate }: Certific
   const [bulkOpen, setBulkOpen] = useState(true);
 
   const [bulkRows, setBulkRows] = useState<BulkRowRecord[]>([]);
+  const [bulkColumnMapping, setBulkColumnMapping] = useState<BulkColumnMapping>({
+    name: "",
+    salutation: "",
+    year: "",
+    date: "",
+    organization: "",
+  });
   const [bulkIssues, setBulkIssues] = useState<BulkValidationIssue[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkProgressMessage, setBulkProgressMessage] = useState<string | null>(null);
@@ -173,14 +229,27 @@ export default function CertificateStudioPage({ session, certificate }: Certific
     return logoAssets.filter((logo) => logo.name.toLowerCase().includes(query));
   }, [logoAssets, setupLogoSearch]);
 
+  const mappedBulkRows = useMemo(
+    () => mapBulkRows(bulkRows, bulkColumnMapping, templateInput.organizationName),
+    [bulkColumnMapping, bulkRows, templateInput.organizationName],
+  );
+
   const normalizedBulkStudents = useMemo(
     () =>
-      normalizeCertificateStudentRows(bulkRows as Array<Record<string, unknown>>, {
+      normalizeCertificateStudentRows(mappedBulkRows as Array<Record<string, unknown>>, {
         eventName: templateInput.eventName,
         issueDate: templateInput.issueDate,
       }),
-    [bulkRows, templateInput.eventName, templateInput.issueDate],
+    [mappedBulkRows, templateInput.eventName, templateInput.issueDate],
   );
+
+  const bulkColumnOptions = useMemo(() => {
+    const headers = Object.keys(bulkRows[0] || {});
+    return [
+      { label: "Not mapped", value: "__none__" },
+      ...headers.map((header) => ({ label: header, value: header })),
+    ];
+  }, [bulkRows]);
 
   const previewOverlayItems = useMemo(() => {
     if (previewStudentIndex === null || normalizedBulkStudents.length === 0) {
@@ -195,15 +264,13 @@ export default function CertificateStudioPage({ session, certificate }: Certific
 
       return {
         ...item,
-        text: item.text
-          .replace(/\{\{\s*name\s*\}\}/gi, student.name)
-          .replace(/\{\{\s*gender\s*\}\}/gi, student.gender)
-          .replace(/\{\{\s*prize\s*\}\}/gi, student.prize)
-          .replace(/\{\{\s*event\s*\}\}/gi, student.event)
-          .replace(/\{\{\s*date\s*\}\}/gi, student.date),
+        text: applyCertificatePlaceholders(item.text, {
+          ...student,
+          organization: student.organization || templateInput.organizationName,
+        }),
       } as OverlayItem;
     });
-  }, [normalizedBulkStudents, overlayItems, previewStudentIndex]);
+  }, [normalizedBulkStudents, overlayItems, previewStudentIndex, templateInput.organizationName]);
 
   useEffect(() => {
     let isMounted = true;
@@ -228,7 +295,24 @@ export default function CertificateStudioPage({ session, certificate }: Certific
       }
     };
 
+    const loadTemplateAssets = async () => {
+      try {
+        const response = await fetch("/api/assets?type=certificate_template", { cache: "no-store" });
+        const data = (await response.json()) as { data?: CertificateTemplateAsset[] };
+        if (!response.ok || !isMounted) {
+          return;
+        }
+
+        setTemplateAssets(Array.isArray(data.data) ? data.data : []);
+      } catch {
+        if (isMounted) {
+          setTemplateAssets([]);
+        }
+      }
+    };
+
     void loadLogos();
+    void loadTemplateAssets();
 
     return () => {
       isMounted = false;
@@ -285,6 +369,14 @@ export default function CertificateStudioPage({ session, certificate }: Certific
     setBulkIssues(issues);
   }, []);
 
+  useEffect(() => {
+    if (bulkRows.length === 0) {
+      return;
+    }
+
+    validateBulkRows(mappedBulkRows);
+  }, [bulkRows.length, mappedBulkRows, validateBulkRows]);
+
   const parseBulkFile = useCallback(async (file: File) => {
     const lowerName = file.name.toLowerCase();
 
@@ -292,6 +384,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
       const raw = await file.text();
       const parsed = JSON.parse(raw) as unknown;
       const rows = Array.isArray(parsed) ? (parsed.filter((entry) => typeof entry === "object" && entry !== null) as BulkRowRecord[]) : [];
+      setBulkColumnMapping(inferBulkColumnMapping(rows));
       setBulkRows(rows);
       validateBulkRows(rows);
       return;
@@ -301,6 +394,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
       const raw = await file.text();
       const result = Papa.parse<BulkRowRecord>(raw, { header: true, skipEmptyLines: true });
       const rows = (result.data || []) as BulkRowRecord[];
+      setBulkColumnMapping(inferBulkColumnMapping(rows));
       setBulkRows(rows);
       validateBulkRows(rows);
       return;
@@ -310,6 +404,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
       const matrix = await readSheet(file);
 
       if (matrix.length === 0) {
+        setBulkColumnMapping(inferBulkColumnMapping([]));
         setBulkRows([]);
         validateBulkRows([]);
         return;
@@ -335,6 +430,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
           return record;
         });
 
+      setBulkColumnMapping(inferBulkColumnMapping(rows));
       setBulkRows(rows);
       validateBulkRows(rows);
       return;
@@ -362,7 +458,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
       const response = await fetch(`/api/certificate/${certificate.id}/bulk-generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format: "pdf", rows: bulkRows }),
+        body: JSON.stringify({ format: "pdf", rows: mappedBulkRows }),
       });
 
       if (!response.ok) {
@@ -386,7 +482,7 @@ export default function CertificateStudioPage({ session, certificate }: Certific
       setBulkLoading(false);
       setBulkProgressMessage(null);
     }
-  }, [bulkIssues.length, bulkRows, certificate.id]);
+  }, [bulkIssues.length, bulkRows.length, certificate.id, mappedBulkRows]);
 
   const captureSnapshot = useCallback((): Snapshot => {
     return {
@@ -513,6 +609,23 @@ export default function CertificateStudioPage({ session, certificate }: Certific
       });
     },
     [isAdminReadOnly, runWithUndo, templateInput],
+  );
+
+  const applyCloudinaryTemplate = useCallback(
+    (asset: CertificateTemplateAsset) => {
+      if (isAdminReadOnly) {
+        return;
+      }
+
+      runWithUndo(() => {
+        setBackground({
+          borderColor: "transparent",
+          backgroundImage: `url("${asset.cloudinaryUrl}")`,
+        });
+        setSelectedOverlayId(null);
+      });
+    },
+    [isAdminReadOnly, runWithUndo],
   );
 
   const addTextOverlay = () => {
@@ -899,6 +1012,25 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                     </button>
                   );
                 })}
+                {templateAssets.map((asset) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    onClick={() => applyCloudinaryTemplate(asset)}
+                    className="overflow-hidden rounded-xl border border-slate-200 bg-white text-left transition hover:border-slate-400"
+                  >
+                    <div className="relative h-24 w-full bg-slate-100">
+                      <Image
+                        src={asset.cloudinaryUrl}
+                        alt={asset.name}
+                        fill
+                        sizes="288px"
+                        className="object-cover"
+                      />
+                    </div>
+                    <p className="px-3 py-2 text-sm font-bold text-slate-900">{asset.name}</p>
+                  </button>
+                ))}
               </div>
             )}
           </section>
@@ -982,23 +1114,53 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                   </label>
 
                   {bulkRows.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Map Columns</p>
+                      <div className="mt-3 grid gap-3">
+                        {([
+                          ["name", "Name Column"],
+                          ["salutation", "Salutation Column"],
+                          ["year", "Year Column"],
+                          ["date", "Date Column"],
+                          ["organization", "Organization Column"],
+                        ] as const).map(([field, label]) => (
+                          <label key={field} className="block space-y-1">
+                            <span className="text-xs font-semibold text-slate-600">{label}</span>
+                            <SelectBox
+                              value={bulkColumnMapping[field] || "__none__"}
+                              onChange={(value) =>
+                                setBulkColumnMapping((prev) => ({
+                                  ...prev,
+                                  [field]: value === "__none__" ? "" : value,
+                                }))
+                              }
+                              options={bulkColumnOptions}
+                              className="!h-10 !bg-white !text-slate-700 !border-slate-200"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {bulkRows.length > 0 && (
                     <div className="max-h-40 overflow-auto rounded-xl border border-slate-200 bg-white">
                       <table className="min-w-full text-xs">
                         <thead className="bg-slate-50 text-slate-500">
                           <tr>
                             <th className="px-2 py-1 text-left">s.no</th>
                             <th className="px-2 py-1 text-left">name</th>
-                            <th className="px-2 py-1 text-left">gender</th>
-                            <th className="px-2 py-1 text-left">prize</th>
+                            <th className="px-2 py-1 text-left">salutation</th>
+                            <th className="px-2 py-1 text-left">year</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {bulkRows.slice(0, 10).map((row, index) => (
+                          {mappedBulkRows.slice(0, 10).map((row, index) => (
                             <tr key={`row-${index}`} className="border-t border-slate-100">
                               <td className="px-2 py-1">{`${row["s.no"] ?? row.sno ?? index + 1}`}</td>
                               <td className="px-2 py-1">{`${row.name ?? ""}`}</td>
-                              <td className="px-2 py-1">{`${row.gender ?? ""}`}</td>
-                              <td className="px-2 py-1">{`${row.prize ?? ""}`}</td>
+                              <td className="px-2 py-1">{`${row.salutation ?? row.gender ?? ""}`}</td>
+                              <td className="px-2 py-1">{`${row.year ?? ""}`}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1349,6 +1511,8 @@ export default function CertificateStudioPage({ session, certificate }: Certific
                 style={{
                   border: `6px solid ${background.borderColor}`,
                   backgroundImage: background.backgroundImage,
+                  backgroundPosition: "center",
+                  backgroundSize: "cover",
                 }}
               >
                 <div className="pointer-events-none absolute inset-[14px] rounded-sm border-2 border-slate-200" />

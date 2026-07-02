@@ -42,7 +42,12 @@ export const LogoSidebar = ({ editor, activeTool, onChangeActiveTool }: LogoSide
   };
 
   const onSelectLogo = (src: string) => {
-    editor?.addImage(src);
+    const activeObject = editor?.canvas?.getActiveObject();
+    if (activeObject && activeObject.name === "image-box") {
+      (editor as any).assignLogoToImageBox(src);
+    } else {
+      editor?.addImage(src);
+    }
   };
 
   return (

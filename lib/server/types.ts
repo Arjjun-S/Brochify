@@ -41,6 +41,7 @@ export type BrochureRecord = {
 	assignedAdminUsername: string | null;
 	status: BrochureStatus;
 	rejectionReason: string | null;
+	thumbnailUrl: string | null;
 	createdAt: string;
 	updatedAt: string;
 };

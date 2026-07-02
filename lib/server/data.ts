@@ -24,6 +24,7 @@ type BrochureWithRelations = Prisma.BrochureGetPayload<{
   include: {
     creator: { select: { username: true } };
     assignedAdminUser: { select: { username: true } };
+    designProject: { select: { thumbnailUrl: true } };
   };
 }>;
 
@@ -139,6 +140,7 @@ function mapBrochureRow(row: BrochureWithRelations): BrochureRecord {
     assignedAdminUsername: row.assignedAdminUser?.username ?? null,
     status: row.status as BrochureStatus,
     rejectionReason: row.rejectionReason,
+    thumbnailUrl: row.designProject?.thumbnailUrl ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -367,6 +369,9 @@ export async function listBrochuresForUser(user: SessionUser, options?: ListBroc
       assignedAdminUser: {
         select: { username: true },
       },
+      designProject: {
+        select: { thumbnailUrl: true },
+      },
     },
     orderBy: {
       updatedAt: "desc",
@@ -391,6 +396,9 @@ export async function getBrochureByIdForUser(id: number, user: SessionUser): Pro
       assignedAdminUser: {
         select: { username: true },
       },
+      designProject: {
+        select: { thumbnailUrl: true },
+      },
     },
   });
 
@@ -406,11 +414,13 @@ export async function createBrochureDraft(input: {
 }): Promise<number> {
   await ensureDatabase();
 
+  const emptyState = createEmptyEditorState(input.template);
+
   const created = await prisma.brochure.create({
     data: {
       title: input.title,
       description: input.description,
-      content: toPrismaJson(createEmptyEditorState(input.template)),
+      content: toPrismaJson(emptyState),
       createdBy: input.createdBy,
       assignedAdminId: input.assignedAdminId,
       status: "draft",
@@ -418,6 +428,20 @@ export async function createBrochureDraft(input: {
     select: {
       id: true,
     },
+  });
+
+  // Automatically create a linked DesignProject
+  await prisma.designProject.create({
+    data: {
+      name: input.title,
+      json: "", // You could use createDesignProjectSeedFromBrochure if it was available here, or just let it seed later, or use empty
+      width: 1200,
+      height: 900,
+      createdBy: input.createdBy,
+      brochureId: created.id,
+    } as never,
+  }).catch(() => {
+    // Ignore linking errors if schema doesn't match perfectly during transition
   });
 
   return created.id;

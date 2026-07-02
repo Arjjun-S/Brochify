@@ -29,6 +29,12 @@ type LogoAsset = {
   src: string;
 };
 
+type TemplateAsset = {
+  id: string;
+  name: string;
+  src: string;
+};
+
 async function filesToDataUrls(files: FileList | null, maxCount: number): Promise<string[]> {
   if (!files || files.length === 0) return [];
   const selected = Array.from(files)
@@ -59,6 +65,8 @@ export default function FacultyCertificateCreatePage() {
   const [logoSearch, setLogoSearch] = useState("");
   const [logoDataUrls, setLogoDataUrls] = useState<string[]>([]);
   const [signatureImageDataUrl, setSignatureImageDataUrl] = useState<string | null>(null);
+  const [availableTemplates, setAvailableTemplates] = useState<TemplateAsset[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [assignedAdminId, setAssignedAdminId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +103,20 @@ export default function FacultyCertificateCreatePage() {
       }
     };
     void loadLogos();
+  }, []);
+
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        const response = await fetch("/api/certificate/templates", { cache: "no-store" });
+        const data = (await response.json()) as { templates?: TemplateAsset[] };
+        if (!response.ok) return;
+        setAvailableTemplates(Array.isArray(data.templates) ? data.templates : []);
+      } catch {
+        setAvailableTemplates([]);
+      }
+    };
+    void loadTemplates();
   }, []);
 
   const filteredLogoOptions = useMemo(() => {
@@ -149,7 +171,7 @@ export default function FacultyCertificateCreatePage() {
         template: "srm",
         background: {
           borderColor: "#1e3a8a",
-          backgroundImage: "linear-gradient(145deg, rgba(255,255,255,1) 0%, rgba(241,245,249,1) 100%)",
+          backgroundImage: selectedTemplate ? `url('${selectedTemplate}')` : "linear-gradient(145deg, rgba(255,255,255,1) 0%, rgba(241,245,249,1) 100%)",
         },
       };
 
@@ -409,6 +431,44 @@ export default function FacultyCertificateCreatePage() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Select background template */}
+            <div className={cn(
+              "rounded-2xl border p-3",
+              isDark ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-slate-50",
+            )}>
+              <p className={cn("text-sm font-semibold", isDark ? "text-slate-200" : "text-slate-700")}>Select Background Template</p>
+              {availableTemplates.length === 0 ? (
+                <p className={cn("mt-2 text-xs", isDark ? "text-slate-400" : "text-slate-500")}>No templates found.</p>
+              ) : (
+                <div className="mt-3 grid max-h-60 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
+                  {availableTemplates.map((template) => {
+                    const selected = selectedTemplate === template.src;
+                    return (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => setSelectedTemplate(selected ? "" : template.src)}
+                        className={cn(
+                          "rounded-xl border p-2 text-left transition",
+                          selected
+                            ? isDark ? "border-indigo-500 bg-indigo-900" : "border-indigo-300 bg-indigo-50"
+                            : isDark ? "border-slate-700 bg-slate-800 hover:border-slate-600" : "border-slate-200 bg-white hover:border-slate-300",
+                        )}
+                      >
+                        <div className={cn(
+                          "relative h-20 w-full overflow-hidden rounded-md border",
+                          isDark ? "border-slate-700 bg-slate-900" : "border-slate-100 bg-white",
+                        )}>
+                          <Image src={template.src} alt={template.name} fill className="object-cover" unoptimized />
+                        </div>
+                        <p className={cn("mt-1 truncate text-xs font-semibold", isDark ? "text-slate-300" : "text-slate-700")}>{template.name}</p>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

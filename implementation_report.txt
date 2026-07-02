@@ -1,0 +1,45 @@
+# IMPLEMENTATION REPORT
+
+## Completion Status
+
+- Phase 1 documentation: completed in `understanding.txt`.
+- Phase 2 Prisma structure: schema validates; a clean single init migration has been restored under `prisma/migrations/20260628000000_init`.
+- Phase 3 Cloudinary templates: certificate template assets are now fetched from `/api/assets?type=certificate_template` in the certificate studio and rendered as selectable Cloudinary previews.
+- Phase 4 brochure QR element: completed. The QR menu item opens a QR sidebar, accepts a URL, generates a preview, and adds the QR image to the Fabric canvas.
+- Phases 5-6 certificate templates and variables: Cloudinary background templates can be selected while text remains editable. Certificate text replacement supports `{{salutation}}`, `{{name}}`, `{{year}}`, `{{date}}`, `{{organization}}`, `{{certificate_id}}`, and `{{verification_url}}`, while retaining older `{{gender}}`, `{{prize}}`, and `{{event}}` placeholders.
+- Phases 7, 10, 11 bulk/PDF/ZIP: existing CSV/XLSX/JSON ZIP generation is connected to explicit column mapping for name, salutation, year, date, and organization.
+- Phases 8-9 verification and certificate QR: bulk export now creates `certificate_verifications` rows, generates a verification token/URL for each certificate, embeds an automatic QR code in each generated certificate, and exposes `/verify/[token]`.
+
+## Changes Made
+
+- Added the QR sidebar to the brochure editor render tree and improved its preview/generate/add-to-canvas workflow.
+- Added `api.qrserver.com` to Next image remote patterns for QR previews.
+- Added `CertificateVerification` relation mapping to the Prisma schema with the table name `certificate_verifications`.
+- Rebuilt Prisma migration history as a single ordered init migration.
+- Extended certificate row normalization and placeholder substitution to cover the requested dynamic variables.
+- Updated certificate bulk generation to create verification records and embed verification QR codes in generated PDFs/images inside the ZIP.
+- Added explicit CSV/XLSX/JSON column mapping UI in the certificate studio.
+- Added Cloudinary certificate template preview cards in the certificate studio.
+- Updated the verification page to show recipient, unique certificate ID, title, organization, generation date, status, and token.
+
+## Verification Run
+
+- `npm run lint`: passed.
+- `npx prisma validate`: passed.
+- `npx prisma generate`: passed.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run build`: passed.
+- `npx prisma migrate status`: reached the configured MySQL database and reported the new init migration as pending.
+- `npx prisma migrate dev --skip-generate`: blocked non-destructively because the existing local `brochify` database has drift from prior `db push`/old schema state, including an existing `CertificateVerification` table. Prisma requested a reset; I did not reset/drop the database.
+
+## Remaining Issue
+
+- To fully prove `migrate dev` on the configured `brochify` database, the existing drift must be resolved. The safest options are either:
+  - reset only a disposable development database and run `npx prisma migrate dev`, or
+  - manually migrate/rename the existing `CertificateVerification` table to `certificate_verifications` and reconcile `_prisma_migrations`.
+
+## Recommended Future Improvements
+
+- Replace the QR image service with a local/server-side QR generator to remove the external runtime dependency during PDF generation.
+- Stream ZIP output for very large certificate batches instead of holding the final archive in memory.
+- Move legacy `users.password` data fully to `password_hash` and remove the plaintext-compatible column after a migration plan.

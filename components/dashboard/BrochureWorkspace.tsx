@@ -138,20 +138,41 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
     setCreatingType(type);
     setError(null);
     try {
+      // 1. Fetch a valid admin to assign
+      const adminResponse = await fetch("/api/users/admins", { cache: "no-store" });
+      const adminData = await adminResponse.json();
+      if (!adminResponse.ok) throw new Error(adminData.error || "Failed to load admins.");
+      const defaultAdminId = adminData.admins?.[0]?.id;
+
+      if (!defaultAdminId) {
+        throw new Error("No admins available to assign.");
+      }
+
       const preset = CANVAS_PRESETS[type];
-      const response = await fetch("/api/design-projects", {
+      
+      // 2. Create Brochure draft
+      const response = await fetch("/api/brochure", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `Untitled ${preset.label}`,
-          json: "",
-          width: preset.width,
-          height: preset.height,
+          title: `Untitled ${preset.label}`,
+          description: "New design draft",
+          assignedAdminId: defaultAdminId,
+          template: type === "trifold" ? "whiteBlue" : "posterFlyer",
         }),
       });
-      const data = (await response.json()) as { data?: { id: number }; error?: string };
-      if (!response.ok || !data.data?.id) throw new Error(data.error || "Failed to create project.");
-      router.push(`/editor/${data.data.id}?type=${type}`);
+      const data = (await response.json()) as { id?: number; error?: string };
+      if (!response.ok || !data.id) throw new Error(data.error || "Failed to create brochure.");
+      
+      // 3. Immediately reload the list so it appears on dashboard without refresh
+      await loadBrochures();
+      
+      // 4. Optionally navigate to the studio, or just let them see it in the list.
+      // Wait, to avoid a jarring redirect away from the dashboard when the requirement says "without requiring a page refresh",
+      // we can just reset state and let them click it.
+      setCreatingType(null);
+      setCreateOpen(false);
+      
     } catch (createError) {
       const message = createError instanceof Error ? createError.message : "Failed to create project.";
       setError(message);
@@ -518,7 +539,9 @@ export default function BrochureWorkspace({ user }: BrochureWorkspaceProps) {
                           "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-colors duration-300",
                           isDark ? "bg-indigo-900/50 text-indigo-400 group-hover:bg-indigo-900" : "bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100"
                         )}>
-                          {brochure.title.toLowerCase().includes("flyer") || brochure.title.toLowerCase().includes("poster") ? (
+                          {brochure.thumbnailUrl ? (
+                            <img src={brochure.thumbnailUrl} alt={brochure.title} className="h-full w-full rounded-2xl object-cover" />
+                          ) : brochure.title.toLowerCase().includes("flyer") || brochure.title.toLowerCase().includes("poster") ? (
                             <Square className="h-6 w-6" />
                           ) : (
                             <AlignLeft className="h-6 w-6" />

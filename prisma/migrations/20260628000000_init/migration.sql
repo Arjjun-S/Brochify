@@ -7,6 +7,7 @@ CREATE TABLE `users` (
     `role` ENUM('admin', 'faculty') NOT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
+    UNIQUE INDEX `users_username_key`(`username`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -23,6 +24,9 @@ CREATE TABLE `brochures` (
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 
+    INDEX `brochures_status_idx`(`status`),
+    INDEX `brochures_created_by_idx`(`created_by`),
+    INDEX `brochures_assigned_admin_idx`(`assigned_admin`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -39,6 +43,9 @@ CREATE TABLE `certificates` (
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 
+    INDEX `certificates_status_idx`(`status`),
+    INDEX `certificates_created_by_idx`(`created_by`),
+    INDEX `certificates_assigned_admin_idx`(`assigned_admin`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -51,6 +58,7 @@ CREATE TABLE `assets` (
     `cloudinary_public_id` VARCHAR(255) NOT NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
+    INDEX `assets_type_idx`(`type`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -69,41 +77,25 @@ CREATE TABLE `design_projects` (
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL,
 
+    UNIQUE INDEX `design_projects_brochure_id_key`(`brochure_id`),
+    INDEX `design_projects_created_by_idx`(`created_by`),
+    INDEX `design_projects_is_template_idx`(`is_template`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateIndex
-CREATE UNIQUE INDEX `users_username_key` ON `users`(`username`);
+-- CreateTable
+CREATE TABLE `certificate_verifications` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `certificate_id` INTEGER NOT NULL,
+    `recipient_name` VARCHAR(255) NOT NULL,
+    `verification_token` VARCHAR(64) NOT NULL,
+    `generated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `organization` VARCHAR(255) NULL,
 
--- CreateIndex
-CREATE INDEX `brochures_status_idx` ON `brochures`(`status`);
-
--- CreateIndex
-CREATE INDEX `brochures_created_by_idx` ON `brochures`(`created_by`);
-
--- CreateIndex
-CREATE INDEX `brochures_assigned_admin_idx` ON `brochures`(`assigned_admin`);
-
--- CreateIndex
-CREATE INDEX `certificates_status_idx` ON `certificates`(`status`);
-
--- CreateIndex
-CREATE INDEX `certificates_created_by_idx` ON `certificates`(`created_by`);
-
--- CreateIndex
-CREATE INDEX `certificates_assigned_admin_idx` ON `certificates`(`assigned_admin`);
-
--- CreateIndex
-CREATE INDEX `assets_type_idx` ON `assets`(`type`);
-
--- CreateIndex
-CREATE UNIQUE INDEX `design_projects_brochure_id_key` ON `design_projects`(`brochure_id`);
-
--- CreateIndex
-CREATE INDEX `design_projects_created_by_idx` ON `design_projects`(`created_by`);
-
--- CreateIndex
-CREATE INDEX `design_projects_is_template_idx` ON `design_projects`(`is_template`);
+    UNIQUE INDEX `certificate_verifications_verification_token_key`(`verification_token`),
+    INDEX `certificate_verifications_certificate_id_idx`(`certificate_id`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
 ALTER TABLE `brochures` ADD CONSTRAINT `brochures_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -122,3 +114,7 @@ ALTER TABLE `design_projects` ADD CONSTRAINT `design_projects_brochure_id_fkey` 
 
 -- AddForeignKey
 ALTER TABLE `design_projects` ADD CONSTRAINT `design_projects_created_by_fkey` FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `certificate_verifications` ADD CONSTRAINT `certificate_verifications_certificate_id_fkey` FOREIGN KEY (`certificate_id`) REFERENCES `certificates`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+

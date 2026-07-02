@@ -3,6 +3,7 @@ import debounce from "lodash.debounce";
 import { useEffect } from "react";
 
 import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
+import { applyCertificatePlaceholders } from "@/lib/domains/certificate";
 
 interface UseCanvasEventsProps {
   save: () => void;
@@ -50,9 +51,39 @@ export const useCanvasEvents = ({
       clearSelectionCallback?.();
     };
 
-    const onTextEditingEntered = () => {
+    const onTextEditingEntered = (e: any) => {
+      const activeObject = canvas.getActiveObject();
+      if (activeObject && (activeObject as any).name === "brochitextbox" && (activeObject as any).originalText !== undefined) {
+        activeObject.set({ text: (activeObject as any).originalText });
+        canvas.renderAll();
+      }
       refreshFabricTextEditingAnchor(canvas);
       requestAnimationFrame(() => refreshFabricTextEditingAnchor(canvas));
+    };
+
+    const onTextEditingExited = (e: any) => {
+      const activeObject = canvas.getActiveObject();
+      if (activeObject && (activeObject as any).name === "brochitextbox") {
+        const textLike = activeObject as fabric.Textbox;
+        const currentText = textLike.text || "";
+        (activeObject as any).originalText = currentText;
+
+        const mockStudent = {
+          serialNo: "001",
+          salutation: "Mr",
+          name: "Student",
+          year: "2026",
+          gender: "Mr" as const,
+          prize: "First Place",
+          event: "Web Dev Hackathon",
+          date: "29 June 2026",
+          organization: "SRM Institute of Science and Technology",
+        };
+        const previewText = applyCertificatePlaceholders(currentText, mockStudent);
+        textLike.set({ text: previewText });
+        canvas.renderAll();
+        save();
+      }
     };
 
     const onTextSelectionChanged = () => {
@@ -66,6 +97,7 @@ export const useCanvasEvents = ({
     canvas.on("selection:updated", onSelectionUpdated);
     canvas.on("selection:cleared", onSelectionCleared);
     canvas.on("text:editing:entered", onTextEditingEntered);
+    canvas.on("text:editing:exited", onTextEditingExited);
     canvas.on("text:selection:changed", onTextSelectionChanged);
 
     return () => {
@@ -78,6 +110,7 @@ export const useCanvasEvents = ({
       canvas.off("selection:updated", onSelectionUpdated);
       canvas.off("selection:cleared", onSelectionCleared);
       canvas.off("text:editing:entered", onTextEditingEntered);
+      canvas.off("text:editing:exited", onTextEditingExited);
       canvas.off("text:selection:changed", onTextSelectionChanged);
     };
   },

@@ -16,6 +16,7 @@ import {
 
 import { ActiveTool, Editor } from "@/features/editor/types";
 import { Logo } from "@/features/editor/components/logo";
+import { BulkExportModal } from "@/features/editor/components/bulk-export-modal";
 
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/hint";
@@ -34,6 +35,8 @@ interface NavbarProps {
   brochureId?: number;
   activeTool: ActiveTool;
   onChangeActiveTool: (tool: ActiveTool) => void;
+  editorType?: "brochure" | "certificate";
+  certificateContent?: any;
 }
 
 type ReviewStatus = "draft" | "pending" | "approved" | "rejected";
@@ -57,7 +60,10 @@ export const Navbar = ({
   brochureId,
   activeTool,
   onChangeActiveTool,
+  editorType = "brochure",
+  certificateContent,
 }: NavbarProps) => {
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const data = useMutationState({
     filters: {
       mutationKey: ["project", { id }],
@@ -77,7 +83,8 @@ export const Navbar = ({
   const [workflowBusy, setWorkflowBusy] = useState<"submit" | "approve" | "reject" | "export" | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
 
-  const canShowWorkflow = Number.isFinite(brochureId);
+  const resolvedWorkflowId = editorType === "certificate" ? Number.parseInt(id, 10) : brochureId;
+  const canShowWorkflow = Number.isFinite(resolvedWorkflowId);
 
   const watermarkText = useMemo(() => {
     if (!canShowWorkflow) {
@@ -87,7 +94,7 @@ export const Navbar = ({
   }, [canShowWorkflow, workflow?.status]);
 
   useEffect(() => {
-    if (!canShowWorkflow || !brochureId) {
+    if (!canShowWorkflow || !resolvedWorkflowId) {
       setWorkflow(null);
       setWorkflowError(null);
       return;
@@ -100,17 +107,26 @@ export const Navbar = ({
       setWorkflowError(null);
 
       try {
-        const [sessionResponse, brochureResponse] = await Promise.all([
+        const fetchUrl = editorType === "certificate"
+          ? `/api/certificate/${resolvedWorkflowId}`
+          : `/api/brochure/${resolvedWorkflowId}`;
+
+        const [sessionResponse, workflowResponse] = await Promise.all([
           fetch("/api/auth/session", { cache: "no-store" }),
-          fetch(`/api/brochure/${brochureId}`, { cache: "no-store" }),
+          fetch(fetchUrl, { cache: "no-store" }),
         ]);
 
         const sessionPayload = (await sessionResponse.json()) as {
           user?: { role?: "admin" | "faculty" };
           error?: string;
         };
-        const brochurePayload = (await brochureResponse.json()) as {
+        const workflowPayload = (await workflowResponse.json()) as {
           brochure?: {
+            status?: ReviewStatus;
+            rejectionReason?: string | null;
+            content?: { template?: string };
+          };
+          certificate?: {
             status?: ReviewStatus;
             rejectionReason?: string | null;
             content?: { template?: string };
@@ -121,8 +137,10 @@ export const Navbar = ({
         if (!sessionResponse.ok) {
           throw new Error(sessionPayload.error || "Failed to load session.");
         }
-        if (!brochureResponse.ok || !brochurePayload.brochure?.status) {
-          throw new Error(brochurePayload.error || "Failed to load brochure workflow.");
+
+        const item = editorType === "certificate" ? workflowPayload.certificate : workflowPayload.brochure;
+        if (!workflowResponse.ok || !item?.status) {
+          throw new Error(workflowPayload.error || "Failed to load workflow context.");
         }
 
         if (!active) {
@@ -131,9 +149,9 @@ export const Navbar = ({
 
         setSessionRole(sessionPayload.user?.role || null);
         setWorkflow({
-          status: brochurePayload.brochure.status,
-          rejectionReason: brochurePayload.brochure.rejectionReason ?? null,
-          template: brochurePayload.brochure.content?.template || "",
+          status: item.status,
+          rejectionReason: item.rejectionReason ?? null,
+          template: item.content?.template || "",
         });
       } catch (error) {
         if (!active) {
@@ -153,14 +171,14 @@ export const Navbar = ({
     return () => {
       active = false;
     };
-  }, [brochureId, canShowWorkflow]);
+  }, [resolvedWorkflowId, canShowWorkflow, editorType]);
 
   const runWorkflowAction = async (
     kind: "submit" | "approve" | "reject",
     endpoint: string,
     body: Record<string, unknown>,
   ) => {
-    if (!brochureId) {
+    if (!resolvedWorkflowId) {
       return;
     }
 
@@ -180,17 +198,24 @@ export const Navbar = ({
           rejectionReason?: string | null;
           content?: { template?: string };
         };
+        certificate?: {
+          status?: ReviewStatus;
+          rejectionReason?: string | null;
+          content?: { template?: string };
+        };
         error?: string;
       };
 
-      if (!response.ok || !payload.brochure?.status) {
+      const item = editorType === "certificate" ? payload.certificate : payload.brochure;
+
+      if (!response.ok || !item?.status) {
         throw new Error(payload.error || "Workflow action failed.");
       }
 
       setWorkflow((current) => ({
-        status: payload.brochure?.status || current?.status || "draft",
-        rejectionReason: payload.brochure?.rejectionReason ?? null,
-        template: payload.brochure?.content?.template || current?.template || "",
+        status: item.status || current?.status || "draft",
+        rejectionReason: item.rejectionReason ?? null,
+        template: item.content?.template || current?.template || "",
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Workflow action failed.";
@@ -200,22 +225,73 @@ export const Navbar = ({
     }
   };
 
+  const getCertificateContent = () => {
+    if (!editor || !certificateContent) return {};
+
+    const JSON_KEYS = [
+      "name",
+      "pageIndex",
+      "placeholderId",
+      "gradientAngle",
+      "selectable",
+      "hasControls",
+      "subTargetCheck",
+      "linkData",
+      "editable",
+      "extensionType",
+      "extension",
+      "originalSrc",
+      "originalText",
+      "assignedLogo",
+    ];
+
+    const objects = editor.canvas.getObjects().map((o) => o.toJSON(JSON_KEYS));
+    const bgImage = editor.canvas.backgroundImage as any;
+    const backgroundImage = bgImage
+      ? (typeof bgImage.getSrc === "function" ? bgImage.getSrc() : bgImage.src || bgImage._element?.src || "")
+      : "";
+    const templateMatch = backgroundImage.match(/template\d+/);
+    const template = templateMatch ? templateMatch[0] : (certificateContent.template || "template1");
+
+    return {
+      ...certificateContent,
+      overlayItems: objects,
+      background: {
+        ...certificateContent.background,
+        backgroundImage,
+      },
+      template,
+    };
+  };
+
   const handleSubmitForReview = () => {
-    if (!brochureId) {
+    if (!resolvedWorkflowId) {
       return;
     }
-    void runWorkflowAction("submit", `/api/brochure/${brochureId}/submit`, {});
+    if (editorType === "certificate") {
+      void runWorkflowAction("submit", `/api/certificate/${resolvedWorkflowId}/submit`, {
+        content: getCertificateContent(),
+      });
+    } else {
+      void runWorkflowAction("submit", `/api/brochure/${resolvedWorkflowId}/submit`, {});
+    }
   };
 
   const handleApprove = () => {
-    if (!brochureId) {
+    if (!resolvedWorkflowId) {
       return;
     }
-    void runWorkflowAction("approve", `/api/brochure/${brochureId}/approve`, {});
+    if (editorType === "certificate") {
+      void runWorkflowAction("approve", `/api/certificate/${resolvedWorkflowId}/approve`, {
+        content: getCertificateContent(),
+      });
+    } else {
+      void runWorkflowAction("approve", `/api/brochure/${resolvedWorkflowId}/approve`, {});
+    }
   };
 
   const handleReject = () => {
-    if (!brochureId) {
+    if (!resolvedWorkflowId) {
       return;
     }
 
@@ -225,9 +301,16 @@ export const Navbar = ({
       return;
     }
 
-    void runWorkflowAction("reject", `/api/brochure/${brochureId}/reject`, {
-      rejectionReason: reason,
-    });
+    if (editorType === "certificate") {
+      void runWorkflowAction("reject", `/api/certificate/${resolvedWorkflowId}/reject`, {
+        rejectionReason: reason,
+        content: getCertificateContent(),
+      });
+    } else {
+      void runWorkflowAction("reject", `/api/brochure/${resolvedWorkflowId}/reject`, {
+        rejectionReason: reason,
+      });
+    }
   };
 
   const handlePdfExport = async () => {
@@ -487,10 +570,29 @@ export const Navbar = ({
                   </p>
                 </div>
               </DropdownMenuItem>
+              {editorType === "certificate" && (
+                <DropdownMenuItem
+                  className="flex items-center gap-x-2"
+                  onClick={() => setBulkModalOpen(true)}
+                >
+                  <CiFileOn className="size-8 text-indigo-500" />
+                  <div>
+                    <p className="font-semibold text-indigo-600">Bulk Export (Mail Merge)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Generate personalized certificates in bulk
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
+      <BulkExportModal
+        isOpen={bulkModalOpen}
+        onClose={() => setBulkModalOpen(false)}
+        certificateId={id}
+      />
     </nav>
   );
 };
