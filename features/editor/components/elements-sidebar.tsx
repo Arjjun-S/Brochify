@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { AlertTriangle, Loader, Square, Circle as CircleIcon, Triangle, Minus, QrCode, Image as ImageIcon } from "lucide-react";
 
@@ -20,6 +21,26 @@ interface ElementsSidebarProps {
 
 export const ElementsSidebar = ({ editor, activeTool, onChangeActiveTool }: ElementsSidebarProps) => {
   const { data, isLoading, isError } = useGetAssets("badge");
+  const [hasQrBox, setHasQrBox] = useState(false);
+
+  useEffect(() => {
+    if (!editor?.canvas) return;
+
+    const checkQrBox = () => {
+      const exists = editor.canvas.getObjects().some((obj) => obj.name === "qr-box");
+      setHasQrBox(exists);
+    };
+
+    checkQrBox();
+
+    editor.canvas.on("object:added", checkQrBox);
+    editor.canvas.on("object:removed", checkQrBox);
+
+    return () => {
+      editor.canvas?.off("object:added", checkQrBox);
+      editor.canvas?.off("object:removed", checkQrBox);
+    };
+  }, [editor, editor?.canvas]);
 
   const onClose = () => {
     onChangeActiveTool("select");
@@ -75,14 +96,23 @@ export const ElementsSidebar = ({ editor, activeTool, onChangeActiveTool }: Elem
                 <span className="text-[10px] font-medium">Line</span>
               </button>
               <button
-                onClick={() => (editor as any)?.addQrBox()}
-                title="Make our event certificate valid with verification."
-                className="flex flex-col items-center justify-center p-3 border rounded-lg hover:bg-slate-50 transition gap-y-1 text-slate-700 relative group"
+                onClick={() => {
+                  if (hasQrBox) return;
+                  (editor as any)?.addQrBox();
+                }}
+                disabled={hasQrBox}
+                title={hasQrBox ? "Only one QR Verification Box is allowed per certificate. Do not create another QR Box." : "Make our event certificate valid with verification."}
+                className={cn(
+                  "flex flex-col items-center justify-center p-3 border rounded-lg hover:bg-slate-50 transition gap-y-1 text-slate-700 relative group",
+                  hasQrBox && "opacity-50 cursor-not-allowed bg-slate-100"
+                )}
               >
                 <QrCode className="size-5 text-indigo-600" />
                 <span className="text-[10px] font-medium">QR Box</span>
                 <div className="absolute bottom-full mb-2 hidden group-hover:block w-48 bg-slate-900 text-white text-[10px] rounded p-2 z-50 pointer-events-none shadow-md">
-                  Make our event certificate valid with verification.
+                  {hasQrBox 
+                    ? "Only one QR Verification Box is allowed per certificate." 
+                    : "Make our event certificate valid with verification."}
                 </div>
               </button>
               <button

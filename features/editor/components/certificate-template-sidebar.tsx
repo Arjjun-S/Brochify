@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import Image from "next/image";
-import { AlertTriangle, Loader, Check } from "lucide-react";
+import { AlertTriangle, Loader, Check, Plus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { ActiveTool, Editor } from "@/features/editor/types";
 import { ToolSidebarClose } from "@/features/editor/components/tool-sidebar-close";
@@ -21,6 +24,14 @@ interface CertificateTemplateSidebarProps {
 
 export const CertificateTemplateSidebar = ({ editor, activeTool, onChangeActiveTool }: CertificateTemplateSidebarProps) => {
   const { data, isLoading, isError } = useGetAssets("certificate_template");
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (data?.data && editor) {
+      const urls = data.data.map((asset) => asset.cloudinaryUrl);
+      editor.preloadTemplates(urls);
+    }
+  }, [data, editor]);
 
   const onClose = () => {
     onChangeActiveTool("select");
@@ -94,6 +105,49 @@ export const CertificateTemplateSidebar = ({ editor, activeTool, onChangeActiveT
                   </button>
                 );
               })}
+            {/* Custom Template Upload Card */}
+            <button
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = ".png,.jpg,.jpeg,.webp";
+                input.onchange = async (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (!file) return;
+
+                  const toastId = toast.loading("Uploading custom template...");
+                  try {
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("name", file.name.split(".")[0]);
+                    formData.append("type", "certificate_template");
+
+                    const res = await fetch("/api/assets", {
+                      method: "POST",
+                      body: formData,
+                    });
+                    const result = await res.json();
+                    if (!res.ok || !result.data?.cloudinaryUrl) {
+                      throw new Error(result.error || "Upload failed");
+                    }
+
+                    toast.success("Template uploaded successfully!", { id: toastId });
+                    queryClient.invalidateQueries({ queryKey: ["assets", "certificate_template"] });
+
+                    const url = result.data.cloudinaryUrl;
+                    editor?.preloadTemplates([url]);
+                    editor?.addBackgroundImage(url);
+                  } catch (err: any) {
+                    toast.error(err.message || "Failed to upload custom template", { id: toastId });
+                  }
+                };
+                input.click();
+              }}
+              className="relative w-full h-[100px] flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-sm hover:border-indigo-600 hover:bg-slate-50 transition cursor-pointer text-slate-500 hover:text-indigo-600"
+            >
+              <Plus className="size-6 mb-1" />
+              <span className="text-xs font-semibold">Upload Custom</span>
+            </button>
           </div>
         </div>
       </ScrollArea>

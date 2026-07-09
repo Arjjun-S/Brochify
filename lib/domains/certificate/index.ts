@@ -321,12 +321,12 @@ export function createCertificateOverlayLayout(
   // 1. Institution Name (Static TextBox)
   overlays.push(
     createTextOverlay({
-      text: "SRM Institute of Science and Technology",
+      text: "SRM INSTITUTE OF SCIENCE AND TECHNOLOGY",
       x: 200,
-      y: 120,
+      y: 80,
       width: 1000,
-      height: 40,
-      fontSize: 28,
+      height: 50,
+      fontSize: 36,
       fontWeight: 700,
       align: "center",
       color: "#0f172a",
@@ -410,17 +410,29 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
     return null;
   }
 
+  const left = typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0);
+  const top = typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0);
+  const angle = typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0);
+  const scaleX = typeof item.scaleX === "number" ? item.scaleX : 1;
+  const scaleY = typeof item.scaleY === "number" ? item.scaleY : 1;
+
   if (item.type === "group" || item.name === "qr-box" || item.name === "image-box") {
     if (item.name === "qr-box") {
       return {
+        ...item,
         id: typeof item.id === "string" ? item.id : createId("certificate-qr-box"),
-        type: "shape",
+        type: "rect",
         page: 1,
-        x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
-        y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
+        left,
+        top,
+        angle,
+        scaleX,
+        scaleY,
+        x: left,
+        y: top,
         width: typeof item.width === "number" ? item.width : 150,
         height: typeof item.height === "number" ? item.height : 150,
-        rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
+        rotation: angle,
         shape: "rectangle",
         fill: "rgba(241, 245, 249, 0.3)",
         stroke: "#cbd5e1",
@@ -430,44 +442,62 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
       } as any;
     }
     if (item.name === "image-box") {
+      const src = typeof item.assignedLogo === "string" ? item.assignedLogo : (typeof item.src === "string" ? item.src : "");
       return {
+        ...item,
         id: typeof item.id === "string" ? item.id : createId("certificate-image-box"),
-        type: "image",
+        type: src ? "image" : "rect",
         page: 1,
-        x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
-        y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
+        left,
+        top,
+        angle,
+        scaleX,
+        scaleY,
+        x: left,
+        y: top,
         width: typeof item.width === "number" ? item.width : 150,
         height: typeof item.height === "number" ? item.height : 150,
-        rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
-        src: typeof item.assignedLogo === "string" ? item.assignedLogo : (typeof item.src === "string" ? item.src : ""),
+        rotation: angle,
+        src,
         name: "image-box",
-        borderRadius: 8,
+        borderRadius: typeof item.borderRadius === "number" ? item.borderRadius : 8,
         assignedLogo: typeof item.assignedLogo === "string" ? item.assignedLogo : undefined
       } as any;
     }
   }
 
-  if (item.type === "text" || item.type === "textbox") {
+  if (item.type === "text" || item.type === "textbox" || item.type === "i-text") {
+    const fill = typeof item.fill === "string" ? item.fill : (typeof item.color === "string" ? item.color : "#0f172a");
+    const textAlign = typeof item.textAlign === "string" ? item.textAlign : (typeof item.align === "string" ? item.align : "center");
+    const underline = item.underline === true || item.textDecoration === "underline";
+
     return {
+      ...item,
       id: typeof item.id === "string" ? item.id : createId("certificate-text"),
-      type: "text",
+      type: item.type || "textbox",
       page: 1,
-      x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
-      y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
-      width: typeof item.width === "number" ? item.width * (typeof item.scaleX === "number" ? item.scaleX : 1) : 200,
-      height: typeof item.height === "number" ? item.height * (typeof item.scaleY === "number" ? item.scaleY : 1) : 40,
-      rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
+      left,
+      top,
+      angle,
+      fill,
+      textAlign,
+      underline,
+      scaleX,
+      scaleY,
+      styles: (item as any).styles || {},
+      x: left,
+      y: top,
+      width: typeof item.width === "number" ? item.width : 200,
+      height: typeof item.height === "number" ? item.height : 40,
+      rotation: angle,
       text: typeof item.text === "string" ? item.text : "",
       fontFamily: normalizeFontFamilyValue(typeof item.fontFamily === "string" ? item.fontFamily : undefined),
       fontSize: typeof item.fontSize === "number" ? item.fontSize : 18,
       fontWeight: typeof item.fontWeight === "number" ? item.fontWeight : 600,
       fontStyle: item.fontStyle === "italic" ? "italic" : "normal",
-      textDecoration: item.textDecoration === "underline" ? "underline" : "none",
-      color: typeof item.color === "string" ? item.color : "#0f172a",
-      align:
-        item.align === "left" || item.align === "right" || item.align === "justify" || item.align === "center"
-          ? item.align
-          : "center",
+      textDecoration: underline ? "underline" : "none",
+      color: fill,
+      align: textAlign,
       backgroundColor: typeof item.backgroundColor === "string" ? item.backgroundColor : "transparent",
       name: typeof (item as any).name === "string" ? (item as any).name : undefined,
       originalText: typeof (item as any).originalText === "string" ? (item as any).originalText : undefined,
@@ -476,32 +506,44 @@ function normalizeOverlayItem(item: unknown): OverlayItem | null {
 
   if (item.type === "image") {
     return {
+      ...item,
       id: typeof item.id === "string" ? item.id : createId("certificate-image"),
       type: "image",
       page: 1,
-      x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
-      y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
-      width: typeof item.width === "number" ? item.width * (typeof item.scaleX === "number" ? item.scaleX : 1) : 120,
-      height: typeof item.height === "number" ? item.height * (typeof item.scaleY === "number" ? item.scaleY : 1) : 80,
-      rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
+      left,
+      top,
+      angle,
+      scaleX,
+      scaleY,
+      x: left,
+      y: top,
+      width: typeof item.width === "number" ? item.width : 120,
+      height: typeof item.height === "number" ? item.height : 80,
+      rotation: angle,
       src: typeof item.src === "string" ? item.src : "",
       name: typeof item.name === "string" ? item.name : "asset",
       borderRadius: typeof item.borderRadius === "number" ? item.borderRadius : 0,
       originalSrc: typeof (item as any).originalSrc === "string" ? (item as any).originalSrc : undefined,
-    };
+    } as any;
   }
 
   if (item.type === "shape" || item.type === "rect" || item.type === "circle" || item.type === "triangle" || item.type === "line") {
     return {
+      ...item,
       id: typeof item.id === "string" ? item.id : createId("certificate-shape"),
-      type: "shape",
+      type: item.type === "shape" ? "rect" : item.type,
       page: 1,
-      x: typeof item.left === "number" ? item.left : (typeof item.x === "number" ? item.x : 0),
-      y: typeof item.top === "number" ? item.top : (typeof item.y === "number" ? item.y : 0),
-      width: typeof item.width === "number" ? item.width * (typeof item.scaleX === "number" ? item.scaleX : 1) : 120,
-      height: typeof item.height === "number" ? item.height * (typeof item.scaleY === "number" ? item.scaleY : 1) : 80,
-      rotation: typeof item.angle === "number" ? item.angle : (typeof item.rotation === "number" ? item.rotation : 0),
-      shape: item.shape === "circle" || item.type === "circle" ? "circle" : "rectangle",
+      left,
+      top,
+      angle,
+      scaleX,
+      scaleY,
+      x: left,
+      y: top,
+      width: typeof item.width === "number" ? item.width : 120,
+      height: typeof item.height === "number" ? item.height : 80,
+      rotation: angle,
+      shape: item.shape || (item.type === "circle" ? "circle" : "rectangle"),
       fill: typeof item.fill === "string" ? item.fill : "rgba(14,165,233,0.14)",
       stroke: typeof item.stroke === "string" ? item.stroke : "#0369a1",
       strokeWidth: typeof item.strokeWidth === "number" ? item.strokeWidth : 2,
@@ -751,9 +793,8 @@ export function renderCertificateHtmlForStudent(
 
       if (item.name === "qr-placeholder" || item.name === "qr-box") {
         if (student.verificationUrl) {
-          return `<div style="${baseStyle};text-align:center;font-family:Arial,sans-serif;color:#334155;overflow:hidden;">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&margin=4&data=${encodeURIComponent(student.verificationUrl)}" alt="Verification QR code" style="width:100%;height:calc(100% - 14px);object-fit:contain;display:block;margin:0 auto;" />
-            <div style="font-size:8px;line-height:1.2;word-break:break-all;">${escapeHtml(student.certificateId ?? "Verify")}</div>
+          return `<div style="${baseStyle};overflow:hidden;background:transparent;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=${encodeURIComponent(student.verificationUrl)}" alt="Verification QR code" style="width:100%;height:100%;object-fit:contain;display:block;" />
           </div>`;
         } else {
           return `<div style="${baseStyle};border:2px dashed #94a3b8;background:rgba(148,163,184,0.05);display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:14px;color:#64748b;font-weight:bold;">QR</div>`;
@@ -798,7 +839,7 @@ export function getCertificateDownloadFileName(
   serialNo: string | null | undefined,
   studentName: string,
   index: number,
-  extension: "pdf" | "png" | "jpg",
+  extension: "pdf" | "png" | "jpg" | "svg",
 ): string {
   const serialText = `${serialNo ?? ""}`.trim();
   const cleanName = studentName
@@ -815,5 +856,5 @@ export function getCertificateDownloadFileName(
   }
 
   const paddedIndex = String(index + 1).padStart(3, "0");
-  return `serialNo_${paddedIndex}.${extension}`;
+  return `${paddedIndex}_${cleanName}.${extension}`;
 }

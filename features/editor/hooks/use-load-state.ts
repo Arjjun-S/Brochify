@@ -106,6 +106,7 @@ export const useLoadState = ({
                   stroke: "#e2e8f0",
                   strokeWidth: 1,
                   selectable: false,
+                  evented: false,
                   hasControls: false,
                   shadow: new fabric.Shadow({
                     color: "rgba(0,0,0,0.15)",
@@ -119,7 +120,7 @@ export const useLoadState = ({
                 canvas.sendToBack(workspace);
               }
 
-              // Fit background image to workspace
+              // Fit and lock background image to workspace
               const bg = canvas.backgroundImage;
               if (bg) {
                 const workspaceWidth = workspace.width ?? (isCertificate ? CERTIFICATE_PAGE_WIDTH : 983);
@@ -131,6 +132,15 @@ export const useLoadState = ({
                   top: workspace.top ?? 0,
                   scaleX: workspaceWidth / (bg.width || 1),
                   scaleY: workspaceHeight / (bg.height || 1),
+                  selectable: false,
+                  evented: false,
+                  hasControls: false,
+                  hasBorders: false,
+                  lockMovementX: true,
+                  lockMovementY: true,
+                  lockRotation: true,
+                  lockScalingX: true,
+                  lockScalingY: true,
                 });
               }
 
@@ -149,6 +159,8 @@ export const useLoadState = ({
               canvasHistory.current = [currentState];
               setHistoryIndex(0);
               autoZoom();
+              (canvas as any).isLoaded = true;
+              canvas.fire("canvas:loaded");
             });
           } catch (e) {
             console.error("loadFromJSON error:", e);

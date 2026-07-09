@@ -13,9 +13,9 @@ import { prisma } from "@/lib/server/prisma";
 
 export const runtime = "nodejs";
 
-type OutputFormat = "pdf" | "png" | "jpg";
+type OutputFormat = "pdf" | "png" | "jpg" | "svg";
 
-const VALID_FORMATS = new Set<OutputFormat>(["pdf", "png", "jpg"]);
+const VALID_FORMATS = new Set<OutputFormat>(["pdf", "png", "jpg", "svg"]);
 
 function parseCertificateId(rawId: string): number | null {
   const id = Number.parseInt(rawId, 10);
@@ -246,6 +246,41 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           });
 
           const fileName = getCertificateDownloadFileName(student.serialNo, student.name, globalIndex, format);
+
+          if (format === "svg") {
+            const svgContent = `
+              <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="990">
+                <foreignObject width="1400" height="990">
+                  <div xmlns="http://www.w3.org/1999/xhtml">
+                    <style>
+                      * { box-sizing: border-box; }
+                      .certificate-page { font-family: "Times New Roman", Times, serif; }
+                      .certificate-watermark {
+                        position: absolute;
+                        inset: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        pointer-events: none;
+                        transform: rotate(-30deg);
+                        color: rgba(185, 28, 28, 0.26);
+                        font-size: 42px;
+                        font-weight: 800;
+                        letter-spacing: 0.1em;
+                        text-transform: uppercase;
+                        z-index: 9999;
+                        white-space: pre;
+                      }
+                    </style>
+                    ${watermarkText ? `<div class="certificate-watermark">${watermarkText}</div>` : ""}
+                    ${pageHtml}
+                  </div>
+                </foreignObject>
+              </svg>
+            `.trim();
+            zip.file(fileName, toBuffer(svgContent));
+            continue;
+          }
 
           if (format === "pdf") {
             const pdfBytes = await page.pdf({

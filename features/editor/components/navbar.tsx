@@ -507,18 +507,20 @@ export const Navbar = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-60">
-              <DropdownMenuItem
-                className="flex items-center gap-x-2"
-                onClick={() => editor?.saveJson()}
-              >
-                <CiFileOn className="size-8" />
-                <div>
-                  <p>JSON</p>
-                  <p className="text-xs text-muted-foreground">
-                    Save for later editing
-                  </p>
-                </div>
-              </DropdownMenuItem>
+              {editorType !== "certificate" && (
+                <DropdownMenuItem
+                  className="flex items-center gap-x-2"
+                  onClick={() => editor?.saveJson()}
+                >
+                  <CiFileOn className="size-8" />
+                  <div>
+                    <p>JSON</p>
+                    <p className="text-xs text-muted-foreground">
+                      Save for later editing
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 className="flex items-center gap-x-2"
                 onClick={() => {

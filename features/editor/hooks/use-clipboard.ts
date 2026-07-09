@@ -3,10 +3,12 @@ import { useCallback, useRef } from "react";
 
 interface UseClipboardProps {
   canvas: fabric.Canvas | null;
+  save: () => void;
 };
 
 export const useClipboard = ({
-  canvas
+  canvas,
+  save
 }: UseClipboardProps) => {
   const clipboard = useRef<fabric.Object | null>(null);
 
@@ -47,8 +49,51 @@ export const useClipboard = ({
       });
       canvas.setActiveObject(clonedObj);
       canvas.requestRenderAll();
+      save();
     });
-  }, [canvas]);
+  }, [canvas, save]);
 
-  return { copy, paste };
+  const duplicate = useCallback(() => {
+    const activeObject = canvas?.getActiveObject();
+    if (!activeObject || !canvas) return;
+
+    activeObject.clone((clonedObj: fabric.Object) => {
+      canvas.discardActiveObject();
+      
+      const customProps = ["id", "name", "originalSrc", "originalText", "assignedLogo", "selectable", "evented", "hasControls"];
+      customProps.forEach(prop => {
+        if ((activeObject as any)[prop] !== undefined) {
+          (clonedObj as any)[prop] = (activeObject as any)[prop];
+        }
+      });
+      
+      if (clonedObj.name !== "qr-box") {
+        const prefix = clonedObj.type === "text" || clonedObj.type === "textbox" ? "certificate-text" : "duplicate";
+        (clonedObj as any).id = `${prefix}-${Math.random().toString(36).substr(2, 9)}`;
+      }
+
+      clonedObj.set({
+        left: (clonedObj.left || 0) + 20,
+        top: (clonedObj.top || 0) + 20,
+        evented: true,
+      });
+
+      if (clonedObj.type === "activeSelection") {
+        const activeSelection = clonedObj as fabric.ActiveSelection;
+        activeSelection.canvas = canvas;
+        activeSelection.forEachObject((obj: fabric.Object) => {
+          canvas.add(obj);
+        });
+        activeSelection.setCoords();
+      } else {
+        canvas.add(clonedObj);
+      }
+
+      canvas.setActiveObject(clonedObj);
+      canvas.requestRenderAll();
+      save();
+    });
+  }, [canvas, save]);
+
+  return { copy, paste, duplicate };
 };

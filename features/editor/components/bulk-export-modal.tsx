@@ -19,7 +19,7 @@ interface BulkExportModalProps {
 export const BulkExportModal = ({ isOpen, onClose, certificateId, editor }: BulkExportModalProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
-  const [format, setFormat] = useState<"pdf" | "png" | "jpg">("pdf");
+  const [format, setFormat] = useState<"pdf" | "png" | "jpg" | "svg">("pdf");
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
@@ -205,7 +205,7 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId, editor }: Bulk
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 mt-4">
+        <div className="space-y-6 mt-4 max-h-[70vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
           <div className="space-y-2">
             <Label className="text-xs font-semibold text-slate-300">Upload Data File (.csv, .json, .xlsx)</Label>
             <div className="relative border-2 border-dashed border-slate-700 hover:border-indigo-500/50 rounded-xl p-6 text-center cursor-pointer transition bg-slate-950/40">
@@ -279,8 +279,8 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId, editor }: Bulk
 
           <div className="space-y-3">
             <Label className="text-xs font-semibold text-slate-300">Export Format</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {(["pdf", "png", "jpg"] as const).map((fmt) => {
+            <div className="grid grid-cols-4 gap-2">
+              {(["pdf", "png", "jpg", "svg"] as const).map((fmt) => {
                 const isSelected = format === fmt;
                 return (
                   <button
@@ -296,8 +296,8 @@ export const BulkExportModal = ({ isOpen, onClose, certificateId, editor }: Bulk
                     disabled={loading || parsing}
                   >
                     <span className="font-bold text-sm uppercase">{fmt}</span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">
-                      {fmt === "pdf" ? "Vector PDF" : fmt === "png" ? "HQ Image" : "Standard JPG"}
+                    <span className="text-[9px] text-slate-400 mt-0.5">
+                      {fmt === "pdf" ? "Vector PDF" : fmt === "png" ? "HQ Image" : fmt === "jpg" ? "Standard JPG" : "Vector SVG"}
                     </span>
                   </button>
                 );

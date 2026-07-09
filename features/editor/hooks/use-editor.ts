@@ -48,6 +48,50 @@ import { CERTIFICATE_PAGE_WIDTH, CERTIFICATE_PAGE_HEIGHT, applyCertificatePlaceh
 
 const IDENTITY_MATRIX: [number, number, number, number, number, number] = [1, 0, 0, 1, 0, 0];
 
+const backgroundImageCache = new Map<string, fabric.Image>();
+
+const setTextStyleProperty = (object: fabric.Object, property: string, value: any) => {
+  if (isTextType(object.type)) {
+    const textObject = object as fabric.IText;
+    if (
+      textObject.isEditing &&
+      textObject.selectionStart !== undefined &&
+      textObject.selectionEnd !== undefined &&
+      textObject.selectionStart !== textObject.selectionEnd
+    ) {
+      const styleObj: Record<string, any> = {};
+      styleObj[property] = value;
+      textObject.setSelectionStyles(styleObj);
+    } else {
+      const updateObj: Record<string, any> = {};
+      updateObj[property] = value;
+      textObject.set(updateObj);
+    }
+  }
+};
+
+const getTextStyleProperty = (object: fabric.Object | undefined, property: string, fallback: any) => {
+  if (!object || !isTextType(object.type)) return fallback;
+  const textObject = object as fabric.IText;
+  if (
+    textObject.isEditing &&
+    textObject.selectionStart !== undefined &&
+    textObject.selectionEnd !== undefined &&
+    textObject.selectionStart !== textObject.selectionEnd
+  ) {
+    const styles = textObject.getSelectionStyles();
+    if (Array.isArray(styles)) {
+      if (styles[0] && styles[0][property] !== undefined) {
+        return styles[0][property];
+      }
+    } else if (styles && typeof styles === "object") {
+      const val = (styles as any)[property];
+      if (val !== undefined) return val;
+    }
+  }
+  return textObject.get(property as keyof fabric.IText) ?? fallback;
+};
+
 function toFiniteNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -598,6 +642,7 @@ const buildEditor = ({
                 stroke: "#e2e8f0",
                 strokeWidth: 1,
                 selectable: false,
+                evented: false,
                 hasControls: false,
                 shadow: new fabric.Shadow({
                   color: "rgba(0,0,0,0.15)",
@@ -611,7 +656,7 @@ const buildEditor = ({
               canvas.sendToBack(workspace);
             }
 
-            // Fit background image to workspace
+            // Fit and lock background image to workspace
             const bg = canvas.backgroundImage;
             if (bg) {
               const wWidth = workspace.width ?? CERTIFICATE_PAGE_WIDTH;
@@ -623,11 +668,22 @@ const buildEditor = ({
                 top: workspace.top ?? 0,
                 scaleX: wWidth / (bg.width || 1),
                 scaleY: wHeight / (bg.height || 1),
+                selectable: false,
+                evented: false,
+                hasControls: false,
+                hasBorders: false,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
               });
             }
 
             rebuildInteractiveElements(canvas);
             autoZoom();
+            (canvas as any).isLoaded = true;
+            canvas.fire("canvas:loaded");
           });
         } catch (e) {
           console.error("loadFromJSON error:", e);
@@ -876,41 +932,65 @@ const buildEditor = ({
       canvas.renderAll();
       save();
     },
+    preloadTemplates: (urls: string[]) => {
+      urls.forEach((url) => {
+        const cleanUrl = url.split("?")[0] + "?c_cache=1";
+        if (backgroundImageCache.has(cleanUrl)) return;
+        fabric.Image.fromURL(
+          cleanUrl,
+          (image) => {
+            backgroundImageCache.set(cleanUrl, image);
+          },
+          { crossOrigin: "anonymous" }
+        );
+      });
+    },
     addBackgroundImage: (value: string) => {
       const cleanUrl = value.split("?")[0] + "?c_cache=1";
+
+      const setBg = (imgObj: fabric.Image) => {
+        const workspace = getWorkspace() as fabric.Rect | undefined;
+        if (!workspace) return;
+        const workspaceWidth = workspace.width ?? CERTIFICATE_PAGE_WIDTH;
+        const workspaceHeight = workspace.height ?? CERTIFICATE_PAGE_HEIGHT;
+
+        imgObj.set({
+          originX: "left",
+          originY: "top",
+          left: workspace.left ?? 0,
+          top: workspace.top ?? 0,
+          scaleX: workspaceWidth / (imgObj.width || 1),
+          scaleY: workspaceHeight / (imgObj.height || 1),
+          selectable: false,
+          evented: false,
+          hasControls: false,
+          hasBorders: false,
+          lockMovementX: true,
+          lockMovementY: true,
+          lockRotation: true,
+          lockScalingX: true,
+          lockScalingY: true,
+        });
+
+        canvas.setBackgroundImage(imgObj, () => {
+          canvas.renderAll();
+          save();
+        });
+      };
+
+      if (backgroundImageCache.has(cleanUrl)) {
+        const cached = backgroundImageCache.get(cleanUrl)!;
+        setBg(cached);
+        return;
+      }
+
       fabric.Image.fromURL(
         cleanUrl,
         (image) => {
-          const workspace = getWorkspace() as fabric.Rect | undefined;
-          if (!workspace) {
-            return;
-          }
-
-          const workspaceWidth = workspace.width ?? CERTIFICATE_PAGE_WIDTH;
-          const workspaceHeight = workspace.height ?? CERTIFICATE_PAGE_HEIGHT;
-          const imageWidth = image.width || 1;
-          const imageHeight = image.height || 1;
-
-          const coverScale = Math.max(
-            workspaceWidth / imageWidth,
-            workspaceHeight / imageHeight,
-          );
-
-          image.set({
-            originX: "left",
-            originY: "top",
-            left: workspace.left ?? 0,
-            top: workspace.top ?? 0,
-            scaleX: workspaceWidth / imageWidth,
-            scaleY: workspaceHeight / imageHeight,
-          });
-
-          canvas.setBackgroundImage(image, () => {
-            canvas.renderAll();
-            save();
-          });
+          backgroundImageCache.set(cleanUrl, image);
+          setBg(image);
         },
-        { crossOrigin: "anonymous" },
+        { crossOrigin: "anonymous" }
       );
     },
     enableDrawingMode: () => {
@@ -927,6 +1007,7 @@ const buildEditor = ({
     onRedo: () => redo(),
     onCopy: () => copy(),
     onPaste: () => paste(),
+    onDuplicate: () => duplicate(),
     changeImageFilter: (value: string) => {
       const objects = canvas.getActiveObjects();
       objects.forEach((object) => {
@@ -1285,26 +1366,13 @@ const buildEditor = ({
     },
     changeFontSize: (value: number) => {
       canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-expect-error Fabric typing mismatch.
-          // Faulty TS library, fontSize exists.
-          object.set({ fontSize: value });
-        }
+        setTextStyleProperty(object, "fontSize", value);
       });
       canvas.renderAll();
     },
     getActiveFontSize: () => {
       const selectedObject = selectedObjects?.[0];
-
-      if (!selectedObject) {
-        return FONT_SIZE;
-      }
-
-      // @ts-expect-error Fabric typing mismatch.
-      // Faulty TS library, fontSize exists.
-      const value = selectedObject.get("fontSize") || FONT_SIZE;
-
-      return value;
+      return getTextStyleProperty(selectedObject, "fontSize", FONT_SIZE);
     },
     changeTextAlign: (value: string) => {
       canvas.getActiveObjects().forEach((object) => {
@@ -1331,26 +1399,13 @@ const buildEditor = ({
     },
     changeFontUnderline: (value: boolean) => {
       canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-expect-error Fabric typing mismatch.
-          // Faulty TS library, underline exists.
-          object.set({ underline: value });
-        }
+        setTextStyleProperty(object, "underline", value);
       });
       canvas.renderAll();
     },
     getActiveFontUnderline: () => {
       const selectedObject = selectedObjects?.[0];
-
-      if (!selectedObject) {
-        return false;
-      }
-
-      // @ts-expect-error Fabric typing mismatch.
-      // Faulty TS library, underline exists.
-      const value = selectedObject.get("underline") || false;
-
-      return value;
+      return getTextStyleProperty(selectedObject, "underline", false);
     },
     changeFontLinethrough: (value: boolean) => {
       canvas.getActiveObjects().forEach((object) => {
@@ -1377,11 +1432,7 @@ const buildEditor = ({
     },
     changeFontStyle: (value: string) => {
       canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-expect-error Fabric typing mismatch.
-          // Faulty TS library, fontStyle exists.
-          object.set({ fontStyle: value });
-        }
+        setTextStyleProperty(object, "fontStyle", value);
       });
       canvas.renderAll();
     },
@@ -1400,11 +1451,7 @@ const buildEditor = ({
     },
     changeFontWeight: (value: number) => {
       canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-expect-error Fabric typing mismatch.
-          // Faulty TS library, fontWeight exists.
-          object.set({ fontWeight: value });
-        }
+        setTextStyleProperty(object, "fontWeight", value);
       });
       canvas.renderAll();
     },
@@ -1436,18 +1483,18 @@ const buildEditor = ({
     changeFontFamily: (value: string) => {
       setFontFamily(value);
       canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-expect-error Fabric typing mismatch.
-          // Faulty TS library, fontFamily exists.
-          object.set({ fontFamily: value });
-        }
+        setTextStyleProperty(object, "fontFamily", value);
       });
       canvas.renderAll();
     },
     changeFillColor: (value: string) => {
       setFillColor(value);
       canvas.getActiveObjects().forEach((object) => {
-        object.set({ fill: value });
+        if (isTextType(object.type)) {
+          setTextStyleProperty(object, "fill", value);
+        } else {
+          object.set({ fill: value });
+        }
       });
       canvas.renderAll();
     },
@@ -1801,41 +1848,15 @@ const buildEditor = ({
     canvas,
     getActiveFontWeight: () => {
       const selectedObject = selectedObjects?.[0];
-
-      if (!selectedObject) {
-        return FONT_WEIGHT;
-      }
-
-      // @ts-expect-error Fabric typing mismatch.
-      // Faulty TS library, fontWeight exists.
-      const value = selectedObject.get("fontWeight") || FONT_WEIGHT;
-
-      return value;
+      return getTextStyleProperty(selectedObject, "fontWeight", FONT_WEIGHT);
     },
     getActiveFontFamily: () => {
       const selectedObject = selectedObjects?.[0];
-
-      if (!selectedObject) {
-        return fontFamily;
-      }
-
-      // @ts-expect-error Fabric typing mismatch.
-      // Faulty TS library, fontFamily exists.
-      const value = selectedObject.get("fontFamily") || fontFamily;
-
-      return value;
+      return getTextStyleProperty(selectedObject, "fontFamily", fontFamily);
     },
     getActiveFillColor: () => {
       const selectedObject = selectedObjects?.[0];
-
-      if (!selectedObject) {
-        return fillColor;
-      }
-
-      const value = selectedObject.get("fill") || fillColor;
-
-      // Currently, gradients & patterns are not supported
-      return value as string;
+      return getTextStyleProperty(selectedObject, "fill", fillColor);
     },
     getActiveStrokeColor: () => {
       const selectedObject = selectedObjects?.[0];
@@ -1925,7 +1946,7 @@ export const useEditor = ({
     },
   });
 
-  const { copy, paste } = useClipboard({ canvas });
+  const { copy, paste, duplicate } = useClipboard({ canvas, save });
 
   const { autoZoom } = useAutoResize({
     canvas,
@@ -1952,6 +1973,7 @@ export const useEditor = ({
     redo,
     copy,
     paste,
+    duplicate,
     save,
     canvas,
   });
@@ -2063,6 +2085,7 @@ export const useEditor = ({
         stroke: "#e2e8f0",
         strokeWidth: 1,
         selectable: false,
+        evented: false,
         hasControls: false,
         shadow: new fabric.Shadow({
           color: "rgba(0,0,0,0.15)",

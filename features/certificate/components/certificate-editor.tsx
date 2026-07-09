@@ -35,6 +35,9 @@ import { refreshFabricTextEditingAnchor } from "@/features/editor/utils";
 import { JSON_KEYS } from "@/features/editor/types";
 import { CERTIFICATE_PAGE_HEIGHT, CERTIFICATE_PAGE_WIDTH, applyCertificatePlaceholders } from "@/lib/domains/certificate";
 import { BrochiTextboxModal } from "@/features/editor/components/brochi-textbox-modal";
+import { useGetAssets } from "@/features/assets/api/use-get-assets";
+import { Loader } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface CertificateEditorProps {
   initialData: {
@@ -55,6 +58,7 @@ interface CertificateEditorProps {
 
 export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
   const [activeTool, setActiveTool] = useState<ActiveTool>("select");
+  const [canvasLoaded, setCanvasLoaded] = useState(false);
   const [customSignatures, setCustomSignatures] = useState<Array<{ name: string; designation: string; src: string }>>(
     initialData.content.customSignatures || []
   );
@@ -129,7 +133,30 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
     saveCallback: debouncedSave,
     isApproved,
   });
+  const templatesQuery = useGetAssets("certificate_template");
 
+  useEffect(() => {
+    if (editor && templatesQuery.data?.data) {
+      const urls = templatesQuery.data.data.map((asset) => asset.cloudinaryUrl);
+      editor.preloadTemplates(urls);
+    }
+  }, [editor, templatesQuery.data]);
+
+  useEffect(() => {
+    const canvas = editor?.canvas;
+    if (!canvas) return;
+
+    if ((canvas as any).isLoaded) {
+      setCanvasLoaded(true);
+      return;
+    }
+
+    const handleLoaded = () => setCanvasLoaded(true);
+    canvas.on("canvas:loaded", handleLoaded);
+    return () => {
+      canvas.off("canvas:loaded", handleLoaded);
+    };
+  }, [editor?.canvas]);
   const onChangeActiveTool = useCallback((tool: ActiveTool) => {
     if (tool === "draw") {
       editor?.enableDrawingMode();
@@ -353,7 +380,20 @@ export const CertificateEditor = ({ initialData }: CertificateEditorProps) => {
             onChangeActiveTool={onChangeActiveTool}
           />
           <div className="flex-1 min-h-0 h-[calc(100%-124px)] bg-muted relative flex items-center justify-center" ref={containerRef}>
-            <canvas ref={canvasRef} className="block" />
+            <div className={cn(
+              "transition-opacity duration-300",
+              canvasLoaded ? "opacity-100" : "opacity-0 pointer-events-none"
+            )}>
+              <canvas ref={canvasRef} className="block" />
+            </div>
+            {!canvasLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/10 backdrop-blur-sm z-[9999]">
+                <div className="flex flex-col items-center gap-y-3">
+                  <Loader className="size-8 text-indigo-600 animate-spin" />
+                  <p className="text-sm font-semibold text-slate-700">Loading certificate workspace...</p>
+                </div>
+              </div>
+            )}
           </div>
           <Footer editor={editor} />
         </main>

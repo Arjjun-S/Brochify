@@ -3,6 +3,7 @@ import { ITextboxOptions } from "fabric/fabric-impl";
 import * as material from "material-colors";
 
 export const JSON_KEYS = [
+  "id",
   "name",
   "pageIndex",
   "placeholderId",
@@ -247,6 +248,7 @@ export interface Editor {
   disableDrawingMode: () => void;
   onCopy: () => void;
   onPaste: () => void;
+  onDuplicate: () => void;
   changeImageFilter: (value: string) => void;
   addImage: (value: string) => void;
   delete: () => void;
@@ -295,4 +297,5 @@ export interface Editor {
   addQrBox: () => void;
   addImageBox: () => void;
   assignLogoToImageBox: (logoUrl: string) => void;
+  preloadTemplates: (urls: string[]) => void;
 };
